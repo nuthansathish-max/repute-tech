@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: repute-tech.in
+      POSTGRES_PASSWORD: repute-tech.in
+      POSTGRES_DB: repute-tech.in
+    ports:
+      - "5432:5432"
+    volumes:
+      - repute-tech.in_pg:/var/lib/postgresql/data
+volumes:
+  repute-tech.in_pg:

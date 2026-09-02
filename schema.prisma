@@ -1,0 +1,380 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OWNER
+  MANAGER
+  STAFF
+}
+enum BusinessType {
+  RESTAURANT
+  HOTEL
+  CAFE
+  SALON
+  OTHER
+}
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+enum ReplyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  FAILED
+}
+enum ConsentType {
+  WHATSAPP_MARKETING
+  EMAIL_MARKETING
+}
+
+model Session {
+id String @id @default(cuid())
+  tokenHash String @unique
+  userId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([userId,expiresAt])
+}
+
+model GoogleConnection {
+id String @id @default(cuid())
+  userId String
+  businessId String?
+  googleAccountId String?
+  accessTokenEnc String
+  refreshTokenEnc String?
+  expiresAt DateTime?
+  scope String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  business Business? @relation(fields:[businessId],references:[id],onDelete:SetNull)
+  @@index([userId])
+  @@index([businessId])
+}
+
+model User {
+id String @id @default(cuid())
+  email String @unique
+  name String
+  passwordHash String?
+  role UserRole @default(OWNER)
+  memberships BusinessMember[]
+  sessions Session[]
+  googleConnections GoogleConnection[]
+  notifications Notification[]
+  planRequests PlanRequest[]
+  createdAt DateTime @default(now())
+}
+
+model Business {
+id String @id @default(cuid())
+  name String
+  type BusinessType
+  slug String @unique
+  logoUrl String?
+  phone String?
+  website String?
+  aiTone String @default("Warm & professional")
+  aiLanguage String @default("English")
+  aiInstructions String?
+  aiAutoDraft Boolean @default(true)
+  aiRequireApproval Boolean @default(true)
+  createdAt DateTime @default(now())
+  locations Location[]
+  members BusinessMember[]
+  reviews Review[]
+  menus Menu[]
+  qrCodes SmartQr[]
+  customers Customer[]
+  campaigns Campaign[]
+  subscription Subscription?
+  googleConnections GoogleConnection[]
+  notifications Notification[]
+  planRequests PlanRequest[]
+  whatsappConnection WhatsAppConnection?
+}
+
+model BusinessMember {
+id String @id @default(cuid())
+  userId String
+  businessId String
+  role UserRole
+  user User @relation(fields:[userId],references:[id])
+  business Business @relation(fields:[businessId],references:[id])
+  @@unique([userId,businessId])
+}
+
+model Location {
+id String @id @default(cuid())
+  businessId String
+  name String
+  address String?
+  googleLocationId String?
+  googleAccountId String?
+  lastReviewSyncAt DateTime?
+  business Business @relation(fields:[businessId],references:[id])
+  reviews Review[]
+  @@index([googleLocationId])
+}
+
+model Review {
+id String @id @default(cuid())
+  businessId String
+  locationId String?
+  googleReviewId String?
+  authorName String
+  rating Int
+  text String?
+  sentiment ReviewSentiment?
+  topics String[] @default([])
+  aiReply String?
+  replyStatus ReplyStatus @default(DRAFT)
+  replyState String?
+  policyViolation String?
+  reviewReplyUrl String?
+  source String @default("MANUAL")
+  googleUpdatedAt DateTime?
+  syncedAt DateTime?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  business Business @relation(fields:[businessId],references:[id])
+  location Location? @relation(fields:[locationId],references:[id])
+  @@index([businessId,createdAt])
+  @@index([googleReviewId])
+  @@index([locationId])
+}
+
+model Menu {
+id String @id @default(cuid())
+  businessId String
+  name String
+  isPublished Boolean @default(false)
+  business Business @relation(fields:[businessId],references:[id])
+  items MenuItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MenuItem {
+id String @id @default(cuid())
+  menuId String
+  name String
+  description String?
+  price Decimal @db.Decimal(10,2)
+  imageUrl String?
+  available Boolean @default(true)
+  category String?
+  menu Menu @relation(fields:[menuId],references:[id])
+}
+
+model SmartQr {
+id String @id @default(cuid())
+  businessId String
+  name String
+  slug String @unique
+  destination Json
+  scanCount Int @default(0)
+  isActive Boolean @default(true)
+  business Business @relation(fields:[businessId],references:[id])
+  scans QrScan[]
+}
+
+model QrScan {
+id String @id @default(cuid())
+  qrId String
+  scannedAt DateTime @default(now())
+  source String?
+  userAgent String?
+  referrer String?
+  qr SmartQr @relation(fields:[qrId],references:[id],onDelete:Cascade)
+  @@index([qrId,scannedAt])
+}
+
+model Customer {
+id String @id @default(cuid())
+  businessId String
+  name String?
+  phone String?
+  email String?
+  notes String?
+  lastInteractionAt DateTime?
+  createdAt DateTime @default(now())
+  business Business @relation(fields:[businessId],references:[id])
+  consents Consent[]
+  interactions CustomerInteraction[]
+  campaignMessages CampaignMessage[]
+  @@index([businessId,createdAt])
+}
+
+model CustomerInteraction {
+id String @id @default(cuid())
+  customerId String
+  type String
+  channel String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  customer Customer @relation(fields:[customerId],references:[id],onDelete:Cascade)
+  @@index([customerId,createdAt])
+}
+
+model Consent {
+id String @id @default(cuid())
+  customerId String
+  type ConsentType
+  granted Boolean
+  grantedAt DateTime?
+  revokedAt DateTime?
+  customer Customer @relation(fields:[customerId],references:[id])
+  @@unique([customerId,type])
+}
+
+model Campaign {
+id String @id @default(cuid())
+  businessId String
+  name String
+  message String
+  status String @default("DRAFT")
+  scheduledAt DateTime?
+  sentCount Int @default(0)
+  deliveredCount Int @default(0)
+  failedCount Int @default(0)
+  providerCampaignId String?
+  business Business @relation(fields:[businessId],references:[id])
+  messages CampaignMessage[]
+}
+
+model WhatsAppConnection {
+id String @id @default(cuid())
+  businessId String @unique
+  phoneNumberId String?
+  wabaId String?
+  displayPhone String?
+  accessTokenEnc String?
+  tokenExpiresAt DateTime?
+  connectedAt DateTime?
+  status String @default("DISCONNECTED")
+  business Business @relation(fields:[businessId],references:[id])
+}
+
+model CampaignMessage {
+id String @id @default(cuid())
+  campaignId String
+  customerId String?
+  toPhone String
+  status String @default("QUEUED")
+  providerMessageId String?
+  errorCode String?
+  errorMessage String?
+  sentAt DateTime?
+  deliveredAt DateTime?
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  campaign Campaign @relation(fields:[campaignId],references:[id],onDelete:Cascade)
+  customer Customer? @relation(fields:[customerId],references:[id],onDelete:SetNull)
+  @@index([campaignId,status])
+  @@index([providerMessageId])
+}
+
+model PlanRequest {
+id String @id @default(cuid())
+  businessId String
+  userId String
+  planCode String
+  planName String
+  price Decimal @db.Decimal(10,2)
+  billingInterval String
+  ownerName String
+  contact String
+  status String @default("PENDING")
+  paymentStatus String @default("MANUAL")
+  rejectionReason String?
+  approvedAt DateTime?
+  approvedByUserId String?
+  rejectedAt DateTime?
+  publishedAt DateTime?
+  publishedByUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([businessId,status,createdAt])
+  @@index([userId,createdAt])
+}
+
+model PlanCatalog {
+id String @id @default(cuid())
+  code String @unique
+  name String
+  price Decimal @db.Decimal(10,2)
+  billingInterval String @default("MONTH")
+  description String?
+  features Json?
+  providerPlanId String?
+  active Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+id String @id @default(cuid())
+  businessId String @unique
+  plan String
+  status String @default("ACTIVE")
+  monthlyPrice Decimal @db.Decimal(10,2)
+  billingInterval String @default("MONTH")
+  provider String?
+  providerCustomerId String?
+  providerPlanId String?
+  providerSubscriptionId String?
+  currentPeriodEnd DateTime?
+  business Business @relation(fields:[businessId],references:[id])
+}
+
+model AuditLog {
+id String @id @default(cuid())
+  actorUserId String?
+  action String
+  entity String
+  entityId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+id String @id @default(cuid())
+  userId String
+  businessId String?
+  type String
+  title String
+  message String
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  business Business? @relation(fields:[businessId],references:[id],onDelete:SetNull)
+  @@index([userId,readAt,createdAt])
+}
+
+model ReviewSyncLog {
+id String @id @default(cuid())
+  businessId String
+  locationId String?
+  status String
+  provider String @default("GOOGLE")
+  imported Int @default(0)
+  updated Int @default(0)
+  error String?
+  createdAt DateTime @default(now())
+  @@index([businessId,createdAt])
+}
