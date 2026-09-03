@@ -25,6 +25,9 @@ function sessionCookie(token){const parts=[`rp_session=${token}`,`Max-Age=${14*8
 function clearOAuthCookie(){return `rp_oauth_state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV==='production'?'; Secure':''}`;}
 
 express.application.get = function(path,...handlers){
+  if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
+    res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
+  });
   if(path==='/auth/google') return originalGet.call(this,path,async(_req,res,next)=>{try{
     const state=oauthState();
     res.setHeader('Set-Cookie',`rp_oauth_state=${encodeURIComponent(state)}; Max-Age=600; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV==='production'?'; Secure':''}`);
