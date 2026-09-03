@@ -4,16 +4,19 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { hashPassword, randomToken, tokenHash, setSessionCookie, getCookie, encrypt } from './auth.js';
 import { googleAuthUrl, exchangeCode, googleUser, oauthState } from './google.js';
+import { createTenantGuard } from './tenantAuth.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
 const originalPost = express.application.post;
+const originalPut = express.application.put;
+const originalPatch = express.application.patch;
 
 function slugify(value){return String(value||'business').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50)||'business';}
 async function ensureBusiness(user){
-  const existing = await prisma.businessMember.findFirst({where:{userId:user.id},include:{business:true}});
+  const existing=await prisma.businessMember.findFirst({where:{userId:user.id},include:{business:true}});
   if(existing) return existing.business;
-  const base = slugify(user.name); const slug = `${base}-${randomToken().slice(0,8)}`;
+  const base=slugify(user.name); const slug=`${base}-${randomToken().slice(0,8)}`;
   return prisma.business.create({data:{name:`${user.name}'s Business`,type:'OTHER',slug,members:{create:{userId:user.id,role:'OWNER'}}}});
 }
 async function startSession(user){
@@ -23,8 +26,16 @@ async function startSession(user){
 }
 function sessionCookie(token){const parts=[`rp_session=${token}`,`Max-Age=${14*86400}`,'Path=/','HttpOnly','SameSite=Lax'];if(process.env.NODE_ENV==='production')parts.push('Secure');return parts.join('; ');}
 function clearOAuthCookie(){return `rp_oauth_state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV==='production'?'; Secure':''}`;}
+async function sessionUser(req){
+  const token=getCookie(req,'rp_session'); if(!token)return null;
+  const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}});
+  if(!s || s.expiresAt<new Date()){if(s)await prisma.session.delete({where:{id:s.id}}).catch(()=>{});return null;}
+  return s.user;
+}
+const tenantGuard=createTenantGuard({prisma,sessionUser});
+const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
-express.application.get = function(path,...handlers){
+express.application.get=function(path,...handlers){
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
   });
@@ -45,10 +56,10 @@ express.application.get = function(path,...handlers){
     await prisma.googleConnection.create({data:{userId:user.id,businessId:business.id,accessTokenEnc:encrypt(token.access_token),refreshTokenEnc:token.refresh_token?encrypt(token.refresh_token):undefined,expiresAt:token.expires_in?new Date(Date.now()+token.expires_in*1000):undefined,scope:token.scope}});
     const sessionToken=await startSession(user); res.setHeader('Set-Cookie',[sessionCookie(sessionToken),clearOAuthCookie()]); res.redirect('/?google=connected');
   }catch(e){next(e)}});
-  return originalGet.call(this,path,...handlers);
+  return originalGet.call(this,path,...guardHandlers(handlers));
 };
 
-express.application.post = function(path,...handlers){
+express.application.post=function(path,...handlers){
   if(path==='/api/auth/signup') return originalPost.call(this,path,async(req,res,next)=>{try{
     const schema=z.object({name:z.string().trim().min(2,'Name must be at least 2 characters').max(80),email:z.string().trim().email('Enter a valid email address'),password:z.string().min(8,'Password must be at least 8 characters').max(200)});
     const p=schema.safeParse(req.body);
@@ -59,7 +70,10 @@ express.application.post = function(path,...handlers){
     await ensureBusiness(user); const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
     res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
   }catch(e){next(e)}});
-  return originalPost.call(this,path,...handlers);
+  return originalPost.call(this,path,...guardHandlers(handlers));
 };
+
+express.application.put=function(path,...handlers){return originalPut.call(this,path,...guardHandlers(handlers));};
+express.application.patch=function(path,...handlers){return originalPatch.call(this,path,...guardHandlers(handlers));};
 
 await import('./server.js');
