@@ -36,6 +36,10 @@ const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
 express.application.get=function(path,...handlers){
+  // Express itself calls app.get('setting') with no route handlers when res.json/res.send
+  // reads application settings. Preserve that getter behavior; otherwise JSON.stringify
+  // can receive the Express app function as a replacer and call app.handle() incorrectly.
+  if(handlers.length===0) return originalGet.call(this,path);
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
   });
