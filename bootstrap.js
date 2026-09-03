@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { hashPassword, randomToken, tokenHash, setSessionCookie, getCookie, encrypt } from './auth.js';
 import { googleAuthUrl, exchangeCode, googleUser, oauthState } from './google.js';
 import { createTenantGuard } from './tenantAuth.js';
+import { analyzeReview, generateReply } from './ai.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -36,9 +37,6 @@ const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
 express.application.get=function(path,...handlers){
-  // Express itself calls app.get('setting') with no route handlers when res.json/res.send
-  // reads application settings. Preserve that getter behavior; otherwise JSON.stringify
-  // can receive the Express app function as a replacer and call app.handle() incorrectly.
   if(handlers.length===0) return originalGet.call(this,path);
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
@@ -74,6 +72,34 @@ express.application.post=function(path,...handlers){
     await ensureBusiness(user); const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
     res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
   }catch(e){next(e)}});
+
+  // The UI has a text-only AI assistant. Keep this endpoint stateless so it can
+  // generate a reply without first creating a throwaway database review.
+  if(path==='/api/reviews/ai-reply') return originalPost.call(this,path,async(req,res,next)=>{try{
+    const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    const text=String(req.body?.text||'').trim(); if(!text)return res.status(400).json({error:'Review text is required'});
+    const tone=String(req.body?.tone||'WARM').toUpperCase();
+    const review={authorName:String(req.body?.authorName||'there').trim().slice(0,80)||'there',rating:Number(req.body?.rating||3),text};
+    const analysis=analyzeReview(review);
+    const reply=generateReply(review,{tone,businessName:String(req.body?.businessName||'your business').trim().slice(0,120)||'your business'});
+    return res.json({provider:'local',sentiment:analysis.sentiment,topics:analysis.topics,confidence:analysis.confidence,reply});
+  }catch(e){next(e)}});
+
+  // Match the frontend's business-scoped QR endpoint to the database-backed
+  // Smart QR model. The existing /api/qr route remains available as well.
+  if(path==='/api/businesses/:businessId/qr') return originalPost.call(this,path,async(req,res,next)=>{try{
+    const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    const businessId=String(req.params.businessId); const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}}});
+    if(!member && !['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Business access denied'});
+    const p=z.object({name:z.string().trim().min(1).max(100),slug:z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/i,'Slug may contain only letters, numbers and hyphens')}).safeParse(req.body);
+    if(!p.success)return res.status(400).json({error:p.error.issues[0]?.message||'Invalid QR details'});
+    const existing=await prisma.smartQr.findFirst({where:{businessId,slug:p.data.slug}}); if(existing)return res.status(409).json({error:'That QR slug already exists'});
+    const origin=`${req.protocol}://${req.get('host')}`;
+    const destination={type:'review-hub',url:`${origin}/qr/${encodeURIComponent(p.data.slug)}`};
+    const qr=await prisma.smartQr.create({data:{businessId,name:p.data.name,slug:p.data.slug,destination}});
+    return res.status(201).json({...qr,qrUrl:destination.url,qrImageUrl:`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destination.url)}`});
+  }catch(e){next(e)}});
+
   return originalPost.call(this,path,...guardHandlers(handlers));
 };
 
