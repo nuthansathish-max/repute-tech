@@ -2,7 +2,6 @@ export function createTenantGuard({prisma, sessionUser}){
   const adminRoles=new Set(['ADMIN','SUPER_ADMIN']);
   const publicApiPrefixes=['/api/auth/','/api/customer','/api/whatsapp/webhook','/api/plans'];
   const publicApiExact=new Set(['/api/auth/config-status','/api/auth/login','/api/auth/signup','/api/auth/logout','/api/auth/me']);
-  const publicResourcePrefixes=['/api/qr/'];
 
   const isPublic=(path)=>{
     if(publicApiExact.has(path)) return true;
@@ -12,12 +11,14 @@ export function createTenantGuard({prisma, sessionUser}){
     return false;
   };
 
-  const needsTenant=(path)=>{
+  const needsTenant=(req)=>{
+    const path=req.path;
     if(!path.startsWith('/api/')) return false;
     if(isPublic(path)) return false;
     if(path==='/api/businesses' || path==='/api/me/businesses') return false;
     if(path==='/api/google/status') return false;
     if(path==='/api/notifications' || path.startsWith('/api/notifications/')) return false;
+    if(path==='/api/plan-requests' && req.method==='GET') return false;
     if(path.startsWith('/api/admin/')) return false;
     return true;
   };
@@ -59,7 +60,7 @@ export function createTenantGuard({prisma, sessionUser}){
 
   return async function tenantGuard(req,res,next){
     try{
-      if(!needsTenant(req.path)) return next();
+      if(!needsTenant(req)) return next();
       const user=await sessionUser(req);
       if(!user) return res.status(401).json({error:'Authentication required'});
       req.user=req.user||user;
