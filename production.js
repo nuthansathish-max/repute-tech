@@ -8,6 +8,21 @@ import QRCode from 'qrcode';
 
 const PUBLIC_PORT = Number(process.env.PORT || 10000);
 const INNER_PORT = PUBLIC_PORT + 1;
+
+function tuneDatabaseUrl(value){
+  const raw=String(value||'').trim();
+  if(!raw)return raw;
+  try{
+    const u=new URL(raw);
+    if(!u.searchParams.has('connection_limit'))u.searchParams.set('connection_limit','3');
+    if(!u.searchParams.has('pool_timeout'))u.searchParams.set('pool_timeout','20');
+    return u.toString();
+  }catch{return raw}
+}
+
+// Two Prisma clients run in this compatibility architecture. Keep each client's
+// pool small so Supabase Session Pooler is not exhausted during Render rollouts.
+process.env.DATABASE_URL=tuneDatabaseUrl(process.env.DATABASE_URL);
 process.env.PORT = String(INNER_PORT);
 await import('./bootstrap.js');
 
@@ -24,9 +39,7 @@ const DEFAULT_PLANS = [
 async function ensurePlans(){
   const count=await prisma.planCatalog.count();
   if(count>0)return;
-  for(const p of DEFAULT_PLANS){
-    await prisma.planCatalog.create({data:p});
-  }
+  for(const p of DEFAULT_PLANS) await prisma.planCatalog.create({data:p});
 }
 
 function cookie(req, name){ return getCookie(req, name); }
@@ -155,7 +168,6 @@ function proxy(req,res,u){
   req.pipe(pr);
 }
 
-await ensurePlans();
 const publicServer=http.createServer(handle);
 publicServer.listen(PUBLIC_PORT,()=>console.log(`production gateway listening on port ${PUBLIC_PORT}`));
 process.on('SIGTERM',async()=>{publicServer.close();await prisma.$disconnect()});
