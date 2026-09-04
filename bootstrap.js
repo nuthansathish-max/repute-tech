@@ -7,6 +7,7 @@ import { hashPassword, randomToken, tokenHash, setSessionCookie, getCookie, encr
 import { googleAuthUrl, exchangeCode, googleUser, oauthState } from './google.js';
 import { createTenantGuard } from './tenantAuth.js';
 import { analyzeReview, generateReply } from './ai.js';
+import { aiReviewAnalysis } from './aiProvider.js';
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
 
 const prisma = new PrismaClient();
@@ -40,8 +41,8 @@ async function sessionUser(req){
 const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
-// Keep the original index UI, but inject the comprehensive feature bundle before it is sent.
-// Disable static's automatic index.html handling so the final sendFile route can inject the bundle.
+// Keep the original UI and inject the enhancement bundle. Static index handling is disabled
+// so the final sendFile fallback can add the bundle without replacing the user's design.
 express.static=function(root,options={}){return originalStatic.call(express,root,{...options,index:false});};
 express.application.use=function(...args){
   if(!this.__reputeEnhancementMiddleware){
@@ -115,14 +116,13 @@ express.application.post=function(path,...handlers){
     await ensureBusiness(user); const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
     res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
   }catch(e){next(e)}});
+  // Text-only AI generation now uses the same OpenAI/local provider used by review analysis.
   if(path==='/api/reviews/ai-reply') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const text=String(req.body?.text||'').trim(); if(!text)return res.status(400).json({error:'Review text is required'});
-    const tone=String(req.body?.tone||'WARM').toUpperCase();
-    const review={authorName:String(req.body?.authorName||'there').trim().slice(0,80)||'there',rating:Number(req.body?.rating||3),text};
-    const analysis=analyzeReview(review);
-    const reply=generateReply(review,{tone,businessName:String(req.body?.businessName||'your business').trim().slice(0,120)||'your business'});
-    return res.json({provider:'local',sentiment:analysis.sentiment,topics:analysis.topics,confidence:analysis.confidence,reply});
+    const review={authorName:String(req.body?.authorName||'Customer').trim().slice(0,80)||'Customer',rating:Number(req.body?.rating||3),text};
+    const result=await aiReviewAnalysis(review,String(req.body?.businessName||'your business').trim().slice(0,120)||'your business',String(req.body?.tone||'WARM'));
+    return res.json({provider:result.provider||'local',sentiment:result.sentiment,topics:result.topics,confidence:result.confidence,reply:result.reply});
   }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/qr') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
