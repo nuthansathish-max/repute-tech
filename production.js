@@ -20,8 +20,6 @@ function tuneDatabaseUrl(value){
   }catch{return raw}
 }
 
-// Two Prisma clients run in this compatibility architecture. Keep each client's
-// pool small so Supabase Session Pooler is not exhausted during Render rollouts.
 process.env.DATABASE_URL=tuneDatabaseUrl(process.env.DATABASE_URL);
 process.env.PORT = String(INNER_PORT);
 await import('./bootstrap.js');
@@ -69,10 +67,28 @@ async function qrPayload(qr, origin){
   return {...qr,qrUrl:url,qrImageUrl};
 }
 
+function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+
+async function publicCustomerHub(res, req, slug){
+  const qr=await prisma.smartQr.findUnique({where:{slug},include:{business:{include:{menus:{include:{items:true},where:{isPublished:true},orderBy:{createdAt:'desc'}}}}}});
+  if(!qr) return res.statusCode=404, res.end('Customer hub not found');
+  await prisma.smartQr.update({where:{id:qr.id},data:{scanCount:{increment:1}}}).catch(()=>{});
+  const business=qr.business;
+  const menus=business.menus||[];
+  const menuHtml=menus.length?menus.map(menu=>`<section class="menu"><h2>${escHtml(menu.name)}</h2>${menu.items?.length?menu.items.map(item=>`<article class="item"><div><strong>${escHtml(item.name)}</strong>${item.category?`<span class="cat">${escHtml(item.category)}</span>`:''}<p>${escHtml(item.description||'')}</p></div><b>₹${escHtml(item.price)}</b></article>`).join(''):'<p class="muted">No items added yet.</p>'}</section>`).join(''):'<div class="empty">Digital menu is not published yet.</div>';
+  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(business.name)} · Customer Hub</title><style>*{box-sizing:border-box}body{margin:0;background:#f6f7fb;color:#171a2b;font-family:Inter,system-ui,-apple-system,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:28px 16px 48px}.hero{background:#10152b;color:#fff;border-radius:22px;padding:28px 22px;margin-bottom:16px}.hero h1{margin:0 0 8px;font-size:28px}.hero p{margin:0;color:#cbd2e5}.menu,.empty{background:#fff;border:1px solid #e6e8ef;border-radius:18px;padding:20px;margin-top:14px}.menu h2{margin:0 0 14px;font-size:20px}.item{display:flex;justify-content:space-between;gap:18px;padding:14px 0;border-bottom:1px solid #eef0f4}.item:last-child{border-bottom:0}.item p{margin:6px 0 0;color:#667085;font-size:13px}.item b{white-space:nowrap}.cat{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:10px}.muted,.empty{color:#667085;font-size:14px}.footer{text-align:center;color:#98a2b3;font-size:12px;margin-top:18px}</style></head><body><main class="wrap"><header class="hero"><h1>Welcome to ${escHtml(business.name)}</h1><p>Explore our digital menu.</p></header>${menuHtml}<div class="footer">Powered by repute-tech.in</div></main></body></html>`;
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});res.end(html);
+}
+
 async function handle(req,res){
   const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);
   const p=u.pathname;
   try{
+    const qrMatch=p.match(/^\/(?:q|qr)\/([^/]+)$/);
+    if(req.method==='GET' && qrMatch){
+      return publicCustomerHub(res,req,decodeURIComponent(qrMatch[1]));
+    }
+
     if(req.method==='POST' && p==='/api/reviews/ai-reply'){
       const user=await userFrom(req); if(!user)return json(res,401,{error:'Authentication required'});
       const b=await body(req); const text=String(b.text||'').trim(); if(!text)return json(res,400,{error:'Review text is required'});
@@ -96,7 +112,7 @@ async function handle(req,res){
         if(!name||!/^[a-z0-9-]{2,100}$/.test(slug))return json(res,400,{error:'Enter a valid QR name and slug (letters, numbers and hyphens)'});
         if(await prisma.smartQr.findUnique({where:{slug}}))return json(res,409,{error:'That QR slug already exists. Choose another slug.'});
         const url=`${u.origin}/q/${encodeURIComponent(slug)}`;
-        const qr=await prisma.smartQr.create({data:{businessId:m[1],name,slug,destination:{type:'review-hub',url}}});
+        const qr=await prisma.smartQr.create({data:{businessId:m[1],name,slug,destination:{type:'customer-hub',url}}});
         return json(res,201,await qrPayload(qr,u.origin));
       }
       if(req.method==='POST' && m[2]==='menus'){
