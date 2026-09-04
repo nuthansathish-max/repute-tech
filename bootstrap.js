@@ -15,6 +15,7 @@ const originalPost = express.application.post;
 const originalPut = express.application.put;
 const originalPatch = express.application.patch;
 const originalUse = express.application.use;
+const originalStatic = express.static;
 
 function slugify(value){return String(value||'business').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50)||'business';}
 async function ensureBusiness(user){
@@ -39,7 +40,9 @@ async function sessionUser(req){
 const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
-// Inject the feature enhancement bundle into the existing UI without replacing the original design.
+// Keep the original index UI, but inject the comprehensive feature bundle before it is sent.
+// Disable static's automatic index.html handling so the final sendFile route can inject the bundle.
+express.static=function(root,options={}){return originalStatic.call(express,root,{...options,index:false});};
 express.application.use=function(...args){
   if(!this.__reputeEnhancementMiddleware){
     this.__reputeEnhancementMiddleware=true;
@@ -50,7 +53,7 @@ express.application.use=function(...args){
           try{
             if(String(file).endsWith('index.html')){
               const html=await fs.readFile(file,'utf8');
-              const enhanced=html.replace('</body>','<script src="/app-enhancements.js"></script></body>');
+              const enhanced=html.includes('/app-enhancements.js')?html:html.replace('</body>','<script src="/app-enhancements.js"></script></body>');
               res.type('html').send(enhanced);
               return;
             }
@@ -65,7 +68,6 @@ express.application.use=function(...args){
 };
 
 express.application.get=function(path,...handlers){
-  // Express itself calls app.get('setting') with no route handlers when res.json/res.send reads application settings.
   if(handlers.length===0) return originalGet.call(this,path);
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
@@ -87,14 +89,17 @@ express.application.get=function(path,...handlers){
     await prisma.googleConnection.create({data:{userId:user.id,businessId:business.id,accessTokenEnc:encrypt(token.access_token),refreshTokenEnc:token.refresh_token?encrypt(token.refresh_token):undefined,expiresAt:token.expires_in?new Date(Date.now()+token.expires_in*1000):undefined,scope:token.scope}});
     const sessionToken=await startSession(user); res.setHeader('Set-Cookie',[sessionCookie(sessionToken),clearOAuthCookie()]); res.redirect('/?google=connected');
   }catch(e){next(e)}});
-
+  if(path==='/api/admin/plan-requests') return originalGet.call(this,path,async(req,res,next)=>{try{
+    const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    if(!['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Admin access required'});
+    res.json(await prisma.planRequest.findMany({include:{business:{select:{id:true,name:true,slug:true}},user:{select:{id:true,name:true,email:true}}},orderBy:{createdAt:'desc'}}));
+  }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/campaigns') return originalGet.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const business=await prisma.business.findFirst({where:{id:req.params.businessId,...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})}});
     if(!business)return res.status(403).json({error:'Business access denied'});
     res.json(await prisma.campaign.findMany({where:{businessId:business.id},orderBy:{scheduledAt:'desc'}}));
   }catch(e){next(e)}});
-
   if(path==='/qr/:slug') return originalGet.call(this,path,async(req,res)=>res.redirect(`/public/qr/${encodeURIComponent(req.params.slug)}`));
   return originalGet.call(this,path,...guardHandlers(handlers));
 };
@@ -110,7 +115,6 @@ express.application.post=function(path,...handlers){
     await ensureBusiness(user); const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
     res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
   }catch(e){next(e)}});
-
   if(path==='/api/reviews/ai-reply') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const text=String(req.body?.text||'').trim(); if(!text)return res.status(400).json({error:'Review text is required'});
@@ -120,7 +124,6 @@ express.application.post=function(path,...handlers){
     const reply=generateReply(review,{tone,businessName:String(req.body?.businessName||'your business').trim().slice(0,120)||'your business'});
     return res.json({provider:'local',sentiment:analysis.sentiment,topics:analysis.topics,confidence:analysis.confidence,reply});
   }catch(e){next(e)}});
-
   if(path==='/api/businesses/:businessId/qr') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const businessId=String(req.params.businessId); const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}}});
@@ -133,7 +136,6 @@ express.application.post=function(path,...handlers){
     const qr=await prisma.smartQr.create({data:{businessId,name:p.data.name,slug:p.data.slug,destination}});
     return res.status(201).json({...qr,qrUrl:destination.url,qrImageUrl:`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destination.url)}`});
   }catch(e){next(e)}});
-
   if(path==='/api/businesses/:businessId/menus') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const businessId=String(req.params.businessId);
@@ -144,7 +146,6 @@ express.application.post=function(path,...handlers){
     const menu=await prisma.menu.create({data:{businessId,name:p.data.name,isPublished:p.data.isPublished??p.data.published??false}});
     return res.status(201).json(menu);
   }catch(e){next(e)}});
-
   if(path==='/api/businesses/:businessId/campaigns') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const businessId=String(req.params.businessId);
@@ -155,7 +156,6 @@ express.application.post=function(path,...handlers){
     const campaign=await prisma.campaign.create({data:{businessId,name:p.data.name,message:p.data.message,scheduledAt:p.data.scheduledAt?new Date(p.data.scheduledAt):undefined}});
     return res.status(201).json(campaign);
   }catch(e){next(e)}});
-
   if(path==='/api/businesses/:businessId/reviews/sync') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const business=await prisma.business.findFirst({where:{id:req.params.businessId,...(['SUPER_ADMIN','ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})},include:{locations:true}});
@@ -173,12 +173,6 @@ express.application.post=function(path,...handlers){
     await prisma.auditLog.create({data:{actorUserId:user.id,action:'SYNC_GOOGLE_REVIEWS',entity:'Location',entityId:location.id,metadata:result}});
     return res.json({ok:true,location,result});
   }catch(e){next(e)}});
-
-  // WhatsApp endpoints used by the enhanced dashboard UI.
-  if(path==='/api/whatsapp/campaigns/preview' || path==='/api/whatsapp/campaigns/send' || path==='/api/whatsapp/connection') return originalPost.call(this,path,...handlers);
-
-  // Admin-compatible plan request listing used by the dashboard.
-  if(path==='/api/admin/plan-requests') return originalPost.call(this,path,...handlers);
   return originalPost.call(this,path,...guardHandlers(handlers));
 };
 
