@@ -7,12 +7,26 @@
   async function getBusiness(){const bs=await req('/businesses');if(!bs.length)throw new Error('No business found');return bs[0]}
   function notify(msg){if(typeof window.toast==='function')window.toast(msg);else alert(msg)}
 
-  function enhanceMobileNav(){
-    const bar=document.querySelector('.mobilebar');if(!bar)return;
-    const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI'],['qr','▣ QR'],['menu','☰ Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['pricing','💳 Plans'],['settings','⚙ Account']];
-    bar.innerHTML=pages.map(([id,label])=>`<button data-page="${id}">${label}</button>`).join('');
-    bar.style.overflowX='auto';bar.style.justifyContent='flex-start';bar.style.scrollbarWidth='none';bar.style.whiteSpace='nowrap';
-    bar.querySelectorAll('button').forEach(b=>{b.style.minWidth='82px';b.addEventListener('click',e=>{e.preventDefault();if(typeof showPage==='function')showPage(b.dataset.page)})});
+  const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI Assistant'],['qr','▣ Smart QR'],['menu','☰ Digital Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['pricing','💳 Plans & Pricing'],['settings','⚙ Account Settings']];
+
+  function navigate(page){
+    document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===page));
+    document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+    const labels={dashboard:'Good morning 👋',reviews:'Review inbox',ai:'AI Review Assistant',qr:'Smart QR',menu:'Digital Menu',customers:'Customer CRM',campaigns:'WhatsApp',analytics:'Business analytics',pricing:'Plans & pricing',settings:'Account Settings'};
+    if($('heading'))$('heading').textContent=labels[page]||'repute-tech.in';
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  function enhanceNavigation(){
+    document.querySelectorAll('.side [data-page]').forEach(btn=>{btn.onclick=e=>{e.preventDefault();navigate(btn.dataset.page)}});
+    const bar=document.querySelector('.mobilebar');
+    if(bar){
+      bar.innerHTML=pages.map(([id,label])=>`<button type="button" data-page="${id}">${label}</button>`).join('');
+      bar.style.overflowX='auto';bar.style.justifyContent='flex-start';bar.style.scrollbarWidth='none';bar.style.whiteSpace='nowrap';
+      bar.querySelectorAll('button').forEach(b=>{b.style.minWidth='94px';b.addEventListener('click',()=>navigate(b.dataset.page))});
+    }
+    // Always restore the owner dashboard as the default workspace page.
+    if(!$('dashboard')?.classList.contains('active'))navigate('dashboard');
   }
 
   async function enhanceAI(){
@@ -29,10 +43,10 @@
     const btn=$('createQr'), list=$('qrList'); if(!btn||!list)return;
     async function render(){const b=await getBusiness();const rows=await req(`/businesses/${b.id}/qr`);list.innerHTML=rows.map(q=>{
       const url=q.qrUrl||`${location.origin}/q/${encodeURIComponent(q.slug)}`;
-      const img=q.qrImageUrl||`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(url)}`;
-      return `<div class="item"><b>${esc(q.name)}</b><div class="sub">${esc(q.slug)} · ${q.scanCount||0} scans</div><img src="${img}" alt="QR code" style="width:180px;height:180px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px"><div class="row" style="margin-top:8px"><a class="btn secondary" href="${img}" target="_blank" rel="noopener">Open QR</a><a class="btn secondary" href="${url}" target="_blank" rel="noopener">Open customer hub</a></div></div>`
+      const img=q.qrImageUrl||'';
+      return `<div class="item"><b>${esc(q.name)}</b><div class="sub">${esc(q.slug)} · ${q.scanCount||0} scans</div>${img?`<img src="${img}" alt="QR code" style="width:180px;height:180px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px">`:''}<div class="row" style="margin-top:8px;flex-wrap:wrap">${img?`<a class="btn secondary" href="${img}" download="${esc(q.slug)}-qr.png">Download QR</a>`:''}<a class="btn secondary" href="${url}" target="_blank" rel="noopener">Customer Hub</a></div></div>`
     }).join('')||'<div class="sub">No QR codes yet.</div>'}
-    btn.onclick=async()=>{btn.disabled=true;btn.textContent='Creating…';try{const b=await getBusiness();const name=$('qrName').value.trim();const slug=$('qrSlug').value.trim().toLowerCase();if(!name||!slug)throw new Error('Enter a QR name and slug');const created=await post(`/businesses/${b.id}/qr`,{name,slug});notify('QR created successfully');if(created.qrImageUrl){list.innerHTML=`<div class="item"><b>${esc(created.name)}</b><div class="sub">${esc(created.slug)} · 0 scans</div><img src="${created.qrImageUrl}" alt="QR code" style="width:220px;height:220px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px"><div class="row" style="margin-top:8px"><a class="btn secondary" href="${created.qrImageUrl}" target="_blank" rel="noopener">Open QR</a><a class="btn secondary" href="${created.qrUrl}" target="_blank" rel="noopener">Open customer hub</a></div></div>`}await render();}catch(e){notify(e.message)}finally{btn.disabled=false;btn.textContent='Create QR'}};
+    btn.onclick=async()=>{btn.disabled=true;btn.textContent='Creating…';try{const b=await getBusiness();const name=$('qrName').value.trim();const slug=$('qrSlug').value.trim().toLowerCase();if(!name||!slug)throw new Error('Enter a QR name and slug');const created=await post(`/businesses/${b.id}/qr`,{name,slug});notify('QR created successfully');if(created.qrImageUrl){list.innerHTML=`<div class="item"><b>${esc(created.name)}</b><div class="sub">${esc(created.slug)} · 0 scans</div><img src="${created.qrImageUrl}" alt="QR code" style="width:220px;height:220px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px"><div class="row" style="margin-top:8px;flex-wrap:wrap"><a class="btn secondary" href="${created.qrImageUrl}" download="${esc(created.slug)}-qr.png">Download QR</a><a class="btn secondary" href="${created.qrUrl}" target="_blank" rel="noopener">Customer Hub</a></div></div>`}await render();}catch(e){notify(e.message)}finally{btn.disabled=false;btn.textContent='Create QR'}};
     try{await render()}catch{}
   }
 
@@ -60,16 +74,24 @@
 
   async function enhancePlans(){
     const grid=$('pricingGrid');if(!grid)return;
-    try{
-      const d=await req('/plans');
-      grid.innerHTML=d.map(p=>`<div class="card ${p.code==='PRO'?'featured':''}"><div class="section-title">${esc(p.name)}</div><div class="price">₹${esc(p.price)}<small>/${p.billingInterval==='YEAR'?'year':'month'}</small></div><div class="features">${(p.features||[]).map(f=>`<div>✓ ${esc(f)}</div>`).join('')}</div><button class="btn" data-plan-code="${esc(p.code)}">Request plan</button></div>`).join('')||'<div class="notice">No plans are configured.</div>';
+    const fallback=[
+      {code:'STARTER',name:'Starter',price:199,billingInterval:'MONTH',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
+      {code:'GROWTH',name:'Growth',price:499,billingInterval:'MONTH',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
+      {code:'PRO',name:'Pro',price:999,billingInterval:'MONTH',features:['Everything in Growth','Advanced analytics','AI insights','Higher usage limits']},
+      {code:'HIGH_TRAFFIC',name:'High Traffic',price:1999,billingInterval:'MONTH',features:['Everything in Pro','High-volume usage','Priority support','Multi-location ready']},
+      {code:'ALL_IN_ONE_YEARLY',name:'All-in-One Yearly',price:8999,billingInterval:'YEAR',features:['Everything in High Traffic','All features','Best yearly value','Priority support']}
+    ];
+    function draw(data){
+      grid.style.gridTemplateColumns='repeat(auto-fit,minmax(190px,1fr))';
+      grid.innerHTML=data.map(p=>`<div class="card ${p.code==='PRO'?'featured':''}"><div class="section-title">${esc(p.name)}</div><div class="price">₹${esc(p.price)}<small>/${p.billingInterval==='YEAR'?'year':'month'}</small></div><div class="features">${(p.features||[]).map(f=>`<div>✓ ${esc(f)}</div>`).join('')}</div><button class="btn" data-plan-code="${esc(p.code)}">Request plan</button></div>`).join('');
       grid.querySelectorAll('[data-plan-code]').forEach(btn=>btn.onclick=async()=>{try{await requestPlan(btn.dataset.planCode)}catch(e){notify(e.message)}});
-    }catch(e){grid.innerHTML=`<div class="notice">Unable to load plans: ${esc(e.message)}</div>`}
+    }
+    try{const d=await req('/plans');draw(Array.isArray(d)&&d.length?d:fallback)}catch(e){draw(fallback)}
   }
 
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
-    enhanceMobileNav();
+    enhanceNavigation();
     await Promise.allSettled([enhanceAI(),enhanceQR(),enhanceMenu(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
   let tries=0;const timer=setInterval(async()=>{if(++tries>40)return;if($('authOverlay')?.style.display==='none'){clearInterval(timer);await enhance()}},500);
