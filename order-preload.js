@@ -1,3 +1,4 @@
+import './db-pool.js';
 import './business-status.js';
 import './order-status-fix.js';
 import http from 'node:http';
