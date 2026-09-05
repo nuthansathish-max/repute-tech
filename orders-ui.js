@@ -41,6 +41,12 @@
   function updateBadge(n){['ordersBadge','ordersBadgeMobile'].forEach(id=>{const e=$(id);if(e){e.textContent=n;e.style.display=n?'inline-block':'none'}})}
   function transitionsFor(status){if(status==='PENDING')return ['ACCEPTED','CANCELLED'];if(status==='ACCEPTED')return ['DELIVERED','CANCELLED'];return []}
   function buttonLabel(status){return status==='ACCEPTED'?'Accept order':status==='CANCELLED'?'Cancel order':status==='DELIVERED'?'Mark delivered':status}
+  function buttonStyle(status){
+    if(status==='ACCEPTED')return 'background:#16a34a;color:#fff;border:1px solid #15803d';
+    if(status==='CANCELLED')return 'background:#dc2626;color:#fff;border:1px solid #b91c1c';
+    if(status==='DELIVERED')return 'background:#2563eb;color:#fff;border:1px solid #1d4ed8';
+    return 'background:var(--p);color:#fff';
+  }
   async function loadOrders(){
     addNav();addSection();const list=$('ordersList');if(!list)return;list.innerHTML='<div class="sub">Loading orders…</div>';
     try{
@@ -55,7 +61,7 @@
         const head=document.createElement('div');head.innerHTML='<strong>'+esc(o.orderNumber)+'</strong> · <b>'+esc(o.status)+'</b><div class="sub" style="margin-top:6px">'+esc(o.customerName)+(o.customerPhone?' · '+esc(o.customerPhone):'')+'</div><div style="margin-top:10px">'+(o.items||[]).map(i=>esc(i.itemName)+' × '+Number(i.quantity||0)+' — '+money(i.lineTotal)).join('<br>')+'</div><div class="sub" style="margin-top:8px">'+new Date(o.createdAt).toLocaleString()+(o.notes?' · '+esc(o.notes):'')+'</div><div style="text-align:right;margin-top:8px"><b style="font-size:20px">'+money(o.total)+'</b><div class="sub">Pay at store</div></div>';
         item.appendChild(head);
         const actions=document.createElement('div');actions.style='display:flex;gap:8px;flex-wrap:wrap;margin-top:13px';
-        transitionsFor(o.status).forEach(st=>{const btn=document.createElement('button');btn.type='button';btn.className='btn '+(st==='CANCELLED'?'secondary':'');btn.textContent=buttonLabel(st);btn.dataset.status=st;btn.onclick=()=>updateOrderStatus(o.id,st);actions.appendChild(btn)});
+        transitionsFor(o.status).forEach(st=>{const btn=document.createElement('button');btn.type='button';btn.className='btn';btn.style=buttonStyle(st);btn.textContent=buttonLabel(st);btn.dataset.status=st;btn.onclick=()=>updateOrderStatus(o.id,st);actions.appendChild(btn)});
         if(!actions.children.length){const done=document.createElement('span');done.className='sub';done.textContent=o.status==='DELIVERED'?'Order delivered':'Order cancelled';actions.appendChild(done)}
         item.appendChild(actions);list.appendChild(item)
       });
