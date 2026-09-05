@@ -1,9 +1,16 @@
+import { PrismaClient } from '@prisma/client';
+import './business-status.js';
 import http from 'node:http';
-import { publicOrder, publicOrderStatus } from './public-order.js';
+
+const schemaPrisma=new PrismaClient();
+await schemaPrisma.$executeRawUnsafe(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS "isOpen" BOOLEAN NOT NULL DEFAULT true`);
+await schemaPrisma.$disconnect();
+
+const { publicOrder, publicOrderStatus } = await import('./public-order.js');
 const original=http.createServer;
 http.createServer=function(listener,...args){
   return original.call(http,async(req,res)=>{
-    const p=new URL(req.url,`http://${req.headers.host||'localhost'}`).pathname;
+    const p=new URL(req.url,`http://${req.headers.host||'localhost'`).pathname;
     try{
       let m=p.match(/^\/q\/([^/]+)\/order$/);
       if(req.method==='GET'&&m)return publicOrder(req,res,decodeURIComponent(m[1]));
