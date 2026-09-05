@@ -6,11 +6,36 @@ datasource db {
   url = env("DATABASE_URL")
 }
 
-enum UserRole { SUPER_ADMIN ADMIN OWNER MANAGER STAFF }
-enum BusinessType { RESTAURANT HOTEL CAFE SALON OTHER }
-enum ReviewSentiment { POSITIVE NEUTRAL NEGATIVE }
-enum ReplyStatus { DRAFT PENDING_APPROVAL APPROVED PUBLISHED FAILED }
-enum ConsentType { WHATSAPP_MARKETING EMAIL_MARKETING }
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OWNER
+  MANAGER
+  STAFF
+}
+enum BusinessType {
+  RESTAURANT
+  HOTEL
+  CAFE
+  SALON
+  OTHER
+}
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+enum ReplyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  FAILED
+}
+enum ConsentType {
+  WHATSAPP_MARKETING
+  EMAIL_MARKETING
+}
 
 model Session {
   id String @id @default(cuid())
@@ -335,7 +360,6 @@ model ReviewSyncLog {
   createdAt DateTime @default(now())
   @@index([businessId,createdAt])
 }
-
 model Order {
   id String @id @default(cuid())
   businessId String
