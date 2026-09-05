@@ -47,6 +47,16 @@
     if(status==='DELIVERED')return 'background:#2563eb;color:#fff;border:1px solid #1d4ed8';
     return 'background:var(--p);color:#fff';
   }
+  function renderOrderActions(item,status){
+    const actions=document.createElement('div');actions.style='display:flex;gap:8px;flex-wrap:wrap;margin-top:13px';
+    transitionsFor(status).forEach(st=>{const btn=document.createElement('button');btn.type='button';btn.className='btn';btn.style=buttonStyle(st);btn.textContent=buttonLabel(st);btn.dataset.status=st;btn.onclick=()=>updateOrderStatus(item.dataset.orderId,st);actions.appendChild(btn)});
+    if(!actions.children.length){const done=document.createElement('span');done.className='sub';done.textContent=status==='DELIVERED'?'Order delivered':'Order cancelled';actions.appendChild(done)}
+    return actions;
+  }
+  function replaceOrderActions(item,status){
+    const old=item.querySelector('[data-order-actions]');if(old)old.remove();
+    const actions=renderOrderActions(item,status);actions.dataset.orderActions='true';item.appendChild(actions);
+  }
   async function loadOrders(){
     addNav();addSection();const list=$('ordersList');if(!list)return;list.innerHTML='<div class="sub">Loading orders…</div>';
     try{
@@ -58,18 +68,30 @@
       list.innerHTML='';
       orders.forEach(o=>{
         const item=document.createElement('div');item.className='item';item.dataset.orderId=o.id;
-        const head=document.createElement('div');head.innerHTML='<strong>'+esc(o.orderNumber)+'</strong> · <b>'+esc(o.status)+'</b><div class="sub" style="margin-top:6px">'+esc(o.customerName)+(o.customerPhone?' · '+esc(o.customerPhone):'')+'</div><div style="margin-top:10px">'+(o.items||[]).map(i=>esc(i.itemName)+' × '+Number(i.quantity||0)+' — '+money(i.lineTotal)).join('<br>')+'</div><div class="sub" style="margin-top:8px">'+new Date(o.createdAt).toLocaleString()+(o.notes?' · '+esc(o.notes):'')+'</div><div style="text-align:right;margin-top:8px"><b style="font-size:20px">'+money(o.total)+'</b><div class="sub">Pay at store</div></div>';
+        const head=document.createElement('div');head.innerHTML='<strong>'+esc(o.orderNumber)+'</strong> · <b data-order-status>'+esc(o.status)+'</b><div class="sub" style="margin-top:6px">'+esc(o.customerName)+(o.customerPhone?' · '+esc(o.customerPhone):'')+'</div><div style="margin-top:10px">'+(o.items||[]).map(i=>esc(i.itemName)+' × '+Number(i.quantity||0)+' — '+money(i.lineTotal)).join('<br>')+'</div><div class="sub" style="margin-top:8px">'+new Date(o.createdAt).toLocaleString()+(o.notes?' · '+esc(o.notes):'')+'</div><div style="text-align:right;margin-top:8px"><b style="font-size:20px">'+money(o.total)+'</b><div class="sub">Pay at store</div></div>';
         item.appendChild(head);
-        const actions=document.createElement('div');actions.style='display:flex;gap:8px;flex-wrap:wrap;margin-top:13px';
-        transitionsFor(o.status).forEach(st=>{const btn=document.createElement('button');btn.type='button';btn.className='btn';btn.style=buttonStyle(st);btn.textContent=buttonLabel(st);btn.dataset.status=st;btn.onclick=()=>updateOrderStatus(o.id,st);actions.appendChild(btn)});
-        if(!actions.children.length){const done=document.createElement('span');done.className='sub';done.textContent=o.status==='DELIVERED'?'Order delivered':'Order cancelled';actions.appendChild(done)}
-        item.appendChild(actions);list.appendChild(item)
+        const actions=renderOrderActions(item,o.status);actions.dataset.orderActions='true';item.appendChild(actions);list.appendChild(item)
       });
     }catch(e){list.innerHTML='<div class="sub">'+esc(e.message)+'</div>'}
   }
   async function updateOrderStatus(id,status){
     if(status==='CANCELLED'&&!confirm('Cancel this order? This can be done while the order is pending or accepted.'))return;
-    try{await api('/orders/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({status})});await loadOrders()}catch(e){notify(e.message)}
+    const item=document.querySelector('[data-order-id="'+CSS.escape(id)+'"]');
+    const buttons=item?[...item.querySelectorAll('[data-status]')]:[];
+    buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
+    if(item){
+      const statusEl=item.querySelector('[data-order-status]');if(statusEl)statusEl.textContent=status;
+      replaceOrderActions(item,status);
+      item.dataset.previousStatus=item.dataset.previousStatus||'';
+    }
+    try{
+      await api('/orders/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({status})});
+      if(item){item.dataset.previousStatus='';}
+      const pending=[...document.querySelectorAll('[data-order-status]')].filter(e=>e.textContent==='PENDING').length;updateBadge(pending);
+    }catch(e){
+      notify(e.message);
+      await loadOrders();
+    }
   }
   function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('orders').classList.add('active');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
   window.showOrders=showOrders;window.updateOrderStatus=updateOrderStatus;
