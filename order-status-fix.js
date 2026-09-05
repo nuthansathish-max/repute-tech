@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
+import { notifyBusiness } from './notification-preload.js';
 
 const prisma = new PrismaClient();
 const originalPatch = express.application.patch;
@@ -18,7 +19,7 @@ async function ensureOrderTables(){
 async function userFrom(req){
   const token=getCookie(req,'rp_session');
   if(!token)return null;
-  const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}});
+  const s=await prisma.session.findUnique({where:{tokenHash:token},include:{user:true}});
   if(!s || s.expiresAt<new Date())return null;
   return s.user;
 }
@@ -51,6 +52,7 @@ async function updateOrderStatus(req,res,next){
     if(order.customerId){
       prisma.customerInteraction.create({data:{customerId:order.customerId,type:`ORDER_${status}`,channel:'DIGITAL_MENU',metadata:{orderId:order.id,orderNumber:order.orderNumber}}}).catch(()=>{});
     }
+    notifyBusiness(order.businessId,{type:`ORDER_${status}`,title:`Order ${status.toLowerCase()}`,message:`Order #${order.orderNumber} for ${order.customerName} is now ${status.toLowerCase()}.`}).catch(()=>{});
   }catch(e){next(e)}
 }
 
