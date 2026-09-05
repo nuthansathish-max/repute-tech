@@ -57,4 +57,6 @@ $('syncGoogle').onclick=async()=>{try{await post(`/businesses/${businessId}/revi
 function showPage(page){const target=$(page);if(!target)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));target.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const active=document.querySelector(`[data-page="${page}"]`);if(active)$('heading').textContent=active.textContent.trim();window.scrollTo({top:0,behavior:'smooth'})}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
 initAuth();
-</script></body></html>
+</script>
+<script src="/app-enhancements.js"></script><script src="/orders-ui.js"></script><script src="/auth-enhancements.js"></script><script src="/reliability-enhancements.js"></script>
+</body></html>
