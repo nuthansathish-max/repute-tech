@@ -60,6 +60,11 @@ async function body(req){
 }
 function json(res,status,data){const out=JSON.stringify(data);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(out)}
 
+function publicOrigin(req){
+  const proto=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim() || (req.socket.encrypted?'https':'http');
+  return `${proto}://${req.headers.host||'localhost'}`;
+}
+
 async function qrPayload(qr, origin){
   const url=`${origin}/q/${encodeURIComponent(qr.slug)}`;
   let qrImageUrl=null;
@@ -67,7 +72,7 @@ async function qrPayload(qr, origin){
   return {...qr,qrUrl:url,qrImageUrl};
 }
 
-function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function escHtml(value){return String(value??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));}
 
 async function publicCustomerHub(res, req, slug){
   const qr=await prisma.smartQr.findUnique({where:{slug},include:{business:{include:{menus:{include:{items:true},where:{isPublished:true},orderBy:{createdAt:'desc'}}}}}});
@@ -75,8 +80,9 @@ async function publicCustomerHub(res, req, slug){
   await prisma.smartQr.update({where:{id:qr.id},data:{scanCount:{increment:1}}}).catch(()=>{});
   const business=qr.business;
   const menus=business.menus||[];
-  const menuHtml=menus.length?menus.map(menu=>`<section class="menu"><h2>${escHtml(menu.name)}</h2>${menu.items?.length?menu.items.map(item=>`<article class="item"><div><strong>${escHtml(item.name)}</strong>${item.category?`<span class="cat">${escHtml(item.category)}</span>`:''}<p>${escHtml(item.description||'')}</p></div><b>₹${escHtml(item.price)}</b></article>`).join(''):'<p class="muted">No items added yet.</p>'}</section>`).join(''):'<div class="empty">Digital menu is not published yet.</div>';
-  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(business.name)} · Customer Hub</title><style>*{box-sizing:border-box}body{margin:0;background:#f6f7fb;color:#171a2b;font-family:Inter,system-ui,-apple-system,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:28px 16px 48px}.hero{background:#10152b;color:#fff;border-radius:22px;padding:28px 22px;margin-bottom:16px}.hero h1{margin:0 0 8px;font-size:28px}.hero p{margin:0;color:#cbd2e5}.menu,.empty{background:#fff;border:1px solid #e6e8ef;border-radius:18px;padding:20px;margin-top:14px}.menu h2{margin:0 0 14px;font-size:20px}.item{display:flex;justify-content:space-between;gap:18px;padding:14px 0;border-bottom:1px solid #eef0f4}.item:last-child{border-bottom:0}.item p{margin:6px 0 0;color:#667085;font-size:13px}.item b{white-space:nowrap}.cat{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:10px}.muted,.empty{color:#667085;font-size:14px}.footer{text-align:center;color:#98a2b3;font-size:12px;margin-top:18px}</style></head><body><main class="wrap"><header class="hero"><h1>Welcome to ${escHtml(business.name)}</h1><p>Explore our digital menu.</p></header>${menuHtml}<div class="footer">Powered by repute-tech.in</div></main></body></html>`;
+  const orderUrl=`/q/${encodeURIComponent(slug)}/order`;
+  const menuHtml=menus.length?menus.map(menu=>`<section class="menu"><div class="menuHead"><div><div class="eyebrow">DIGITAL MENU</div><h2>${escHtml(menu.name)}</h2></div><span class="menuCount">${menu.items?.length||0} items</span></div>${menu.items?.length?menu.items.map(item=>`<article class="item"><div class="itemMain"><div class="itemTitle"><strong>${escHtml(item.name)}</strong>${item.category?`<span class="cat">${escHtml(item.category)}</span>`:''}</div>${item.description?`<p>${escHtml(item.description)}</p>`:''}</div><b class="price">₹${escHtml(item.price)}</b></article>`).join(''):'<p class="muted">No items added yet.</p>'}</section>`).join(''):'<div class="empty"><div class="emptyIcon">☰</div><h2>Menu coming soon</h2><p>This business has not published its digital menu yet.</p></div>';
+  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#5146e5"><title>${escHtml(business.name)} · Customer Menu</title><style>*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f4f6ff 0,#f8f9fc 44%,#fff 100%);color:#171a2b;font-family:Inter,system-ui,-apple-system,sans-serif}.wrap{max-width:820px;margin:0 auto;padding:18px 14px 54px}.hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#0f1429 0%,#2b2b67 52%,#5146e5 100%);color:#fff;border-radius:26px;padding:28px 22px 24px;box-shadow:0 16px 40px rgba(31,41,95,.2)}.hero:after{content:'';position:absolute;width:190px;height:190px;border-radius:50%;right:-70px;top:-85px;background:rgba(255,255,255,.08)}.brand{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.72;margin-bottom:12px}.hero h1{position:relative;margin:0 0 8px;font-size:30px;line-height:1.1}.hero p{position:relative;margin:0;color:#dfe3ff;line-height:1.5;max-width:600px}.cta{display:inline-flex;align-items:center;justify-content:center;margin-top:18px;text-decoration:none;background:#fff;color:#171a2b;border-radius:13px;padding:12px 16px;font-weight:850;box-shadow:0 7px 18px rgba(0,0,0,.15)}.hint{font-size:12px;color:#667085;margin:14px 3px 0}.menu,.empty{background:rgba(255,255,255,.97);border:1px solid #e4e7f0;border-radius:20px;padding:18px;margin-top:14px;box-shadow:0 7px 24px rgba(16,24,40,.055)}.menuHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:5px}.eyebrow{font-size:10px;letter-spacing:.1em;color:#5146e5;font-weight:800}.menu h2{margin:3px 0 0;font-size:20px}.menuCount{font-size:11px;color:#667085;background:#f2f4f7;padding:6px 9px;border-radius:999px;white-space:nowrap}.item{display:flex;justify-content:space-between;gap:18px;padding:15px 2px;border-bottom:1px solid #eef0f4}.item:last-child{border-bottom:0}.itemMain{min-width:0}.itemTitle{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.item strong{font-size:15px}.item p{margin:6px 0 0;color:#667085;font-size:13px;line-height:1.45}.price{white-space:nowrap;font-size:16px}.cat{display:inline-block;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#5146e5;font-size:10px;font-weight:700}.empty{text-align:center;padding:34px 20px}.emptyIcon{width:48px;height:48px;margin:auto;border-radius:15px;display:grid;place-items:center;background:#eef2ff;color:#5146e5;font-size:22px}.empty h2{margin:12px 0 5px}.empty p,.muted{color:#667085;font-size:13px}.footer{text-align:center;color:#98a2b3;font-size:11px;margin-top:18px}@media(max-width:560px){.hero h1{font-size:25px}.hero{padding:24px 18px}.menu{padding:16px}.cta{width:100%}}</style></head><body><main class="wrap"><header class="hero"><div class="brand">Repute-Tech · Smart Customer Hub</div><h1>Welcome to ${escHtml(business.name)}</h1><p>Browse the latest menu and order directly from your phone. Payment is collected manually at the store.</p><a class="cta" href="${orderUrl}">View menu &amp; order <span style="margin-left:7px">→</span></a></header><div class="hint">Scan complete · You can browse the menu below before ordering.</div>${menuHtml}<div class="footer">Powered by repute-tech.in</div></main></body></html>`;
   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});res.end(html);
 }
 
@@ -103,7 +109,7 @@ async function handle(req,res){
       if(req.method==='GET'){
         if(m[2]==='qr'){
           const rows=await prisma.smartQr.findMany({where:{businessId:m[1]},orderBy:{name:'asc'}});
-          return json(res,200,await Promise.all(rows.map(q=>qrPayload(q,u.origin))));
+          return json(res,200,await Promise.all(rows.map(q=>qrPayload(q,publicOrigin(req)))));
         }
         return json(res,200,await prisma.menu.findMany({where:{businessId:m[1]},include:{items:true},orderBy:{createdAt:'desc'}}));
       }
@@ -111,9 +117,10 @@ async function handle(req,res){
         const b=await body(req); const name=String(b.name||'').trim(); const slug=String(b.slug||'').trim().toLowerCase();
         if(!name||!/^[a-z0-9-]{2,100}$/.test(slug))return json(res,400,{error:'Enter a valid QR name and slug (letters, numbers and hyphens)'});
         if(await prisma.smartQr.findUnique({where:{slug}}))return json(res,409,{error:'That QR slug already exists. Choose another slug.'});
-        const url=`${u.origin}/q/${encodeURIComponent(slug)}`;
+        const origin=publicOrigin(req);
+        const url=`${origin}/q/${encodeURIComponent(slug)}`;
         const qr=await prisma.smartQr.create({data:{businessId:m[1],name,slug,destination:{type:'customer-hub',url}}});
-        return json(res,201,await qrPayload(qr,u.origin));
+        return json(res,201,await qrPayload(qr,origin));
       }
       if(req.method==='POST' && m[2]==='menus'){
         const b=await body(req); const name=String(b.name||'').trim(); if(!name)return json(res,400,{error:'Enter a menu name'});
