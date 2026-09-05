@@ -1,7 +1,7 @@
 export function createTenantGuard({prisma, sessionUser}){
   const adminRoles=new Set(['ADMIN','SUPER_ADMIN']);
   const publicApiPrefixes=['/api/auth/','/api/customer','/api/whatsapp/webhook','/api/plans'];
-  const publicApiExact=new Set(['/api/auth/config-status','/api/auth/login','/api/auth/signup','/api/auth/logout','/api/auth/me']);
+  const publicApiExact=new Set(['/api/auth/config-status','/api/auth/login','/api/auth/signup','/api/auth/logout','/api/auth/me','/api/public/orders']);
 
   const isPublic=(path)=>{
     if(publicApiExact.has(path)) return true;
@@ -39,6 +39,10 @@ export function createTenantGuard({prisma, sessionUser}){
       }
       if(req.path.includes('/qr/')){
         const row=await prisma.smartQr.findUnique({where:{id},select:{businessId:true}});
+        return row?.businessId||null;
+      }
+      if(req.path.startsWith('/api/orders/')){
+        const row=await prisma.order.findUnique({where:{id},select:{businessId:true}});
         return row?.businessId||null;
       }
     }
