@@ -41,8 +41,8 @@ async function sessionUser(req){
 const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,...handlers];
 
-// Keep the original UI and inject the enhancement bundle. Static index handling is disabled
-// so the final sendFile fallback can add the bundle without replacing the user's design.
+// Keep the original UI and inject enhancement bundles. Static index handling is disabled
+// so the final sendFile fallback can add the bundles without replacing the user's design.
 express.static=function(root,options={}){return originalStatic.call(express,root,{...options,index:false});};
 express.application.use=function(...args){
   if(!this.__reputeEnhancementMiddleware){
@@ -54,7 +54,7 @@ express.application.use=function(...args){
           try{
             if(String(file).endsWith('index.html')){
               const html=await fs.readFile(file,'utf8');
-              const enhanced=html.includes('/app-enhancements.js')?html:html.replace('</body>','<script src="/app-enhancements.js"></script></body>');
+              const enhanced=html.includes('/app-enhancements.js')?html:html.replace('</body>','<script src="/app-enhancements.js"></script><script src="/orders-ui.js"></script><script src="/auth-enhancements.js"></script></body>');
               res.type('html').send(enhanced);
               return;
             }
@@ -179,4 +179,7 @@ express.application.post=function(path,...handlers){
 express.application.put=function(path,...handlers){return originalPut.call(this,path,...guardHandlers(handlers));};
 express.application.patch=function(path,...handlers){return originalPatch.call(this,path,...guardHandlers(handlers));};
 
+// Order routes are registered after the tenant wrapper so their public checkout
+// endpoint stays public while business order management performs its own membership check.
+await import('./orderRoutes.js');
 await import('./server.js');
