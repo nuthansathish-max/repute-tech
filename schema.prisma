@@ -83,6 +83,7 @@ model Business {
   logoUrl String?
   phone String?
   website String?
+  isOpen Boolean @default(true)
   aiTone String @default("Warm & professional")
   aiLanguage String @default("English")
   aiInstructions String?
