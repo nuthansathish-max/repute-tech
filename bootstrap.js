@@ -90,6 +90,15 @@ express.application.get=function(path,...handlers){
     await prisma.googleConnection.create({data:{userId:user.id,businessId:business.id,accessTokenEnc:encrypt(token.access_token),refreshTokenEnc:token.refresh_token?encrypt(token.refresh_token):undefined,expiresAt:token.expires_in?new Date(Date.now()+token.expires_in*1000):undefined,scope:token.scope}});
     const sessionToken=await startSession(user); res.setHeader('Set-Cookie',[sessionCookie(sessionToken),clearOAuthCookie()]); res.redirect('/?google=connected');
   }catch(e){next(e)}});
+  if(path==='/api/businesses') return originalGet.call(this,path,async(req,res,next)=>{try{
+    const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    // Older accounts may have a User row but no Business/BusinessMember row because
+    // they were created before the business workspace was introduced. Repair that
+    // relationship on the first authenticated business lookup so every owner has context.
+    await ensureBusiness(user);
+    const where=['SUPER_ADMIN','ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}};
+    res.json(await prisma.business.findMany({where,include:{locations:true,subscription:true}}));
+  }catch(e){next(e)}});
   if(path==='/api/admin/plan-requests') return originalGet.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     if(!['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Admin access required'});
@@ -101,13 +110,13 @@ express.application.get=function(path,...handlers){
     if(!business)return res.status(403).json({error:'Business access denied'});
     res.json(await prisma.campaign.findMany({where:{businessId:business.id},orderBy:{scheduledAt:'desc'}}));
   }catch(e){next(e)}});
-  if(path==='/qr/:slug') return originalGet.call(this,path,async(req,res)=>res.redirect(`/public/qr/${encodeURIComponent(req.params.slug)}`));
+  if(path==='/qr/:slug') return originalGet.call(this,path,async(req,res)=>res.redirect(`/q/${encodeURIComponent(req.params.slug)}`));
   return originalGet.call(this,path,...guardHandlers(handlers));
 };
 
 express.application.post=function(path,...handlers){
   if(path==='/api/auth/signup') return originalPost.call(this,path,async(req,res,next)=>{try{
-    const schema=z.object({name:z.string().trim().min(2,'Name must be at least 2 characters').max(80),email:z.string().trim().email('Enter a valid email address'),password:z.string().min(8,'Password must be at least 8 characters').max(200)});
+    const schema=z.object({name:z.string().trim().min(2,'Name must be at least 2 characters').max(80),email:z.string().trim().email('Enter a valid email address'),password:z.string().min(8,'Password must be at most 200 characters').max(200)});
     const p=schema.safeParse(req.body);
     if(!p.success){const first=p.error.issues[0];return res.status(400).json({error:first?.message||'Invalid signup details',fields:p.error.flatten().fieldErrors});}
     const email=p.data.email.toLowerCase();
@@ -132,7 +141,7 @@ express.application.post=function(path,...handlers){
     if(!p.success)return res.status(400).json({error:p.error.issues[0]?.message||'Invalid QR details'});
     const existing=await prisma.smartQr.findFirst({where:{businessId,slug:p.data.slug}}); if(existing)return res.status(409).json({error:'That QR slug already exists'});
     const origin=`${req.protocol}://${req.get('host')}`;
-    const destination={type:'review-hub',url:`${origin}/qr/${encodeURIComponent(p.data.slug)}`};
+    const destination={type:'review-hub',url:`${origin}/q/${encodeURIComponent(p.data.slug)}`};
     const qr=await prisma.smartQr.create({data:{businessId,name:p.data.name,slug:p.data.slug,destination}});
     return res.status(201).json({...qr,qrUrl:destination.url,qrImageUrl:`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destination.url)}`});
   }catch(e){next(e)}});
