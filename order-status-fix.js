@@ -26,9 +26,11 @@ async function userFrom(req){
 async function updateOrderStatus(req,res,next){
   try{
     await ensureOrderTables();
-    const order=await prisma.order.findUnique({where:{id:req.params.id},include:{items:true}});
+    const [order,user]=await Promise.all([
+      prisma.order.findUnique({where:{id:req.params.id},include:{items:true}}),
+      userFrom(req)
+    ]);
     if(!order)return res.status(404).json({error:'Order not found'});
-    const user=await userFrom(req);
     if(!user)return res.status(401).json({error:'Authentication required'});
     if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){
       const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId:order.businessId}}});
@@ -45,10 +47,10 @@ async function updateOrderStatus(req,res,next){
     }
     if(status===order.status)return res.json({ok:true,order});
     const updated=await prisma.order.update({where:{id:order.id},data:{status},include:{items:true}});
-    if(order.customerId){
-      await prisma.customerInteraction.create({data:{customerId:order.customerId,type:`ORDER_${status}`,channel:'DIGITAL_MENU',metadata:{orderId:order.id,orderNumber:order.orderNumber}}}).catch(()=>{});
-    }
     res.json({ok:true,order:updated});
+    if(order.customerId){
+      prisma.customerInteraction.create({data:{customerId:order.customerId,type:`ORDER_${status}`,channel:'DIGITAL_MENU',metadata:{orderId:order.id,orderNumber:order.orderNumber}}}).catch(()=>{});
+    }
   }catch(e){next(e)}
 }
 
