@@ -1,4 +1,5 @@
 import './db-pool.js';
+import './notification-preload.js';
 import './order-hardening.js';
 import './business-status.js';
 import './order-status-fix.js';
