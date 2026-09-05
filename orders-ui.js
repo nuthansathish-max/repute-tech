@@ -1,7 +1,34 @@
 (function(){
   const $=id=>document.getElementById(id);
   const api=async(url,opt={})=>{const r=await fetch('/api'+url,{credentials:'include',headers:{'content-type':'application/json',...(opt.headers||{})},...opt});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Request failed');return j};
-  function addNav(){const side=document.querySelector('.side')||document.querySelector('.nav');if(side&&!side.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';const a=side.querySelector('[data-page="pricing"]');side.insertBefore(b,a||null);b.addEventListener('click',showOrders)}const bar=document.querySelector('.mobilebar');if(bar&&!bar.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';b.style.minWidth='94px';b.addEventListener('click',showOrders);bar.appendChild(b)}}
+  function addNav(){
+    const nav=document.querySelector('.side .nav')||document.querySelector('.nav');
+    if(nav&&!nav.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';const a=nav.querySelector('[data-page="pricing"]');nav.insertBefore(b,a||null);b.addEventListener('click',showOrders)}
+    const bar=document.querySelector('.mobilebar');
+    if(bar&&!bar.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';b.style.minWidth='94px';b.addEventListener('click',showOrders);bar.appendChild(b)}
+  }
+  function addAvailability(){
+    if($('businessAvailability'))return;
+    const dashboard=$('dashboard');if(!dashboard)return;
+    const card=document.createElement('div');card.id='businessAvailability';card.className='card';card.style.marginBottom='14px';
+    card.innerHTML='<div class="row" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="section-title" style="margin-bottom:4px">Business availability</div><div id="businessAvailabilityText" class="sub">Checking business status…</div></div><button id="businessAvailabilityToggle" class="btn" type="button">Checking…</button></div>';
+    dashboard.prepend(card);
+    $('businessAvailabilityToggle').addEventListener('click',toggleAvailability);
+    loadAvailability();
+  }
+  async function loadAvailability(){
+    addAvailability();
+    try{const bs=await api('/businesses');const b=bs[0];if(!b)throw new Error('No business found');const d=await api('/businesses/'+encodeURIComponent(b.id)+'/status');renderAvailability(d.isOpen)}catch(e){if($('businessAvailabilityText'))$('businessAvailabilityText').textContent=e.message}}
+  function renderAvailability(open){
+    const text=$('businessAvailabilityText'),btn=$('businessAvailabilityToggle');if(!text||!btn)return;
+    text.textContent=open?'Open — customers can use the customer hub and place new orders.':'Closed — customers can still see the hub, but new orders are unavailable.';
+    btn.textContent=open?'Turn business OFF':'Turn business ON';
+    btn.className='btn '+(open?'danger':'');
+  }
+  async function toggleAvailability(){
+    const btn=$('businessAvailabilityToggle');if(!btn)return;btn.disabled=true;
+    try{const bs=await api('/businesses');const b=bs[0];if(!b)throw new Error('No business found');const current=await api('/businesses/'+encodeURIComponent(b.id)+'/status');const next=!current.isOpen;const d=await api('/businesses/'+encodeURIComponent(b.id)+'/status',{method:'PATCH',body:JSON.stringify({isOpen:next})});renderAvailability(d.isOpen);alert(d.isOpen?'Business is now ON.':'Business is now OFF.')}catch(e){alert(e.message)}finally{btn.disabled=false}
+  }
   function addSection(){if($('orders'))return;const main=document.querySelector('main.main');if(!main)return;const s=document.createElement('section');s.id='orders';s.className='page';s.innerHTML='<div class="card"><div class="row" style="justify-content:space-between"><div><div class="section-title">Digital Menu Orders</div><div class="sub">Manage customer orders. Available statuses: Pending, Accepted, Cancelled.</div></div><button class="btn secondary" id="reloadOrders" type="button">Reload</button></div><div id="orderSummary" class="grid" style="grid-template-columns:repeat(3,1fr);margin:14px 0"></div><div id="ordersList" class="list"></div></div>';main.appendChild(s);$('reloadOrders').addEventListener('click',loadOrders)}
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money=n=>'₹'+Number(n||0).toFixed(2);
@@ -10,5 +37,5 @@
   async function updateOrderStatus(id,status){if(status==='CANCELLED'&&!confirm('Cancel this order?'))return;try{await api('/orders/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({status})});await loadOrders()}catch(e){alert(e.message)}}
   function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('orders').classList.add('active');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
   window.showOrders=showOrders;window.updateOrderStatus=updateOrderStatus;
-  function boot(){addNav();addSection();setTimeout(()=>loadOrders(),700);setInterval(addNav,3000);setInterval(()=>{if($('orders')?.classList.contains('active'))loadOrders()},15000)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  function boot(){addNav();addSection();addAvailability();setTimeout(()=>loadOrders(),700);setInterval(addNav,3000);setInterval(loadAvailability,30000);setInterval(()=>{if($('orders')?.classList.contains('active'))loadOrders()},15000)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
