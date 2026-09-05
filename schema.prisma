@@ -6,39 +6,14 @@ datasource db {
   url = env("DATABASE_URL")
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  ADMIN
-  OWNER
-  MANAGER
-  STAFF
-}
-enum BusinessType {
-  RESTAURANT
-  HOTEL
-  CAFE
-  SALON
-  OTHER
-}
-enum ReviewSentiment {
-  POSITIVE
-  NEUTRAL
-  NEGATIVE
-}
-enum ReplyStatus {
-  DRAFT
-  PENDING_APPROVAL
-  APPROVED
-  PUBLISHED
-  FAILED
-}
-enum ConsentType {
-  WHATSAPP_MARKETING
-  EMAIL_MARKETING
-}
+enum UserRole { SUPER_ADMIN ADMIN OWNER MANAGER STAFF }
+enum BusinessType { RESTAURANT HOTEL CAFE SALON OTHER }
+enum ReviewSentiment { POSITIVE NEUTRAL NEGATIVE }
+enum ReplyStatus { DRAFT PENDING_APPROVAL APPROVED PUBLISHED FAILED }
+enum ConsentType { WHATSAPP_MARKETING EMAIL_MARKETING }
 
 model Session {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   tokenHash String @unique
   userId String
   expiresAt DateTime
@@ -46,9 +21,8 @@ id String @id @default(cuid())
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   @@index([userId,expiresAt])
 }
-
 model GoogleConnection {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   userId String
   businessId String?
   googleAccountId String?
@@ -63,9 +37,8 @@ id String @id @default(cuid())
   @@index([userId])
   @@index([businessId])
 }
-
 model User {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   email String @unique
   name String
   passwordHash String?
@@ -77,9 +50,8 @@ id String @id @default(cuid())
   planRequests PlanRequest[]
   createdAt DateTime @default(now())
 }
-
 model Business {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   name String
   type BusinessType
   slug String @unique
@@ -99,15 +71,15 @@ id String @id @default(cuid())
   qrCodes SmartQr[]
   customers Customer[]
   campaigns Campaign[]
+  orders Order[]
   subscription Subscription?
   googleConnections GoogleConnection[]
   notifications Notification[]
   planRequests PlanRequest[]
   whatsappConnection WhatsAppConnection?
 }
-
 model BusinessMember {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   userId String
   businessId String
   role UserRole
@@ -115,9 +87,8 @@ id String @id @default(cuid())
   business Business @relation(fields:[businessId],references:[id])
   @@unique([userId,businessId])
 }
-
 model Location {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   name String
   address String?
@@ -128,9 +99,8 @@ id String @id @default(cuid())
   reviews Review[]
   @@index([googleLocationId])
 }
-
 model Review {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   locationId String?
   googleReviewId String?
@@ -155,20 +125,19 @@ id String @id @default(cuid())
   @@index([googleReviewId])
   @@index([locationId])
 }
-
 model Menu {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   name String
   isPublished Boolean @default(false)
   business Business @relation(fields:[businessId],references:[id])
   items MenuItem[]
+  orders Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 model MenuItem {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   menuId String
   name String
   description String?
@@ -177,10 +146,10 @@ id String @id @default(cuid())
   available Boolean @default(true)
   category String?
   menu Menu @relation(fields:[menuId],references:[id])
+  orderItems OrderItem[]
 }
-
 model SmartQr {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   name String
   slug String @unique
@@ -190,9 +159,8 @@ id String @id @default(cuid())
   business Business @relation(fields:[businessId],references:[id])
   scans QrScan[]
 }
-
 model QrScan {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   qrId String
   scannedAt DateTime @default(now())
   source String?
@@ -201,9 +169,8 @@ id String @id @default(cuid())
   qr SmartQr @relation(fields:[qrId],references:[id],onDelete:Cascade)
   @@index([qrId,scannedAt])
 }
-
 model Customer {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   name String?
   phone String?
@@ -215,11 +182,11 @@ id String @id @default(cuid())
   consents Consent[]
   interactions CustomerInteraction[]
   campaignMessages CampaignMessage[]
+  orders Order[]
   @@index([businessId,createdAt])
 }
-
 model CustomerInteraction {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   customerId String
   type String
   channel String?
@@ -228,9 +195,8 @@ id String @id @default(cuid())
   customer Customer @relation(fields:[customerId],references:[id],onDelete:Cascade)
   @@index([customerId,createdAt])
 }
-
 model Consent {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   customerId String
   type ConsentType
   granted Boolean
@@ -239,9 +205,8 @@ id String @id @default(cuid())
   customer Customer @relation(fields:[customerId],references:[id])
   @@unique([customerId,type])
 }
-
 model Campaign {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   name String
   message String
@@ -254,9 +219,8 @@ id String @id @default(cuid())
   business Business @relation(fields:[businessId],references:[id])
   messages CampaignMessage[]
 }
-
 model WhatsAppConnection {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String @unique
   phoneNumberId String?
   wabaId String?
@@ -267,9 +231,8 @@ id String @id @default(cuid())
   status String @default("DISCONNECTED")
   business Business @relation(fields:[businessId],references:[id])
 }
-
 model CampaignMessage {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   campaignId String
   customerId String?
   toPhone String
@@ -286,9 +249,8 @@ id String @id @default(cuid())
   @@index([campaignId,status])
   @@index([providerMessageId])
 }
-
 model PlanRequest {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   userId String
   planCode String
@@ -312,9 +274,8 @@ id String @id @default(cuid())
   @@index([businessId,status,createdAt])
   @@index([userId,createdAt])
 }
-
 model PlanCatalog {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   code String @unique
   name String
   price Decimal @db.Decimal(10,2)
@@ -326,9 +287,8 @@ id String @id @default(cuid())
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
-
 model Subscription {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String @unique
   plan String
   status String @default("ACTIVE")
@@ -341,9 +301,8 @@ id String @id @default(cuid())
   currentPeriodEnd DateTime?
   business Business @relation(fields:[businessId],references:[id])
 }
-
 model AuditLog {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   actorUserId String?
   action String
   entity String
@@ -351,9 +310,8 @@ id String @id @default(cuid())
   metadata Json?
   createdAt DateTime @default(now())
 }
-
 model Notification {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   userId String
   businessId String?
   type String
@@ -365,9 +323,8 @@ id String @id @default(cuid())
   business Business? @relation(fields:[businessId],references:[id],onDelete:SetNull)
   @@index([userId,readAt,createdAt])
 }
-
 model ReviewSyncLog {
-id String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
   locationId String?
   status String
@@ -377,4 +334,40 @@ id String @id @default(cuid())
   error String?
   createdAt DateTime @default(now())
   @@index([businessId,createdAt])
+}
+
+model Order {
+  id String @id @default(cuid())
+  businessId String
+  menuId String?
+  customerId String?
+  orderNumber String @unique
+  customerName String
+  customerPhone String?
+  fulfilmentType String @default("IN_STORE")
+  status String @default("PENDING")
+  paymentStatus String @default("UNPAID")
+  paymentMethod String @default("MANUAL")
+  notes String?
+  total Decimal @db.Decimal(10,2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  menu Menu? @relation(fields:[menuId],references:[id],onDelete:SetNull)
+  customer Customer? @relation(fields:[customerId],references:[id],onDelete:SetNull)
+  items OrderItem[]
+  @@index([businessId,status,createdAt])
+  @@index([customerId,createdAt])
+}
+model OrderItem {
+  id String @id @default(cuid())
+  orderId String
+  menuItemId String?
+  itemName String
+  quantity Int
+  unitPrice Decimal @db.Decimal(10,2)
+  lineTotal Decimal @db.Decimal(10,2)
+  order Order @relation(fields:[orderId],references:[id],onDelete:Cascade)
+  menuItem MenuItem? @relation(fields:[menuItemId],references:[id],onDelete:SetNull)
+  @@index([orderId])
 }
