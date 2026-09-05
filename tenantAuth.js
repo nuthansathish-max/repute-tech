@@ -8,6 +8,11 @@ export function createTenantGuard({prisma, sessionUser}){
     if(publicApiPrefixes.some(prefix=>path.startsWith(prefix))) return true;
     if(path==='/api/qr' || path==='/api/qr/') return false;
     if(path.startsWith('/api/qr/') && path.endsWith('/scan')) return true;
+    // These handlers perform their own session + business-membership checks.
+    // Excluding them here prevents the generic guard from rejecting valid
+    // parameterized requests before their handlers can resolve the business.
+    if(path==='/api/business/status') return true;
+    if(/^\/api\/businesses\/[^/]+\/(?:status|orders)$/.test(path)) return true;
     return false;
   };
 
