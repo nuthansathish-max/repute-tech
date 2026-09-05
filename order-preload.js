@@ -1,4 +1,5 @@
 import './db-pool.js';
+import './order-hardening.js';
 import './business-status.js';
 import './order-status-fix.js';
 import http from 'node:http';
@@ -32,12 +33,27 @@ async function saveOrderReview(req,res){
   return json(res,200,{ok:true});
 }
 
+function withPhoneValidationPage(res){
+  const end=res.end;
+  res.end=function(chunk,encoding,callback){
+    if(typeof chunk==='string' && chunk.includes('id="phone"')){
+      chunk=chunk
+        .replace('maxlength="20" inputmode="tel"','maxlength="10" minlength="10" inputmode="numeric" autocomplete="tel" pattern="[6-9][0-9]{9}"')
+        .replace('maxlength="30" placeholder="Phone number (optional)"','maxlength="10" minlength="10" inputmode="numeric" autocomplete="tel" pattern="[6-9][0-9]{9}" placeholder="Phone number"')
+        .replace('if(!/^[0-9+()\\-\\s]{7,20}$/.test(phone))','if(!/^[6-9][0-9]{9}$/.test(phone))')
+        .replace("if(!/^[6-9][0-9]{9}$/.test(phone)){$('msg').textContent='Please enter a valid phone number.';return}","if(!/^[6-9][0-9]{9}$/.test(phone)){$('msg').textContent='Enter a valid 10-digit Indian mobile number starting with 6, 7, 8 or 9.';return}");
+    }
+    return end.call(this,chunk,encoding,callback);
+  };
+}
+
 http.createServer=function(listener,...args){
   return original.call(http,async(req,res)=>{
     const p=new URL(req.url,`http://${req.headers.host||'localhost'}`).pathname;
     try{
       if(req.method==='GET'&&/^\/q\/[^/]+\/order$/.test(p)){
         const m=p.match(/^\/q\/([^/]+)\/order$/);
+        withPhoneValidationPage(res);
         return publicOrder(req,res,decodeURIComponent(m[1]));
       }
       if(req.method==='GET'&&/^\/q\/[^/]+\/order-status\/[^/]+$/.test(p)){
