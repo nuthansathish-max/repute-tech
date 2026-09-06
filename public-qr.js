@@ -3,7 +3,6 @@ import { PrismaClient } from '@prisma/client';
 
 // Public customer-facing QR destination. QR scans must never expose raw API/JSON data.
 const prisma = new PrismaClient();
-const originalGet = express.application.get;
 
 function esc(value) {
   return String(value ?? '')
@@ -39,7 +38,6 @@ function publicHubHtml({ business, menus, slug }) {
       </section>`).join('')
     : '<div class="empty">No published menus are available yet.</div>';
 
-  const businessId = esc(business.id);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -52,85 +50,42 @@ function publicHubHtml({ business, menus, slug }) {
 </head>
 <body>
 <div class="wrap">
-  <header class="hero">
-    <div class="eyebrow">Customer Hub</div>
-    <h1>${esc(business.name)}</h1>
-    <p>Browse our menu and share your experience.</p>
-  </header>
-  <div class="actions">
-    <a href="#menus">🍽️ View Menu</a>
-    <button type="button" onclick="openFeedback()">⭐ Give Feedback</button>
-  </div>
+  <header class="hero"><div class="eyebrow">Customer Hub</div><h1>${esc(business.name)}</h1><p>Browse our menu and share your experience.</p></header>
+  <div class="actions"><a href="#menus">🍽️ View Menu</a><button type="button" onclick="openFeedback()">⭐ Give Feedback</button></div>
   <main id="menus">${menuHtml}</main>
   <div class="footer">Powered by repute-tech.in</div>
 </div>
-<div class="modal" id="feedbackModal" onclick="if(event.target===this)closeFeedback()">
-  <div class="sheet">
-    <h2>How was your experience?</h2>
-    <select id="rating"><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Very good</option><option value="3">★★★ Good</option><option value="2">★★ Needs improvement</option><option value="1">★ Poor</option></select>
-    <textarea id="message" rows="4" placeholder="Tell us about your experience (optional)"></textarea>
-    <button onclick="submitFeedback()">Submit Feedback</button>
-    <button class="close" onclick="closeFeedback()">Close</button>
-    <p id="feedbackStatus" class="muted"></p>
-  </div>
-</div>
+<div class="modal" id="feedbackModal" onclick="if(event.target===this)closeFeedback()"><div class="sheet"><h2>How was your experience?</h2><select id="rating"><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Very good</option><option value="3">★★★ Good</option><option value="2">★★ Needs improvement</option><option value="1">★ Poor</option></select><textarea id="message" rows="4" placeholder="Tell us about your experience (optional)"></textarea><button onclick="submitFeedback()">Submit Feedback</button><button class="close" onclick="closeFeedback()">Close</button><p id="feedbackStatus" class="muted"></p></div></div>
 <script>
 const businessId=${JSON.stringify(business.id)};
 function openFeedback(){document.getElementById('feedbackModal').classList.add('open')}
 function closeFeedback(){document.getElementById('feedbackModal').classList.remove('open')}
-async function submitFeedback(){
-  const status=document.getElementById('feedbackStatus');
-  status.textContent='Submitting...';
-  try{
-    const r=await fetch('/api/customer/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({businessId,rating:Number(document.getElementById('rating').value),message:document.getElementById('message').value})});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.error||'Unable to submit feedback');
-    status.textContent='Thank you for your feedback!';
-    document.getElementById('message').value='';
-  }catch(e){status.textContent=e.message||'Unable to submit feedback';}
-}
+async function submitFeedback(){const status=document.getElementById('feedbackStatus');status.textContent='Submitting...';try{const r=await fetch('/api/customer/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({businessId,rating:Number(document.getElementById('rating').value),message:document.getElementById('message').value})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to submit feedback');status.textContent='Thank you for your feedback!';document.getElementById('message').value=''}catch(e){status.textContent=e.message||'Unable to submit feedback'}}
 </script>
-</body>
-</html>`;
+</body></html>`;
 }
 
-async function servePublicQr(req, res, next) {
+export async function servePublicQr(req, res, next) {
   try {
     const slug = String(req.params.slug || '').trim();
     if (!slug) return res.status(404).send('QR code not found');
-
-    const qr = await prisma.smartQr.findFirst({
-      where: { slug },
-      include: {
-        business: {
-          include: {
-            menus: {
-              where: { isPublished: true },
-              orderBy: { createdAt: 'desc' },
-              include: { items: { orderBy: { name: 'asc' } } }
-            }
-          }
-        }
-      }
-    });
-
+    const qr = await prisma.smartQr.findFirst({where:{slug},include:{business:{include:{menus:{where:{isPublished:true},orderBy:{createdAt:'desc'},include:{items:{orderBy:{name:'asc'}}}}}}}});
     if (!qr?.business) return res.status(404).send('QR code not found');
+    await prisma.smartQr.update({where:{id:qr.id},data:{scanCount:{increment:1}}}).catch(()=>{});
+    return res.type('html').send(publicHubHtml({business:qr.business,menus:qr.business.menus||[],slug}));
+  } catch (error) { return next(error); }
+}
 
-    await prisma.smartQr.update({
-      where: { id: qr.id },
-      data: { scanCount: { increment: 1 } }
-    }).catch(() => {});
-
-    return res.type('html').send(publicHubHtml({
-      business: qr.business,
-      menus: qr.business.menus || [],
-      slug
-    }));
-  } catch (error) {
-    return next(error);
+// Register public QR routes on the real Express app immediately before server (1).js
+// installs its final catch-all route. Calling express.application.get directly with the
+// prototype as `this` is invalid because the prototype has no router instance.
+const previousGet = express.application.get;
+express.application.get = function publicQrGet(path, ...handlers) {
+  if (path === '/{*splat}' && handlers.length && !this.__publicQrRoutesInstalled) {
+    this.__publicQrRoutesInstalled = true;
+    previousGet.call(this, '/q/:slug', servePublicQr);
+    previousGet.call(this, '/public/qr/:slug', servePublicQr);
+    previousGet.call(this, '/public/q/qr/:slug', servePublicQr);
   }
-}
-
-for (const path of ['/q/:slug', '/public/qr/:slug', '/public/q/qr/:slug']) {
-  originalGet.call(express.application, path, servePublicQr);
-}
+  return previousGet.call(this, path, ...handlers);
+};
