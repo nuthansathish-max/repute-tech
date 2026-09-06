@@ -1,8 +1,9 @@
 import express from 'express';
 
-// Menu-specific public ordering must be registered before the orderRoutes module
-// adds its fallback /q/:slug/order handler. We internally rewrite the request to
-// that stable handler instead of redirecting the browser to a generic-looking URL.
+// Keep menu-specific customer links public. The previous implementation rewrote
+// req.url and called next(), which could fall through into the dashboard SPA
+// catch-all instead of reaching the public order renderer. Use a real HTTP
+// redirect to the existing public /q/:slug/order handler instead.
 const previousGet = express.application.get;
 const previousListen = express.application.listen;
 
@@ -10,7 +11,7 @@ function registerMenuSpecificOrderRoute(app) {
   if (app.__menuSpecificOrderRouteRegistered) return;
   app.__menuSpecificOrderRouteRegistered = true;
 
-  previousGet.call(app, '/q/:slug/order/:menuId', (req, res, next) => {
+  previousGet.call(app, '/q/:slug/order/:menuId', (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const menuId = String(req.params.menuId || '').trim();
     if (!slug || !menuId) return res.status(404).send('Menu not found');
@@ -18,10 +19,8 @@ function registerMenuSpecificOrderRoute(app) {
     const query = new URLSearchParams(req.query || '');
     query.set('menuId', menuId);
 
-    // Continue through Express to the existing /q/:slug/order handler.
-    // That handler validates businessId + isPublished and renders only this menu.
-    req.url = `/q/${encodeURIComponent(slug)}/order?${query.toString()}`;
-    return next();
+    const target = `/q/${encodeURIComponent(slug)}/order?${query.toString()}`;
+    return res.redirect(302, target);
   });
 }
 
