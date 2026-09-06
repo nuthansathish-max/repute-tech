@@ -19,7 +19,7 @@ async function ensureOrderTables(){
 async function userFrom(req){
   const token=getCookie(req,'rp_session');
   if(!token)return null;
-  const s=await prisma.session.findUnique({where:{tokenHash:token},include:{user:true}});
+  const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}}).catch(()=>null);
   if(!s || s.expiresAt<new Date())return null;
   return s.user;
 }
@@ -34,7 +34,7 @@ async function updateOrderStatus(req,res,next){
     if(!order)return res.status(404).json({error:'Order not found'});
     if(!user)return res.status(401).json({error:'Authentication required'});
     if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){
-      const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId:order.businessId}}});
+      const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId:order.businessId}}}).catch(()=>null);
       if(!member)return res.status(403).json({error:'Business access denied'});
     }
     const status=String(req.body?.status||'').toUpperCase();
