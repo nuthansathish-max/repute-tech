@@ -86,10 +86,37 @@ async function handleNotification(req,res){
   return false;
 }
 
+async function eventFromResponse(req,p,statusCode,chunk){
+  if(statusCode<200 || statusCode>=300 || typeof chunk!=='string')return;
+  try{
+    const data=JSON.parse(chunk);
+    if(req.method==='POST' && p==='/api/public/orders' && data?.order?.businessId){
+      const order=data.order;
+      await notifyBusiness(order.businessId,{type:'ORDER_NEW',title:'New order received',message:`Order #${order.orderNumber} from ${order.customerName||'customer'} is waiting for action.`});
+      return;
+    }
+    if(req.method==='POST' && p==='/api/public/order-review'){
+      const chunks=req.__reputeNotificationBody||[];
+      let body={};
+      try{body=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}')}catch{}
+      const slug=String(body.slug||'').trim();
+      const orderNumber=String(body.orderNumber||'').trim();
+      if(!slug||!orderNumber)return;
+      const qr=await prisma.smartQr.findUnique({where:{slug},select:{businessId:true}});
+      if(!qr)return;
+      await notifyBusiness(qr.businessId,{type:'REVIEW',title:'New customer feedback',message:`Order #${orderNumber} received a ${Number(body.rating)||0}-star customer rating.`});
+    }
+  }catch(e){console.error('notification event',e)}
+}
+
 const original=http.createServer;
 http.createServer=function(listener,...args){
   return original.call(http,async(req,res)=>{
     const p=new URL(req.url,`http://${req.headers.host||'localhost'}`).pathname;
+    if(req.method==='POST' && (p==='/api/public/orders' || p==='/api/public/order-review')){
+      req.__reputeNotificationBody=[];
+      req.on('data',c=>req.__reputeNotificationBody.push(Buffer.from(c)));
+    }
     try{
       if(p==='/api/notifications' || p==='/api/notifications/read-all' || /^\/api\/notifications\/[^/]+\/read$/.test(p) || p==='/api/notifications/test'){
         return handleNotification(req,res);
@@ -100,7 +127,9 @@ http.createServer=function(listener,...args){
           const script=`<script src="/notifications-ui.js"></script>`;
           chunk=chunk.replace('</body>',script+'</body>');
         }
-        return end.call(this,chunk,encoding,callback);
+        const result=end.call(this,chunk,encoding,callback);
+        eventFromResponse(req,p,res.statusCode,chunk).catch(()=>{});
+        return result;
       };
       return listener(req,res);
     }catch(e){console.error('notification preload',e);if(!res.headersSent)json(res,500,{error:'Notification service error'})}
