@@ -26,8 +26,6 @@
 
   async function post(path,body){return req(path,{method:'POST',body:JSON.stringify(body)})}
 
-  // The status endpoint is lightweight and is already used by the live dashboard.
-  // Prefer it for the business id so actions do not depend on the slower businesses query.
   async function getBusiness(){
     try{
       const status=await req('/business/status');
@@ -65,7 +63,8 @@
     const btn=$('aiGenerate'),text=$('aiText'),out=$('aiOutput');if(!btn||!text||!out)return;
     btn.onclick=async()=>{btn.disabled=true;btn.textContent='Generating…';out.style.display='block';out.textContent='Creating your reply…';try{
       const review=text.value.trim();if(!review)throw new Error('Paste a review first');
-      const d=await post('/reviews/ai-reply',{text:review,businessName:'your business',tone:'WARM',authorName:'Customer',rating:3});
+      const b=await getBusiness();
+      const d=await post('/reviews/ai-reply',{text:review,businessId:b.id,businessName:b.name,tone:'WARM',authorName:'Customer',rating:3});
       out.textContent=d.reply||d.text||'No reply was generated.';
     }catch(e){out.textContent=e.message||'Unable to generate reply';}finally{btn.disabled=false;btn.textContent='Generate reply'}};
   }
@@ -76,19 +75,20 @@
       const b=await getBusiness();
       const rows=await req(`/businesses/${encodeURIComponent(b.id)}/qr`);
       list.innerHTML=rows.map(q=>{
-        const url=q.qrUrl||`${location.origin}/q/${encodeURIComponent(q.slug)}`;
-        const img=q.qrImageUrl||'';
-        return `<div class="item"><b>${esc(q.name)}</b><div class="sub">${esc(q.slug)} · ${q.scanCount||0} scans</div>${img?`<img src="${img}" alt="QR code" style="width:180px;height:180px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px">`:''}<div class="row" style="margin-top:8px;flex-wrap:wrap">${img?`<a class="btn secondary" href="${img}" download="${esc(q.slug)}-qr.png">Download QR</a>`:''}<a class="btn secondary" href="${url}" target="_blank" rel="noopener">Customer Hub</a></div></div>`
+        const destination=q.destination?.url||`${location.origin}/public/qr/${encodeURIComponent(q.slug)}`;
+        const img=`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destination)}`;
+        const hub=q.qrUrl||destination;
+        return `<div class="item"><b>${esc(q.name)}</b><div class="sub">${esc(q.slug)} · ${q.scanCount||0} scans</div><img src="${img}" alt="QR code" style="width:180px;height:180px;border:1px solid #e6e8ef;border-radius:8px;margin-top:10px"><div class="row" style="margin-top:8px;flex-wrap:wrap"><a class="btn secondary" href="${img}" download="${esc(q.slug)}-qr.png">Download QR</a><a class="btn secondary" href="${hub}" target="_blank" rel="noopener">Customer Hub</a></div></div>`
       }).join('')||'<div class="sub">No QR codes yet.</div>';
     }
     btn.onclick=async()=>{btn.disabled=true;btn.textContent='Creating…';try{
       const b=await getBusiness();
       const name=$('qrName').value.trim();const slug=$('qrSlug').value.trim().toLowerCase();
       if(!name||!slug)throw new Error('Enter a QR name and slug');
-      const created=await post(`/businesses/${encodeURIComponent(b.id)}/qr`,{name,slug});
+      await post(`/businesses/${encodeURIComponent(b.id)}/qr`,{name,slug});
+      $('qrName').value='';$('qrSlug').value='';
       notify('QR created successfully');
       await render();
-      if(created?.qrUrl)window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
     }catch(e){notify(e.message||'Unable to create QR')}finally{btn.disabled=false;btn.textContent='Create QR'}};
     try{await render()}catch(e){list.innerHTML=`<div class="sub">${esc(e.message)}</div>`}
   }
@@ -96,8 +96,27 @@
   async function enhanceMenu(){
     const create=$('createMenu'),add=$('addItem'),list=$('menuList'),select=$('menuSelect');if(!create||!add||!list||!select)return;
     async function render(){const b=await getBusiness();const rows=await req(`/businesses/${encodeURIComponent(b.id)}/menus`);list.innerHTML=rows.map(m=>`<div class="item"><b>${esc(m.name)}</b><div class="sub">${m.isPublished?'Published':'Draft'} · ${m.items?.length||0} items</div><div style="margin-top:8px">${(m.items||[]).map(i=>`<div class="sub">• ${esc(i.name)} — ₹${esc(i.price)}${i.category?' · '+esc(i.category):''}</div>`).join('')||'<div class="sub">No items yet.</div>'}</div></div>`).join('')||'<div class="sub">No menus yet.</div>';select.innerHTML=rows.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}
-    create.onclick=async()=>{create.disabled=true;try{const b=await getBusiness();const name=$('menuName').value.trim();if(!name)throw new Error('Enter a menu name');await post(`/businesses/${encodeURIComponent(b.id)}/menus`,{name,published:$('menuPublished').checked});notify('Menu created');$('menuName').value='';await render()}catch(e){notify(e.message)}finally{create.disabled=false}};
+    create.onclick=async()=>{create.disabled=true;try{const b=await getBusiness();const name=$('menuName').value.trim();if(!name)throw new Error('Enter a menu name');await post('/menus',{businessId:b.id,name,isPublished:$('menuPublished').checked});notify('Menu created');$('menuName').value='';await render()}catch(e){notify(e.message)}finally{create.disabled=false}};
     add.onclick=async()=>{add.disabled=true;try{if(!select.value)throw new Error('Create a menu first');const name=$('itemName').value.trim();const price=Number($('itemPrice').value);if(!name)throw new Error('Enter an item name');if(!Number.isFinite(price)||price<0)throw new Error('Enter a valid price');await post(`/menus/${encodeURIComponent(select.value)}/items`,{name,price,category:$('itemCategory').value.trim(),description:$('itemDescription').value.trim()});notify('Menu item added');$('itemName').value='';$('itemPrice').value='';$('itemCategory').value='';$('itemDescription').value='';await render()}catch(e){notify(e.message)}finally{add.disabled=false}};
+    try{await render()}catch(e){list.innerHTML=`<div class="sub">${esc(e.message)}</div>`}
+  }
+
+  async function enhanceCampaigns(){
+    const btn=$('createCampaign'),list=$('campaignList');if(!btn||!list)return;
+    async function render(){
+      const b=await getBusiness();
+      const rows=await req(`/businesses/${encodeURIComponent(b.id)}/campaigns`);
+      list.innerHTML=rows.map(c=>`<div class="item"><b>${esc(c.name)}</b><div class="sub">${esc(c.status||'CREATED')} · ${c.sentCount||0} sent · ${c.failedCount||0} failed</div><div style="margin-top:6px">${esc(c.message)}</div></div>`).join('')||'<div class="sub">No campaigns yet.</div>';
+    }
+    btn.onclick=async()=>{btn.disabled=true;btn.textContent='Creating…';try{
+      const b=await getBusiness();
+      const name=$('campName').value.trim();const message=$('campMessage').value.trim();
+      if(!name||!message)throw new Error('Enter campaign name and message');
+      await post('/campaigns',{businessId:b.id,name,message});
+      $('campName').value='';$('campMessage').value='';
+      notify('Campaign created successfully');
+      await render();
+    }catch(e){notify(e.message||'Unable to create campaign')}finally{btn.disabled=false;btn.textContent='Create campaign'}};
     try{await render()}catch(e){list.innerHTML=`<div class="sub">${esc(e.message)}</div>`}
   }
 
@@ -135,7 +154,7 @@
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
-    await Promise.allSettled([enhanceAI(),enhanceQR(),enhanceMenu(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
+    await Promise.allSettled([enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
   let tries=0;const timer=setInterval(async()=>{if(++tries>40)return;if($('authOverlay')?.style.display==='none'){clearInterval(timer);await enhance()}},500);
 })();
