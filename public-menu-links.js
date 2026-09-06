@@ -1,8 +1,8 @@
 import express from 'express';
 
 // Normalize customer-hub menu links to the canonical public ordering endpoint.
-// Each link carries its menu id as a query parameter so the selected menu is
-// preserved instead of falling back to the newest/first published menu.
+// The hub currently renders /q/:slug/order/:menuId links, while the canonical
+// order page selects a menu with ?menuId=. Convert only the public hub HTML.
 const previousSend = express.response.send;
 
 if (!express.response.__publicMenuLinksPatched) {
@@ -10,11 +10,20 @@ if (!express.response.__publicMenuLinksPatched) {
   express.response.send = function patchedPublicMenuLinks(body) {
     try {
       const req = this.req;
-      const isPublicHub = req && /^\/q\/[^/]+$/.test(String(req.path || '')) && typeof body === 'string' && body.includes('Customer Hub');
+      const isPublicHub =
+        req &&
+        /^\/q\/[^/]+$/.test(String(req.path || '')) &&
+        typeof body === 'string' &&
+        body.includes('Customer Hub');
+
       if (isPublicHub) {
-        body = body.replace(/\/q\/([^"'\\s]+)\/order\/([^"'\\s?#]+)/g, '/q/$1/order?menuId=$2');
+        body = body.replace(
+          /href="(\/q\/[^"?#]+\/order)\/([^"?#\s]+)"/g,
+          'href="$1?menuId=$2"'
+        );
       }
     } catch (_) {}
+
     return previousSend.call(this, body);
   };
 }
