@@ -23,6 +23,10 @@ function tuneDatabaseUrl(value) {
 
 process.env.DATABASE_URL = tuneDatabaseUrl(process.env.DATABASE_URL);
 
+// Load API compatibility aliases before bootstrap imports the Express server.
+// This keeps older frontend action URLs working while the canonical API remains unchanged.
+await import('./compat-routes.js');
+
 // Keep Render's PORT unchanged.
 // bootstrap.js -> server.js will create the single Express listener.
 await import('./bootstrap.js');
