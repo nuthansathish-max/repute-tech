@@ -3,8 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
 
 // The QR list endpoint is intentionally kept here as a compatibility override.
-// Some older server code returned only a subset of QR records. The dashboard needs
-// the complete QR history so previously generated codes remain visible/downloadable.
+// Every displayed/downloaded QR must encode the public customer hub URL.
 const prisma = new PrismaClient();
 const previousGet = express.application.get;
 
@@ -45,9 +44,13 @@ express.application.get = function qrHistoryGet(path, ...handlers) {
       });
 
       const result = rows.map(qr => {
-        const destinationUrl = qr?.destination?.url || `${req.protocol}://${req.get('host')}/q/${encodeURIComponent(qr.slug)}`;
+        // Never trust the stored destination here. Older QR records may contain
+        // an authenticated dashboard URL. The QR shown to the owner must always
+        // encode the public customer hub.
+        const destinationUrl = `${req.protocol}://${req.get('host')}/q/${encodeURIComponent(qr.slug)}`;
         return {
           ...qr,
+          destination: { ...(qr.destination || {}), url: destinationUrl },
           qrUrl: destinationUrl,
           qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destinationUrl)}`
         };
