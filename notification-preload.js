@@ -18,7 +18,7 @@ await ensureNotificationTable().catch(e=>console.error('notification table setup
 async function userFrom(req){
   const token=getCookie(req,'rp_session');
   if(!token) return null;
-  const s=await prisma.session.findUnique({where:{tokenHash:token},include:{user:true}}).catch(()=>null);
+  const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}}).catch(()=>null);
   if(!s || s.expiresAt<new Date()) return null;
   return s.user;
 }
@@ -87,9 +87,10 @@ async function handleNotification(req,res){
 }
 
 async function eventFromResponse(req,p,statusCode,chunk){
-  if(statusCode<200 || statusCode>=300 || typeof chunk!=='string')return;
+  if(statusCode<200 || statusCode>=300)return;
   try{
-    const data=JSON.parse(chunk);
+    const raw=Buffer.isBuffer(chunk)?chunk.toString('utf8'):String(chunk||'');
+    const data=JSON.parse(raw||'{}');
     if(req.method==='POST' && p==='/api/public/orders' && data?.order?.businessId){
       const order=data.order;
       await notifyBusiness(order.businessId,{type:'ORDER_NEW',title:'New order received',message:`Order #${order.orderNumber} from ${order.customerName||'customer'} is waiting for action.`});
