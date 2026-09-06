@@ -21,8 +21,23 @@ function tuneDatabaseUrl(value){
 }
 
 process.env.DATABASE_URL=tuneDatabaseUrl(process.env.DATABASE_URL);
+const originalListen = http.Server.prototype.listen;
+
+http.Server.prototype.listen = function (...args) {
+  if (Number(args[0]) === INNER_PORT) {
+    if (typeof args[1] === 'function') {
+      args.splice(1, 0, '127.0.0.1');
+    } else if (typeof args[1] !== 'string') {
+      args.splice(1, 0, '127.0.0.1');
+    }
+  }
+
+  return originalListen.apply(this, args);
+};
+
 process.env.PORT = String(INNER_PORT);
 await import('./bootstrap.js');
+http.Server.prototype.listen = originalListen;
 
 const prisma = new PrismaClient();
 
