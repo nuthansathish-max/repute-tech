@@ -1,7 +1,7 @@
 // Compatibility entrypoint for production.js/bootstrap.js.
 // The existing Express server is kept in server (1).js.
 // Register QR history, public customer-hub routing, menu-link normalization,
-// menu-specific ordering, and the customer-side menu switcher before the canonical server routes.
+// menu-specific ordering, customer ordering, and owner menu/QR management before the canonical server routes.
 //
 // IMPORTANT: do not load qr-public-destination.js here. That legacy compatibility
 // layer intercepts /q/:slug and redirects it to /public/qr/:slug, where the
@@ -12,4 +12,5 @@ await import('./public-menu-links.js');
 await import('./public-qr.js');
 await import('./menu-order-route.js');
 await import('./public-order-enhancement.js');
+await import('./customer-order-and-owner-management.js');
 await import('./server (1).js');
