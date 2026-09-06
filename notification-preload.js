@@ -2,6 +2,8 @@ import './db-pool.js';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
 import http from 'node:http';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const prisma = new PrismaClient();
 let ready = false;
@@ -34,7 +36,6 @@ async function accessibleBusinessIds(user){
 }
 
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
-const readBody=async req=>{const chunks=[];for await(const c of req)chunks.push(c);try{return JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}')}catch{return {}}};
 
 export async function notifyUser(userId,{businessId=null,type='INFO',title,message}){
   try{
@@ -78,7 +79,9 @@ async function handleNotification(req,res){
     return json(res,200,{ok:true});
   }
   if(req.method==='POST' && u.pathname==='/api/notifications/test'){
-    const b=await readBody(req); const businessId=String(b.businessId||'').trim();
+    const chunks=[];for await(const c of req)chunks.push(c);
+    let b={};try{b=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}')}catch{}
+    const businessId=String(b.businessId||'').trim();
     if(!businessId || (!businessIds.includes(businessId) && !['ADMIN','SUPER_ADMIN'].includes(user.role)))return json(res,403,{error:'Business access denied'});
     await notifyUser(user.id,{businessId,type:'TEST',title:'Notifications are working',message:'Repute-Tech notification center is connected and ready.'});
     return json(res,201,{ok:true});
@@ -122,11 +125,16 @@ http.createServer=function(listener,...args){
       if(p==='/api/notifications' || p==='/api/notifications/read-all' || /^\/api\/notifications\/[^/]+\/read$/.test(p) || p==='/api/notifications/test'){
         return handleNotification(req,res);
       }
+      if(req.method==='GET' && p==='/notifications-ui.js'){
+        const file=path.join(process.cwd(),'notifications-ui.js');
+        const js=await fs.readFile(file,'utf8');
+        res.writeHead(200,{'content-type':'application/javascript; charset=utf-8','cache-control':'no-store'});
+        return res.end(js);
+      }
       const end=res.end;
       res.end=function(chunk,encoding,callback){
-        if(typeof chunk==='string' && chunk.includes('</body>') && chunk.includes('repute-tech.in')){
-          const script=`<script src="/notifications-ui.js"></script>`;
-          chunk=chunk.replace('</body>',script+'</body>');
+        if(typeof chunk==='string' && chunk.includes('</body>') && !chunk.includes('/notifications-ui.js')){
+          chunk=chunk.replace('</body>','<script src="/notifications-ui.js"></script></body>');
         }
         const result=end.call(this,chunk,encoding,callback);
         eventFromResponse(req,p,res.statusCode,chunk).catch(()=>{});
