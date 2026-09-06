@@ -1,27 +1,44 @@
 import express from 'express';
 
-// Add a real menu-specific URL without replacing the stable existing order page.
-// /q/:slug/order/:menuId is translated to the existing /q/:slug/order?menuId=...
-// handler, which already validates that the menu belongs to the QR's business.
+// Menu-specific public ordering must be registered before the orderRoutes module
+// adds its fallback /q/:slug/order handler. We internally rewrite the request to
+// that stable handler instead of redirecting the browser to a generic-looking URL.
 const previousGet = express.application.get;
+const previousListen = express.application.listen;
+
+function registerMenuSpecificOrderRoute(app) {
+  if (app.__menuSpecificOrderRouteRegistered) return;
+  app.__menuSpecificOrderRouteRegistered = true;
+
+  previousGet.call(app, '/q/:slug/order/:menuId', (req, res, next) => {
+    const slug = String(req.params.slug || '').trim();
+    const menuId = String(req.params.menuId || '').trim();
+    if (!slug || !menuId) return res.status(404).send('Menu not found');
+
+    const query = new URLSearchParams(req.query || '');
+    query.set('menuId', menuId);
+
+    // Continue through Express to the existing /q/:slug/order handler.
+    // That handler validates businessId + isPublished and renders only this menu.
+    req.url = `/q/${encodeURIComponent(slug)}/order?${query.toString()}`;
+    return next();
+  });
+}
 
 if (!express.application.__menuSpecificOrderGetPatched) {
   express.application.__menuSpecificOrderGetPatched = true;
 
   express.application.get = function patchedMenuSpecificOrderGet(path, ...handlers) {
-    if (!this.__menuSpecificOrderRouteRegistered) {
-      this.__menuSpecificOrderRouteRegistered = true;
-      previousGet.call(this, '/q/:slug/order/:menuId', (req, res) => {
-        const slug = encodeURIComponent(String(req.params.slug || '').trim());
-        const menuId = encodeURIComponent(String(req.params.menuId || '').trim());
-        if (!slug || !menuId) return res.status(404).send('Menu not found');
-
-        const query = new URLSearchParams(req.query || {});
-        query.set('menuId', String(req.params.menuId || '').trim());
-        return res.redirect(302, `/q/${slug}/order?${query.toString()}`);
-      });
-    }
-
+    registerMenuSpecificOrderRoute(this);
     return previousGet.call(this, path, ...handlers);
+  };
+}
+
+if (!express.application.__menuSpecificOrderListenPatched) {
+  express.application.__menuSpecificOrderListenPatched = true;
+
+  express.application.listen = function patchedMenuSpecificOrderListen(...args) {
+    registerMenuSpecificOrderRoute(this);
+    return previousListen.apply(this, args);
   };
 }
