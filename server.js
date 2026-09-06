@@ -1,7 +1,6 @@
 // Compatibility entrypoint for production.js/bootstrap.js.
 // The existing Express server is kept in server (1).js.
-// Register the complete QR-history endpoint before the canonical server routes.
+// Register QR history and public customer-hub routing before the canonical server routes.
 await import('./qr-history.js');
-await import('./server (1).js');
-// Public QR/customer-hub routes support both new and legacy QR destination URLs.
 await import('./public-qr.js');
+await import('./server (1).js');
