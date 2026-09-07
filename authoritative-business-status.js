@@ -58,7 +58,11 @@ function install(app){
   installing=false;
 }
 
-express.application.get=function(path,...handlers){install(this);return originalGet.call(this,path,...handlers)};
+express.application.get=function(path,...handlers){
+  if(handlers.length===0)return originalGet.call(this,path);
+  install(this);
+  return originalGet.call(this,path,...handlers);
+};
 express.application.patch=function(path,...handlers){install(this);return originalPatch.call(this,path,...handlers)};
 express.application.post=function(path,...handlers){install(this);return originalPost.call(this,path,...handlers)};
 express.application.put=function(path,...handlers){install(this);return originalPut.call(this,path,...handlers)};
