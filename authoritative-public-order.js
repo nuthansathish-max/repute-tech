@@ -49,7 +49,10 @@ function install(app){
   if(installed||installing)return;
   installing=true;
   app.route('/q/:slug/order').get(async(req,res,next)=>{try{const data=await load(req.params.slug);if(!data)return res.status(404).send('Order menu not found');if(!data.items.length)return res.status(404).send('No published menu items available');res.type('html').send(page(data,req.params.slug));}catch(e){next(e)}});
-  app.route('/api/public/orders').post(async(req,res,next)=>{try{
+  // Parse the public checkout JSON at the route itself. This route is installed
+  // before server (1).js adds the application's global express.json() middleware,
+  // so relying only on the later global parser leaves req.body empty.
+  app.route('/api/public/orders').post(express.json({limit:'1mb'}),async(req,res,next)=>{try{
     const slug=String(req.body?.slug||'').trim(),name=String(req.body?.customerName||'').trim(),phone=String(req.body?.customerPhone||'').trim()||null,notes=String(req.body?.notes||'').trim()||null,raw=Array.isArray(req.body?.items)?req.body.items:[];
     if(!slug||name.length<2||name.length>80||!raw.length)return res.status(400).json({error:'Name and at least one item are required'});
     const data=await load(slug);if(!data)return res.status(404).json({error:'Menu not found'});
