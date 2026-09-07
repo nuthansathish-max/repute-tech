@@ -46,5 +46,14 @@ function install(app){
 }
 
 const originalRoute=express.application.route;
-express.application.get=function(path,...handlers){install(this);originalRoute.call(this,path).get(...handlers);return this};
-express.application.post=function(path,...handlers){install(this);originalRoute.call(this,path).post(...handlers);return this};
+const originalGet=express.application.get;
+const originalPost=express.application.post;
+express.application.get=function(path,...handlers){
+  if(handlers.length===0)return originalGet.call(this,path);
+  install(this);
+  return originalRoute.call(this,path).get(...handlers);
+};
+express.application.post=function(path,...handlers){
+  install(this);
+  return originalRoute.call(this,path).post(...handlers);
+};
