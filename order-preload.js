@@ -11,12 +11,12 @@ await schemaPrisma.$executeRawUnsafe(`ALTER TABLE "Business" ADD COLUMN IF NOT E
 await schemaPrisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "OrderReview" ("id" TEXT PRIMARY KEY,"orderId" TEXT NOT NULL UNIQUE,"businessId" TEXT NOT NULL,"rating" INTEGER NOT NULL,"text" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
 await schemaPrisma.$disconnect();
 
-const { publicOrder, publicOrderStatus } = await import('./public-order.js');
+const { publicOrderStatus } = await import('./public-order.js');
 const prisma=new PrismaClient();
 const original=http.createServer;
 const readBody=async req=>{const chunks=[];for await(const c of req)chunks.push(c);const raw=Buffer.concat(chunks).toString('utf8');try{return JSON.parse(raw||'{}')}catch{return {}}};
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
-const id=()=>`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+const id=()=>`${Date.now().toString(36)}-${Math.random().toString(36).slice(0,8)}`;
 
 async function saveOrderReview(req,res){
   const body=await readBody(req);
@@ -34,29 +34,14 @@ async function saveOrderReview(req,res){
   return json(res,200,{ok:true});
 }
 
-function withPhoneValidationPage(res){
-  const end=res.end;
-  res.end=function(chunk,encoding,callback){
-    if(typeof chunk==='string' && chunk.includes('id="phone"')){
-      chunk=chunk
-        .replace('maxlength="20" inputmode="tel"','maxlength="10" minlength="10" inputmode="numeric" autocomplete="tel" pattern="[6-9][0-9]{9}"')
-        .replace('maxlength="30" placeholder="Phone number (optional)"','maxlength="10" minlength="10" inputmode="numeric" autocomplete="tel" pattern="[6-9][0-9]{9}" placeholder="Phone number"')
-        .replace('if(!/^[0-9+()\\-\\s]{7,20}$/.test(phone))','if(!/^[6-9][0-9]{9}$/.test(phone))')
-        .replace("if(!/^[6-9][0-9]{9}$/.test(phone)){$('msg').textContent='Please enter a valid phone number.';return}","if(!/^[6-9][0-9]{9}$/.test(phone)){$('msg').textContent='Enter a valid 10-digit Indian mobile number starting with 6, 7, 8 or 9.';return}");
-    }
-    return end.call(this,chunk,encoding,callback);
-  };
-}
-
 http.createServer=function(listener,...args){
   return original.call(http,async(req,res)=>{
     const p=new URL(req.url,`http://${req.headers.host||'localhost'}`).pathname;
     try{
-      if(req.method==='GET'&&/^\/q\/[^/]+\/order$/.test(p)){
-        const m=p.match(/^\/q\/([^/]+)\/order$/);
-        withPhoneValidationPage(res);
-        return publicOrder(req,res,decodeURIComponent(m[1]));
-      }
+      // IMPORTANT: /q/:slug/order must reach the unified all-menus Express route.
+      // The old publicOrder handler selected only one menu and was intercepting it here.
+      // Let the main Express listener handle customer ordering.
+      if(req.method==='GET'&&/^\/q\/[^/]+\/order$/.test(p)) return listener(req,res);
       if(req.method==='GET'&&/^\/q\/[^/]+\/order-status\/[^/]+$/.test(p)){
         const m=p.match(/^\/q\/([^/]+)\/order-status\/([^/]+)$/);
         return publicOrderStatus(req,res,decodeURIComponent(m[1]),decodeURIComponent(m[2]));
