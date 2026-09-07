@@ -2,8 +2,6 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const originalGet = express.application.get;
-const originalPost = express.application.post;
 let installed = false;
 let installing = false;
 
@@ -28,8 +26,8 @@ function page(data,slug){
 function install(app){
   if(installed||installing)return;
   installing=true;
-  originalGet.call(app,'/q/:slug/order',async(req,res,next)=>{try{const data=await load(req.params.slug);if(!data)return res.status(404).send('Order menu not found');if(!data.items.length)return res.status(404).send('No published menu items available');res.type('html').send(page(data,req.params.slug));}catch(e){next(e)}});
-  originalPost.call(app,'/api/public/orders',async(req,res,next)=>{try{
+  app.route('/q/:slug/order').get(async(req,res,next)=>{try{const data=await load(req.params.slug);if(!data)return res.status(404).send('Order menu not found');if(!data.items.length)return res.status(404).send('No published menu items available');res.type('html').send(page(data,req.params.slug));}catch(e){next(e)}});
+  app.route('/api/public/orders').post(async(req,res,next)=>{try{
     const slug=String(req.body?.slug||'').trim(),name=String(req.body?.customerName||'').trim(),phone=String(req.body?.customerPhone||'').trim()||null,notes=String(req.body?.notes||'').trim()||null,raw=Array.isArray(req.body?.items)?req.body.items:[];
     if(!slug||name.length<2||name.length>80||!raw.length)return res.status(400).json({error:'Name and at least one item are required'});
     const data=await load(slug);if(!data)return res.status(404).json({error:'Menu not found'});
@@ -47,5 +45,6 @@ function install(app){
   installing=false;
 }
 
-express.application.get=function(path,...handlers){install(this);return originalGet.call(this,path,...handlers)};
-express.application.post=function(path,...handlers){install(this);return originalPost.call(this,path,...handlers)};
+const originalRoute=express.application.route;
+express.application.get=function(path,...handlers){install(this);return express.application.route===originalRoute?originalRoute.call(this,path).get(...handlers):this};
+express.application.post=function(path,...handlers){install(this);return express.application.route===originalRoute?originalRoute.call(this,path).post(...handlers):this};
