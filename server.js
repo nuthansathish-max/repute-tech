@@ -11,13 +11,15 @@ express.application.listen = function(...args){
   return server.listen(...args);
 };
 
+// Register authoritative routes through Express method hooks. These routes
+// attach to the canonical app as soon as it starts registering its routes,
+// rather than depending on fragile listen() ordering.
+await import('./authoritative-business-status.js');
+await import('./authoritative-public-order.js');
+
 // Register QR history, public customer-hub routing, menu-link normalization,
-// business open/closed status, owner management, unified customer ordering,
-// and the customer order helpers before the canonical server.
-//
-// Do not load qr-public-destination.js: that legacy compatibility layer
-// intercepts /q/:slug and redirects it to /public/qr/:slug. /q/:slug is owned
-// by public-qr.js.
+// business open/closed compatibility, owner management, and customer helpers.
+// Do not load qr-public-destination.js: /q/:slug is owned by public-qr.js.
 await import('./qr-history.js');
 await import('./public-menu-links.js');
 await import('./public-qr.js');
@@ -26,14 +28,12 @@ await import('./menu-order-route.js');
 await import('./customer-order-and-owner-management.js');
 await import('./public-all-order-route.js');
 
-// customer-order-and-owner-management.js currently wraps listen with an
-// async installer. Adapt that return value back to the synchronous HTTP-server
-// interface expected by server (1).js.
+// Some legacy compatibility modules wrap listen with async installers.
+// Adapt their Promise result back to the synchronous HTTP-server interface.
 await import('./listen-compat.js');
 
-// The legacy orderRoutes.js is loaded earlier by bootstrap.js and registers
-// another /q/:slug/order handler. Put the unified all-menus handler last so
-// Express cannot select the legacy single-menu page first.
+// Keep the legacy route compatibility layer loaded, but the authoritative
+// all-menus route above is registered before it and therefore wins.
 await import('./final-order-route.js');
 
 await import('./server (1).js');
