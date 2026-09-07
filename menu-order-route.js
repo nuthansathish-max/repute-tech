@@ -28,6 +28,7 @@ if (!express.application.__menuSpecificOrderGetPatched) {
   express.application.__menuSpecificOrderGetPatched = true;
 
   express.application.get = function patchedMenuSpecificOrderGet(path, ...handlers) {
+    if (handlers.length===0) return previousGet.call(this,path);
     registerMenuSpecificOrderRoute(this);
     return previousGet.call(this, path, ...handlers);
   };
