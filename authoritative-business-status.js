@@ -30,7 +30,6 @@ async function businessFor(req,businessId=null){
 function install(app){
   if(installed || installing)return;
   installing=true;
-  installed=true;
   originalGet.call(app,'/api/business/status',async(req,res,next)=>{
     try{const a=await businessFor(req);if(!a.business)return res.status(a.status).json({error:a.error});res.json({businessId:a.business.id,businessName:a.business.name,name:a.business.name,isOpen:Boolean(a.business.isOpen)});}catch(e){next(e)}
   });
@@ -41,8 +40,9 @@ function install(app){
     try{const a=await businessFor(req,req.params.businessId);if(!a.business)return res.status(a.status).json({error:a.error});res.json({businessId:a.business.id,isOpen:Boolean(a.business.isOpen)});}catch(e){next(e)}
   });
   originalPatch.call(app,'/api/businesses/:businessId/status',async(req,res,next)=>{
-    try{const a=await businessFor(req,req.params.businessId);if(!a.business)return res.status(a.status).json({error:a.error});if(typeof req.body?.isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen:Boolean(updated.isOpen)}});res.json({ok:true,businessId:updated.id,isOpen:Boolean(updated.isOpen)});}catch(e){next(e)}
+    try{const a=await businessFor(req,req.params.businessId);if(!a.business)return res.status(a.status).json({error:a.error});if(typeof req.body?.isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen:req.body.isOpen}});res.json({ok:true,businessId:updated.id,isOpen:Boolean(updated.isOpen)});}catch(e){next(e)}
   });
+  installed=true;
   installing=false;
 }
 
