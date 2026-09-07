@@ -26,7 +26,11 @@ await import('./public-qr.js');
 await import('./business-status.js');
 await import('./menu-order-route.js');
 await import('./customer-order-and-owner-management.js');
-await import('./public-all-order-route.js');
+
+// IMPORTANT: do not load public-all-order-route.js here. It registers a legacy
+// customer order page which can override the authoritative all-menus page.
+// The authoritative-public-order.js module above owns /q/:slug/order and
+// /api/public/orders.
 
 // Some legacy compatibility modules wrap listen with async installers.
 // Adapt their Promise result back to the synchronous HTTP-server interface.
