@@ -1,18 +1,11 @@
 // Compatibility entrypoint for production.js/bootstrap.js.
 // The existing Express server is kept in server (1).js.
 //
-// IMPORTANT: compatibility modules that register routes by wrapping
-// express.application.listen() must be imported AFTER we install the native
-// listen implementation below. Importing them first would cause their route
-// installers to be replaced before the canonical server starts.
+// Install a native listener before loading compatibility modules so their
+// route installers can safely chain onto it.
 import express from 'express';
 import http from 'node:http';
 
-// Always make app.listen() return a real Node HTTP server. The canonical
-// server calls server.on(...) and server.close(...), so returning the Express
-// app here breaks production startup. Keeping this implementation installed
-// before the compatibility imports also lets those modules safely chain their
-// route installers onto this native listener.
 express.application.listen = function(...args){
   const server = http.createServer(this);
   return server.listen(...args);
@@ -32,5 +25,10 @@ await import('./business-status.js');
 await import('./menu-order-route.js');
 await import('./customer-order-and-owner-management.js');
 await import('./public-all-order-route.js');
+
+// customer-order-and-owner-management.js currently wraps listen with an
+// async installer. Adapt that return value back to the synchronous HTTP-server
+// interface expected by server (1).js.
+await import('./listen-compat.js');
 
 await import('./server (1).js');
