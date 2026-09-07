@@ -13,5 +13,4 @@ await import('./public-qr.js');
 await import('./menu-order-route.js');
 await import('./customer-order-and-owner-management.js');
 await import('./public-all-order-route.js');
-await import('./order-notifications.js');
 await import('./server (1).js');
