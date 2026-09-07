@@ -31,4 +31,9 @@ await import('./public-all-order-route.js');
 // interface expected by server (1).js.
 await import('./listen-compat.js');
 
+// The legacy orderRoutes.js is loaded earlier by bootstrap.js and registers
+// another /q/:slug/order handler. Put the unified all-menus handler last so
+// Express cannot select the legacy single-menu page first.
+await import('./final-order-route.js');
+
 await import('./server (1).js');
