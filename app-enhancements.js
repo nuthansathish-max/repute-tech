@@ -59,6 +59,61 @@
     if(!$('dashboard')?.classList.contains('active'))navigate('dashboard');
   }
 
+  async function enhanceReviews(){
+    const page=$('reviews'),list=$('reviewsList');
+    if(!page||!list||page.dataset.reviewActionsReady==='1')return;
+    page.dataset.reviewActionsReady='1';
+    async function render(){
+      const b=await getBusiness();
+      const rows=await req(`/businesses/${encodeURIComponent(b.id)}/reviews`);
+      list.innerHTML=rows.map(r=>{
+        const status=String(r.replyStatus||'').toUpperCase();
+        const hasReply=!!String(r.aiReply||'').trim();
+        const googlePublished=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
+        let action='';
+        if(googlePublished) action='<button class="btn secondary" type="button" disabled>Published to Google</button>';
+        else if(status==='APPROVED') action=`<button class="btn" type="button" data-publish-review="${esc(r.id)}">Publish to Google</button>`;
+        else if(status==='PENDING_APPROVAL'&&hasReply) action=`<button class="btn" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`;
+        else if(hasReply) action=`<button class="btn secondary" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`;
+        const ai=hasReply?`<div class="reply"><strong>AI reply</strong><div style="margin-top:5px">${esc(r.aiReply)}</div></div>`:'';
+        const statusText=googlePublished?'Published to Google':status==='APPROVED'?'Approved — ready to publish':status==='PENDING_APPROVAL'?'Pending approval':(status||'No AI reply yet');
+        const rating=Math.max(0,Math.min(5,Number(r.rating)||0));
+        return `<div class="item"><div class="reviewtop"><b>${esc(r.authorName)}</b><span class="stars">${'★'.repeat(rating)+'☆'.repeat(5-rating)}</span></div><p>${esc(r.text||'No text')}</p><span class="pill">${esc(statusText)}</span><div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn secondary" type="button" data-use-review="${esc(r.id)}">Use for AI</button>${action}</div>${ai}</div>`;
+      }).join('')||'<div class="sub">No reviews.</div>';
+    }
+    list.onclick=async e=>{
+      const use=e.target.closest('[data-use-review]');
+      const approve=e.target.closest('[data-approve-review]');
+      const publish=e.target.closest('[data-publish-review]');
+      try{
+        if(use){
+          const rows=await req(`/businesses/${encodeURIComponent((await getBusiness()).id)}/reviews`);
+          const r=rows.find(x=>x.id===use.dataset.useReview);
+          if(r){$('aiText').value=r.text||'';navigate('ai')}
+          return;
+        }
+        if(approve){
+          const btn=approve;btn.disabled=true;btn.textContent='Approving…';
+          await post(`/reviews/${encodeURIComponent(btn.dataset.approveReview)}/approve`,{});
+          notify('AI reply approved. It is ready to publish to Google.');
+          await render();
+          return;
+        }
+        if(publish){
+          const btn=publish;
+          if(!window.confirm('Publish this approved reply to Google Business Profile?\n\nThe reply will be posted publicly on Google.'))return;
+          btn.disabled=true;btn.textContent='Publishing…';
+          await post(`/reviews/${encodeURIComponent(btn.dataset.publishReview)}/publish`,{confirm:true});
+          notify('Reply published to Google successfully.');
+          await render();
+        }
+      }catch(e){notify(e.message||'Unable to complete the review action');await render()}
+    };
+    const reload=$('loadReviews');
+    if(reload)reload.onclick=render;
+    try{await render()}catch(e){list.innerHTML=`<div class="notice">${esc(e.message)}</div>`}
+  }
+
   async function enhanceAI(){
     const btn=$('aiGenerate'),text=$('aiText'),out=$('aiOutput');if(!btn||!text||!out)return;
     btn.onclick=async()=>{btn.disabled=true;btn.textContent='Generating…';out.style.display='block';out.textContent='Creating your reply…';try{
@@ -154,7 +209,7 @@
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
-    await Promise.allSettled([enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
+    await Promise.allSettled([enhanceReviews(),enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
   let tries=0;const timer=setInterval(async()=>{if(++tries>40)return;if($('authOverlay')?.style.display==='none'){clearInterval(timer);await enhance()}},500);
 
