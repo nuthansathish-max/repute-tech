@@ -44,8 +44,4 @@ await import('./final-order-route.js');
 // routes remain owned by authoritative-public-order.js above.
 await import('./owner-orders-route-fix.js');
 
-// Safe server-side Admin UI patch. This does not use browser globals and only
-// transforms the Admin section of the rendered index page.
-await import('./admin-ui-server-fix.js');
-
 await import('./server (1).js');
