@@ -42,7 +42,7 @@ function showSuccess(order){
   $('successTotal').textContent=money(order.total||0);
   $('successItems').innerHTML=(Array.isArray(order.items)?order.items:[]).map(i=>'<div class="success-item"><span>'+i.itemName+' × '+i.quantity+'</span><span>₹'+money(i.lineTotal)+'</span></div>').join('');
   const notes=String(order.notes||'').trim();
-  if(notes){$('successNotes').style.display='block';$('successNotes').innerHTML='<strong>Instructions</strong><span>'+notes.replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]))+'</span>}else{$('successNotes').style.display='none';$('successNotes').textContent=''}
+  if(notes){$('successNotes').style.display='block';$('successNotes').innerHTML='<strong>Instructions</strong><span>'+notes.replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]))+'</span>'}else{$('successNotes').style.display='none';$('successNotes').textContent=''}
   $('success').classList.add('show');
 }
 $('filters').addEventListener('click',e=>{const b=e.target.closest('[data-menu]');if(!b)return;active=decodeURIComponent(b.dataset.menu||'All');filters();render();});
