@@ -157,4 +157,26 @@
     await Promise.allSettled([enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
   let tries=0;const timer=setInterval(async()=>{if(++tries>40)return;if($('authOverlay')?.style.display==='none'){clearInterval(timer);await enhance()}},500);
+
+  // Admin-only UI requested for individual business owners.
+  // This runs in the browser because app-enhancements.js is already a client script.
+  function enhanceAdminView(){
+    const admin=$('admin');
+    if(!admin)return;
+    const cards=admin.querySelectorAll('.card');
+    cards.forEach(card=>{
+      const title=card.querySelector('.section-title')?.textContent?.trim();
+      if(title==='Plan catalog' || title==='Pending plan requests')card.remove();
+    });
+    const label=[...admin.querySelectorAll('.label')].find(x=>x.textContent.trim()==='Businesses');
+    if(label)label.textContent='Business';
+    const value=$('adminBusinesses');
+    if(value){
+      getBusiness().then(b=>{value.textContent=b.name||'Business'}).catch(()=>{value.textContent='Business'});
+    }
+  }
+
+  const adminTimer=setInterval(()=>{
+    if($('admin')){enhanceAdminView();clearInterval(adminTimer)}
+  },300);
 })();
