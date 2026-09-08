@@ -79,21 +79,27 @@
 
   function boot(){
     const list=$('reviewsList');
-    if(!list||list.dataset.reviewActionsV3==='1')return;
-    list.dataset.reviewActionsV3='1';
+    if(!list||list.dataset.reviewActionsV4==='1')return;
+    list.dataset.reviewActionsV4='1';
     list.onclick=async e=>{
       const gen=e.target.closest('[data-generate-review]');
-      const approve=e.target.closest('[data-approve-review]');
-      const publish=e.target.closest('[data-publish-review]');
+      const approveBtn=e.target.closest('[data-approve-review]');
+      const publishBtn=e.target.closest('[data-publish-review]');
       try{
         if(gen){e.preventDefault();e.stopPropagation();await generate(gen);return;}
-        if(approve){e.preventDefault();e.stopPropagation();await approve(approve);return;}
-        if(publish){e.preventDefault();e.stopPropagation();await publish(publish);return;}
+        if(approveBtn){e.preventDefault();e.stopPropagation();await approve(approveBtn);return;}
+        if(publishBtn){e.preventDefault();e.stopPropagation();await publish(publishBtn);return;}
       }catch(err){notify(err.message||'Unable to complete review action')}
     };
     let queued=false;
-    const observer=new MutationObserver(()=>{
-      if(queued)return;queued=true;
+    const observer=new MutationObserver(mutations=>{
+      const onlyOurChanges=mutations.length>0&&mutations.every(m=>{
+        const nodes=[...m.addedNodes,...m.removedNodes].filter(n=>n.nodeType===1);
+        return nodes.length>0&&nodes.every(n=>n.dataset?.reviewActionControl==='1');
+      });
+      if(onlyOurChanges)return;
+      if(queued)return;
+      queued=true;
       setTimeout(async()=>{queued=false;try{await sync()}catch{}},60);
     });
     observer.observe(list,{childList:true,subtree:true});
