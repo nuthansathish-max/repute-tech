@@ -13,7 +13,7 @@ function loadReviewActions(){
 function loadStableActions(){
   if(document.querySelector('script[data-repute-stable-actions]'))return;
   const s=document.createElement('script');
-  s.src='/stable-action-controls.js?v=1';
+  s.src='/stable-action-controls.js?v=2';
   s.dataset.reputeStableActions='1';
   document.head.appendChild(s);
 }
