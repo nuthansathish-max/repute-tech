@@ -1,135 +1,18 @@
 (() => {
   const API='/api';
   const $=id=>document.getElementById(id);
-  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  let business=null;
-  let syncTimer=null;
-  let syncing=false;
-
-  async function req(path,opts={}){
-    const r=await fetch(API+path,{credentials:'include',headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});
-    const raw=await r.text();
-    let d={};
-    try{d=raw?JSON.parse(raw):{}}catch{d={error:raw||`Request failed (${r.status})`}}
-    if(!r.ok)throw new Error(d.error||d.message||`Request failed (${r.status})`);
-    return d;
-  }
+  let business=null,syncTimer=null,syncing=false;
+  async function req(path,opts={}){const r=await fetch(API+path,{credentials:'include',headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{}}catch{d={error:raw||`Request failed (${r.status})`}}if(!r.ok)throw new Error(d.error||d.message||`Request failed (${r.status})`);return d}
   const notify=msg=>typeof window.toast==='function'?window.toast(msg):alert(msg);
-
-  async function getBusiness(){
-    try{
-      const s=await req('/business/status');
-      if(s?.businessId)return business={id:s.businessId,name:s.businessName||'your business'};
-    }catch{}
-    const bs=await req('/businesses');
-    if(Array.isArray(bs)&&bs[0])return business=bs[0];
-    throw new Error('No business found.');
-  }
-
-  function button(text,kind='secondary'){
-    const b=document.createElement('button');
-    b.type='button';b.className=`btn ${kind}`;b.textContent=text;return b;
-  }
-
-  async function decorateList(listId,endpoint,kind){
-    const list=$(listId);if(!list)return;
-    const items=[...list.children].filter(x=>x.classList.contains('item'));
-    if(!items.length)return;
-    try{
-      const b=await getBusiness();
-      const rows=await req(endpoint(b.id));
-      items.forEach((item,index)=>{
-        const row=rows[index];
-        if(!row||item.dataset.stableActionId===String(row.id))return;
-        item.dataset.stableActionId=String(row.id);
-        item.dataset.stableActionKind=kind;
-        const actions=document.createElement('div');
-        actions.className='row stable-actions';
-        actions.style.cssText='margin-top:10px;flex-wrap:wrap';
-        const edit=button('Edit');
-        edit.dataset.stableEdit=String(row.id);
-        edit.dataset.stableKind=kind;
-        const del=button('Delete','danger');
-        del.dataset.stableDelete=String(row.id);
-        del.dataset.stableKind=kind;
-        actions.append(edit,del);
-        item.appendChild(actions);
-      });
-    }catch{}
-  }
-
-  async function decorateReviews(){
-    const list=$('reviewsList');if(!list)return;
-    list.querySelectorAll('.item').forEach(item=>{
-      if(item.querySelector('[data-stable-generate]'))return;
-      const use=item.querySelector('[data-use-review]');
-      if(!use||item.querySelector('.reply'))return;
-      const b=button('Generate AI Reply');
-      b.dataset.stableGenerate=use.dataset.useReview;
-      const row=use.parentElement;
-      if(row)row.appendChild(b);
-    });
-  }
-
-  async function decorate(){
-    await decorateReviews();
-    await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');
-    await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
-  }
-
-  async function edit(kind,id){
-    const b=await getBusiness();
-    if(kind==='qr'){
-      const name=prompt('QR name:');if(name===null)return;
-      const slug=prompt('QR slug:');if(slug===null)return;
-      if(!name.trim()||!slug.trim())throw new Error('Name and slug are required.');
-      await req(`/businesses/${encodeURIComponent(b.id)}/qr/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({name:name.trim(),slug:slug.trim()})});
-      notify('QR updated successfully.');
-    }else{
-      const name=prompt('Menu name:');if(name===null)return;
-      if(!name.trim())throw new Error('Menu name is required.');
-      await req(`/businesses/${encodeURIComponent(b.id)}/menus/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({name:name.trim()})});
-      notify('Menu updated successfully.');
-    }
-    const refresh=kind==='qr'?$('createQr'):$('createMenu');
-    if(refresh)refresh.dispatchEvent(new Event('click'));
-  }
-
-  async function remove(kind,id){
-    const label=kind==='qr'?'QR':'menu';
-    if(!confirm(`Delete this ${label}? This cannot be undone.`))return;
-    const b=await getBusiness();
-    await req(`/businesses/${encodeURIComponent(b.id)}/${kind==='qr'?'qr':'menus'}/${encodeURIComponent(id)}`,{method:'DELETE'});
-    notify(`${label==='QR'?'QR':'Menu'} deleted successfully.`);
-    const refresh=kind==='qr'?$('createQr'):$('createMenu');
-    if(refresh)refresh.dispatchEvent(new Event('click'));
-  }
-
-  async function generate(id,btn){
-    btn.disabled=true;btn.textContent='Generating…';
-    try{
-      await req(`/reviews/${encodeURIComponent(id)}/ai-reply`,{method:'POST',body:JSON.stringify({tone:'WARM'})});
-      notify('AI reply generated and is pending approval.');
-      const reload=$('loadReviews');if(reload)reload.click();
-    }catch(e){btn.disabled=false;btn.textContent='Generate AI Reply';notify(e.message||'Unable to generate AI reply')}
-  }
-
-  document.addEventListener('click',e=>{
-    const gen=e.target.closest('[data-stable-generate]');
-    if(gen){e.preventDefault();e.stopPropagation();generate(gen.dataset.stableGenerate,gen);return;}
-    const editBtn=e.target.closest('[data-stable-edit]');
-    if(editBtn){e.preventDefault();e.stopPropagation();edit(editBtn.dataset.stableKind,editBtn.dataset.stableEdit).catch(err=>notify(err.message||'Unable to edit'));return;}
-    const delBtn=e.target.closest('[data-stable-delete]');
-    if(delBtn){e.preventDefault();e.stopPropagation();remove(delBtn.dataset.stableKind,delBtn.dataset.stableDelete).catch(err=>notify(err.message||'Unable to delete'));return;}
-  },true);
-
-  function boot(){
-    if(syncTimer)return;
-    const run=async()=>{if(syncing)return;syncing=true;try{await decorate()}finally{syncing=false}};
-    const observer=new MutationObserver(()=>run());
-    observer.observe(document.body,{childList:true,subtree:true});
-    syncTimer=setInterval(run,1000);
-    run();
-  }
+  async function getBusiness(){try{const s=await req('/business/status');if(s?.businessId)return business={id:s.businessId,name:s.businessName||'your business'}}catch{}const bs=await req('/businesses');if(Array.isArray(bs)&&bs[0])return business=bs[0];throw new Error('No business found.')}
+  function button(text,kind='secondary'){const b=document.createElement('button');b.type='button';b.className=`btn ${kind}`;b.textContent=text;return b}
+  async function decorateList(listId,endpoint,kind){const list=$(listId);if(!list)return;const items=[...list.children].filter(x=>x.classList.contains('item'));if(!items.length)return;try{const b=await getBusiness();const rows=await req(endpoint(b.id));items.forEach((item,index)=>{const row=rows[index];if(!row||item.dataset.stableActionId===String(row.id))return;item.dataset.stableActionId=String(row.id);const actions=document.createElement('div');actions.className='row stable-actions';actions.style.cssText='margin-top:10px;flex-wrap:wrap';const edit=button('Edit');edit.dataset.stableEdit=String(row.id);edit.dataset.stableKind=kind;const del=button('Delete','danger');del.dataset.stableDelete=String(row.id);del.dataset.stableKind=kind;actions.append(edit,del);item.appendChild(actions)})}catch{}}
+  async function decorateReviews(){const list=$('reviewsList');if(!list)return;list.querySelectorAll('.item').forEach(item=>{if(item.querySelector('[data-stable-generate]'))return;const use=item.querySelector('[data-use-review]');if(!use||item.querySelector('.reply'))return;const b=button('Generate AI Reply');b.dataset.stableGenerate=use.dataset.useReview;const row=use.parentElement;if(row)row.appendChild(b)})}
+  async function decorate(){await decorateReviews();await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu')}
+  async function edit(kind,id){const b=await getBusiness();if(kind==='qr'){const name=prompt('QR name:');if(name===null)return;const slug=prompt('QR slug:');if(slug===null)return;if(!name.trim()||!slug.trim())throw new Error('Name and slug are required.');await req(`/businesses/${encodeURIComponent(b.id)}/qr/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({name:name.trim(),slug:slug.trim()})});notify('QR updated successfully.')}else{const name=prompt('Menu name:');if(name===null)return;if(!name.trim())throw new Error('Menu name is required.');await req(`/businesses/${encodeURIComponent(b.id)}/menus/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({name:name.trim()})});notify('Menu updated successfully.')}window.location.reload()}
+  async function remove(kind,id){const label=kind==='qr'?'QR':'menu';if(!confirm(`Delete this ${label}? This cannot be undone.`))return;const b=await getBusiness();await req(`/businesses/${encodeURIComponent(b.id)}/${kind==='qr'?'qr':'menus'}/${encodeURIComponent(id)}`,{method:'DELETE'});notify(`${label} deleted successfully.`);window.location.reload()}
+  async function generate(id,btn){btn.disabled=true;btn.textContent='Generating…';try{await req(`/reviews/${encodeURIComponent(id)}/ai-reply`,{method:'POST',body:JSON.stringify({tone:'WARM'})});notify('AI reply generated and is pending approval.');const reload=$('loadReviews');if(reload)reload.click()}catch(e){btn.disabled=false;btn.textContent='Generate AI Reply';notify(e.message||'Unable to generate AI reply')}}
+  document.addEventListener('click',e=>{const gen=e.target.closest('[data-stable-generate]');if(gen){e.preventDefault();e.stopPropagation();generate(gen.dataset.stableGenerate,gen);return}const editBtn=e.target.closest('[data-stable-edit]');if(editBtn){e.preventDefault();e.stopPropagation();edit(editBtn.dataset.stableKind,editBtn.dataset.stableEdit).catch(err=>notify(err.message||'Unable to edit'));return}const delBtn=e.target.closest('[data-stable-delete]');if(delBtn){e.preventDefault();e.stopPropagation();remove(delBtn.dataset.stableKind,delBtn.dataset.stableDelete).catch(err=>notify(err.message||'Unable to delete'));return}},true);
+  function boot(){if(syncTimer)return;const run=async()=>{if(syncing)return;syncing=true;try{await decorate()}finally{syncing=false}};const observer=new MutationObserver(()=>run());observer.observe(document.body,{childList:true,subtree:true});syncTimer=setInterval(run,1000);run()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
