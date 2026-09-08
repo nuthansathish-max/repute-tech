@@ -79,18 +79,22 @@
 
   function boot(){
     const list=$('reviewsList');
-    if(!list||list.dataset.reviewActionsV4==='1')return;
-    list.dataset.reviewActionsV4='1';
-    list.onclick=async e=>{
+    if(!list||list.dataset.reviewActionsV5==='1')return;
+    list.dataset.reviewActionsV5='1';
+    document.addEventListener('click',async e=>{
       const gen=e.target.closest('[data-generate-review]');
       const approveBtn=e.target.closest('[data-approve-review]');
       const publishBtn=e.target.closest('[data-publish-review]');
+      if(!gen&&!approveBtn&&!publishBtn)return;
+      const ownerList=e.target.closest('#reviewsList');
+      if(!ownerList)return;
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
       try{
-        if(gen){e.preventDefault();e.stopPropagation();await generate(gen);return;}
-        if(approveBtn){e.preventDefault();e.stopPropagation();await approve(approveBtn);return;}
-        if(publishBtn){e.preventDefault();e.stopPropagation();await publish(publishBtn);return;}
+        if(gen)await generate(gen);
+        else if(approveBtn)await approve(approveBtn);
+        else await publish(publishBtn);
       }catch(err){notify(err.message||'Unable to complete review action')}
-    };
+    },true);
     let queued=false;
     const observer=new MutationObserver(mutations=>{
       const onlyOurChanges=mutations.length>0&&mutations.every(m=>{
