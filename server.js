@@ -44,4 +44,7 @@ await import('./final-order-route.js');
 // routes remain owned by authoritative-public-order.js above.
 await import('./owner-orders-route-fix.js');
 
+// Admin page UI-only compatibility adjustments.
+await import('./admin-ui-fix.js');
+
 await import('./server (1).js');
