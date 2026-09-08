@@ -1,18 +1,17 @@
 // Server-side Admin UI compatibility patch.
-// Keeps the browser page unchanged for every other section while adjusting
-// only the Admin overview requested for individual business owners.
+// Adjusts only the Admin overview rendered for individual business owners.
 import express from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const originalGet = express.application.get;
+const originalListen = express.application.listen;
 let registered = false;
 
 function patchHtml(html){
   let out = html;
 
-  // Remove the two Admin-only sections from the rendered page.
   out = out.replace(
     /<div class="card"><div class="section-title">Plan catalog<\/div><div id="planCatalog" class="list"><\/div><\/div>/,
     ''
@@ -22,14 +21,11 @@ function patchHtml(html){
     ''
   );
 
-  // Business owners should see their business name instead of a platform-wide
-  // business count in the Admin overview.
   out = out.replace(
     '<div class="label">Businesses</div><div class="value" id="adminBusinesses">—</div>',
     '<div class="label">Business</div><div class="value" id="adminBusinesses">—</div>'
   );
 
-  // The removed Admin sections must not be queried/rendered by the page loader.
   out = out.replace(
     /async function loadAdminPlans\(\)\{.*?\}\nasync function loadAdminPlanRequests\(\)\{.*?\}\n/s,
     'async function loadAdminPlans(){}\nasync function loadAdminPlanRequests(){}\n'
@@ -57,14 +53,5 @@ function register(app){
 
 express.application.listen=function adminUiFixListen(...args){
   register(this);
-  return express.application.__adminUiOriginalListen.apply(this,args);
+  return originalListen.apply(this,args);
 };
-
-// Preserve the listener implementation installed by server.js.
-if(!express.application.__adminUiOriginalListen){
-  express.application.__adminUiOriginalListen=express.application.listen;
-  express.application.listen=function adminUiFixListen(...args){
-    register(this);
-    return express.application.__adminUiOriginalListen.apply(this,args);
-  };
-}
