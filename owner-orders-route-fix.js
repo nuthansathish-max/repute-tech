@@ -1,10 +1,12 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
+import { aiReviewAnalysis } from './aiProvider.js';
 
 const prisma = new PrismaClient();
 const originalListen = express.application.listen;
 const originalGet = express.application.get;
+const originalPost = express.application.post;
 const originalPatch = express.application.patch;
 let registered = false;
 
@@ -41,6 +43,24 @@ function register(app){
         take:100
       });
       return res.json(orders);
+    }catch(e){next(e)}
+  });
+
+  // Standalone AI Assistant endpoint used by the AI Assistant page.
+  // Keep this separate from review-record routes so pasted review text can
+  // generate a suggestion without creating or modifying a database review.
+  originalPost.call(app,'/api/reviews/ai-reply',async(req,res,next)=>{
+    try{
+      const user=await userFrom(req);
+      if(!user)return res.status(401).json({error:'Authentication required'});
+      const text=String(req.body?.text||'').trim();
+      if(!text)return res.status(400).json({error:'Review text is required'});
+      const ratingRaw=Number(req.body?.rating||3);
+      const rating=Number.isInteger(ratingRaw)?Math.min(5,Math.max(1,ratingRaw)):3;
+      const businessName=String(req.body?.businessName||'your business').trim().slice(0,120)||'your business';
+      const review={authorName:String(req.body?.authorName||'Customer').trim().slice(0,80)||'Customer',rating,text};
+      const result=await aiReviewAnalysis(review,businessName,String(req.body?.tone||'WARM'));
+      return res.json({provider:result.provider||'local',sentiment:result.sentiment,topics:result.topics,confidence:result.confidence,reply:result.reply});
     }catch(e){next(e)}
   });
 
