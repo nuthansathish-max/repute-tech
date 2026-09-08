@@ -40,4 +40,8 @@ await import('./listen-compat.js');
 // all-menus route above is registered before it and therefore wins.
 await import('./final-order-route.js');
 
+// Register only the business-owner Orders API here. The public customer-order
+// routes remain owned by authoritative-public-order.js above.
+await import('./owner-orders-route-fix.js');
+
 await import('./server (1).js');
