@@ -62,7 +62,7 @@
       if(nativePublish||nativeApprove)return;
 
       const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
-      const replyText=String(item.querySelector('.reply')?.textContent||'').trim();
+      const replyText=String(item.querySelector('.reply')?.textContent||'').replace(/^AI reply\s*/i,'').trim();
       const published=pill.includes('published to google');
       const approved=pill.includes('approved')||pill.includes('ready to publish');
       if(published)return;
@@ -98,7 +98,6 @@
   async function decorateList(listId,endpoint,kind){
     const list=$(listId);
     if(!list||!pageVisible(kind==='qr'?'qr':'menu'))return;
-
     const items=[...list.children].filter(x=>x.classList.contains('item'));
     const undecorated=items.filter(x=>!x.querySelector('.stable-actions'));
     if(!undecorated.length)return;
@@ -132,13 +131,7 @@
     try{
       const overlay=$('authOverlay');
       if(overlay&&getComputedStyle(overlay).display!=='none')return;
-
-      // Reviews are derived from the already-rendered authoritative review UI.
-      // Do not issue another reviews request on every DOM mutation.
       ensureReviewActionsFromDom();
-
-      // QR/Menu IDs are not rendered in the original cards, so fetch them only
-      // when a freshly-rendered list still needs stable Edit/Delete controls.
       if(pageVisible('qr'))await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');
       if(pageVisible('menu'))await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
     }finally{
@@ -240,12 +233,7 @@
     if(e.target.closest?.('[data-page]'))scheduleEnsure(120);
   },true);
 
-  const observer=new MutationObserver(()=>{
-    // Debounced DOM-only review decoration and on-demand QR/menu decoration.
-    // The previous controller re-requested reviews/menus/QR after its own DOM
-    // mutations, creating a refresh loop and slow dashboard behavior.
-    scheduleEnsure(120);
-  });
+  const observer=new MutationObserver(()=>scheduleEnsure(120));
   observer.observe(document.body,{childList:true,subtree:true});
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>scheduleEnsure(80));
