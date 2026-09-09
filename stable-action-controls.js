@@ -62,7 +62,29 @@
 
       const nativePublish=item.querySelector('[data-publish-review]');
       const nativeApprove=item.querySelector('[data-approve-review]');
-      if(nativePublish||nativeApprove){needsServerSync=true;return;}
+      if(nativePublish||nativeApprove){
+        const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
+        const actionRow=nativePublish?.closest('.row')||nativeApprove?.closest('.row');
+        const published=pill.includes('published to google');
+        const approved=pill.includes('approved')||pill.includes('ready to publish');
+        if(actionRow&&(published||approved)){
+          nativePublish?.remove();
+          nativeApprove?.remove();
+          actionRow.querySelector('.stable-review-actions')?.remove();
+          if(published){
+            const b=button('Published to Google');
+            b.disabled=true;
+            actionRow.appendChild(b);
+          }else{
+            const b=button('Publish to Google','');
+            b.dataset.stablePublish=id;
+            b.dataset.stableReviewAction='1';
+            actionRow.appendChild(b);
+          }
+        }
+        needsServerSync=true;
+        return;
+      }
 
       const stableAction=item.querySelector('[data-stable-review-action]');
       if(stableAction)return;
@@ -202,6 +224,10 @@
       if(needsReviewSync)scheduleReviewSync(80);
       if(pageVisible('qr'))await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');
       if(pageVisible('menu'))await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
+      if(pageVisible('dashboard')){
+        const heading=$('heading');
+        if(heading&&heading.textContent.trim()==='Good morning 👋')heading.textContent='Business overview';
+      }
     }finally{
       decorating=false;
       if(rerun){rerun=false;scheduleEnsure(80)}
@@ -294,6 +320,17 @@
     if(a){e.preventDefault();e.stopImmediatePropagation();approve(a.dataset.stableApprove,a);return}
     const p=e.target.closest?.('[data-stable-publish]');
     if(p){e.preventDefault();e.stopImmediatePropagation();publish(p.dataset.stablePublish,p);return}
+    const nativeApprove=e.target.closest?.('[data-approve-review]');
+    if(nativeApprove){
+      const item=nativeApprove.closest('.item');
+      const pill=(item?.querySelector('.pill')?.textContent||'').toLowerCase();
+      if(pill.includes('approved')||pill.includes('ready to publish')){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        publish(nativeApprove.dataset.approveReview,nativeApprove);
+        return;
+      }
+    }
     const ed=e.target.closest?.('[data-stable-edit]');
     if(ed){e.preventDefault();e.stopImmediatePropagation();edit(ed.dataset.stableKind,ed.dataset.stableEdit,ed).catch(x=>notify(x.message));return}
     const dl=e.target.closest?.('[data-stable-delete]');
