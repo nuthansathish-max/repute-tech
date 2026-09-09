@@ -118,7 +118,7 @@
     reviewSyncing=true;
     try{
       const b=await getBusiness();
-      const rows=await req(`/businesses/${encodeURIComponent(b.id)}/reviews`,{},10000);
+      const rows=await req(`/businesses/${encodeURIComponent(b.id)}/reviews?sync=${Date.now()}`,{cache:'no-store'},10000);
       const byId=new Map((Array.isArray(rows)?rows:[]).map(r=>[String(r.id),r]));
 
       list.querySelectorAll('.item').forEach(item=>{
