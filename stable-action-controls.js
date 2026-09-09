@@ -27,30 +27,34 @@
       const hasReply=!!reply&&!!reply.textContent.trim();
       const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
       const published=pill.includes('published to google');
+      const approved=pill.includes('approved')||pill.includes('ready to publish');
       if(published)return;
-      if(!hasReply){
-        const b=button('Generate AI Reply');b.dataset.stableGenerate=id;b.dataset.stableReviewAction='1';row.appendChild(b);return;
+      if(approved){
+        const b=button('Publish to Google');b.dataset.stablePublish=id;b.dataset.stableReviewAction='1';row.appendChild(b);return;
       }
-      if(pill.includes('pending approval')||pill.includes('no ai reply yet')){
+      if(hasReply){
         const b=button('Approve Reply');b.dataset.stableApprove=id;b.dataset.stableReviewAction='1';row.appendChild(b);return;
       }
-      if(pill.includes('approved')||pill.includes('ready to publish')){
-        const b=button('Publish to Google');b.dataset.stablePublish=id;b.dataset.stableReviewAction='1';row.appendChild(b);
-      }
+      const b=button('Generate AI Reply');b.dataset.stableGenerate=id;b.dataset.stableReviewAction='1';row.appendChild(b);
     });
+  }
+  async function refreshReviews(){
+    const r=$('loadReviews');
+    if(r){r.click();setTimeout(reviewActions,250);setTimeout(reviewActions,750);setTimeout(reviewActions,1500)}
+    else{setTimeout(reviewActions,200)}
   }
   async function generate(id,btn){
     btn.disabled=true;btn.textContent='Generating…';
-    try{await req(`/reviews/${encodeURIComponent(id)}/ai-reply`,{method:'POST',body:JSON.stringify({tone:'WARM'})});notify('AI reply generated and is pending approval.');const r=$('loadReviews');if(r)r.click();else setTimeout(reviewActions,200)}catch(e){btn.disabled=false;btn.textContent='Generate AI Reply';notify(e.message||'Unable to generate AI reply')}
+    try{await req(`/reviews/${encodeURIComponent(id)}/ai-reply`,{method:'POST',body:JSON.stringify({tone:'WARM'})});notify('AI reply generated and is pending your approval. Open Reviews to approve it.');await refreshReviews()}catch(e){btn.disabled=false;btn.textContent='Generate AI Reply';notify(e.message||'Unable to generate AI reply')}
   }
   async function approve(id,btn){
     btn.disabled=true;btn.textContent='Approving…';
-    try{await req(`/reviews/${encodeURIComponent(id)}/approve`,{method:'POST',body:JSON.stringify({})});notify('AI reply approved. It is ready to publish to Google.');const r=$('loadReviews');if(r)r.click();else setTimeout(reviewActions,200)}catch(e){btn.disabled=false;btn.textContent='Approve Reply';notify(e.message||'Unable to approve reply')}
+    try{await req(`/reviews/${encodeURIComponent(id)}/approve`,{method:'POST',body:JSON.stringify({})});notify('AI reply approved. It is ready to publish to Google.');await refreshReviews()}catch(e){btn.disabled=false;btn.textContent='Approve Reply';notify(e.message||'Unable to approve reply')}
   }
   async function publish(id,btn){
     if(!confirm('Publish this approved reply to Google Business Profile?\n\nThe reply will be posted publicly on Google.'))return;
     btn.disabled=true;btn.textContent='Publishing…';
-    try{await req(`/reviews/${encodeURIComponent(id)}/publish`,{method:'POST',body:JSON.stringify({confirm:true})});notify('Reply published to Google successfully.');const r=$('loadReviews');if(r)r.click();else setTimeout(reviewActions,200)}catch(e){btn.disabled=false;btn.textContent='Publish to Google';notify(e.message||'Unable to publish reply to Google')}
+    try{await req(`/reviews/${encodeURIComponent(id)}/publish`,{method:'POST',body:JSON.stringify({confirm:true})});notify('Reply published to Google successfully.');await refreshReviews()}catch(e){btn.disabled=false;btn.textContent='Publish to Google';notify(e.message||'Unable to publish reply to Google')}
   }
   async function getBusiness(){const s=await req('/business/status').catch(()=>null);if(s?.businessId)return s;const bs=await req('/businesses');if(bs?.[0])return bs[0];throw new Error('No business found.')}
   async function edit(kind,id,btn){const b=await getBusiness();const item=btn.closest('.item');if(kind==='qr'){const currentName=item?.querySelector('b')?.textContent||'';const currentSub=item?.querySelector('.sub')?.textContent||'';const name=prompt('QR name:',currentName);if(name===null)return;const slug=prompt('QR slug:',currentSub.split(' · ')[0]||'');if(slug===null)return;if(!name.trim()||!slug.trim())throw new Error('Name and slug are required.');await req(`/businesses/${b.id}/qr/${id}`,{method:'PUT',body:JSON.stringify({name:name.trim(),slug:slug.trim()})});if(item)item.querySelector('b').textContent=name.trim();notify('QR updated successfully.')}else{const currentName=item?.querySelector('b')?.textContent||'';const name=prompt('Menu name:',currentName);if(name===null)return;if(!name.trim())throw new Error('Menu name is required.');await req(`/businesses/${b.id}/menus/${id}`,{method:'PUT',body:JSON.stringify({name:name.trim()})});if(item)item.querySelector('b').textContent=name.trim();notify('Menu updated successfully.')}}
