@@ -20,8 +20,14 @@
     }finally{clearTimeout(timer)}
   }
   function button(text,kind='secondary'){const b=document.createElement('button');b.type='button';b.className=`btn ${kind}`;b.textContent=text;return b}
-  function reviewActions(){
+  async function reviewActions(){
     const list=$('reviewsList');if(!list)return;
+    let rows=[];
+    try{
+      const b=await getBusiness();
+      rows=await req(`/businesses/${encodeURIComponent(b.businessId||b.id)}/reviews`,{},10000);
+    }catch{}
+    const byId=new Map((Array.isArray(rows)?rows:[]).map(r=>[String(r.id),r]));
     list.querySelectorAll('.item').forEach(item=>{
       let row=item.querySelector('.stable-review-actions');
       if(!row){row=document.createElement('div');row.className='row stable-review-actions';row.style.cssText='margin-top:10px;flex-wrap:wrap';item.appendChild(row)}
@@ -30,11 +36,13 @@
       const id=use?.dataset.useReview||item.dataset.reviewActionId;
       if(id)item.dataset.reviewActionId=id;
       row.querySelectorAll('[data-stable-review-action]').forEach(x=>x.remove());
+      const data=byId.get(String(id));
+      const status=String(data?.replyStatus||'').toUpperCase();
       const reply=item.querySelector('.reply');
-      const hasReply=!!reply&&!!reply.textContent.trim();
+      const hasReply=!!String(data?.aiReply||reply?.textContent||'').trim();
       const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
-      const published=pill.includes('published to google');
-      const approved=pill.includes('approved')||pill.includes('ready to publish');
+      const published=status==='PUBLISHED'||pill.includes('published to google');
+      const approved=status==='APPROVED'||pill.includes('approved')||pill.includes('ready to publish');
       if(published)return;
       if(approved){const b=button('Publish to Google');b.dataset.stablePublish=id;b.dataset.stableReviewAction='1';row.appendChild(b);return;}
       if(hasReply){const b=button('Approve Reply');b.dataset.stableApprove=id;b.dataset.stableReviewAction='1';row.appendChild(b);return;}
