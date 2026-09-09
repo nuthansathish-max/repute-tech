@@ -66,7 +66,8 @@ if(!express.response.__publicGoogleReviewSendPatched){
   express.response.__publicGoogleReviewSendPatched=true;
   express.response.send=function patchedPublicGoogleReviewSend(body){
     try{
-      const match=String(this.req?.path||'').match(/^\/q\/([^/]+)$/);
+      const path=String(this.req?.path||'');
+      const match=path.match(/^\/(?:q|public\/qr|public\/q\/qr)\/([^/]+)$/);
       if(match&&typeof body==='string'&&body.includes('openFeedback()')){
         const slug=decodeURIComponent(match[1]);
         const href=`/public/google-review/${encodeURIComponent(slug)}`;
