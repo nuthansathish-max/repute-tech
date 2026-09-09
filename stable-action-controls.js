@@ -53,18 +53,16 @@
     btn.disabled=true;btn.textContent='Approving…';
     try{
       await req(`/reviews/${encodeURIComponent(id)}/approve`,{method:'POST',body:JSON.stringify({})},10000);
-      const item=btn.closest('.item');
-      const pill=item?.querySelector('.pill');
-      if(pill)pill.textContent='Approved — ready to publish';
-      btn.remove();
-      if(item){const row=item.querySelector('.stable-review-actions');if(row){const p=button('Publish to Google');p.dataset.stablePublish=id;p.dataset.stableReviewAction='1';row.appendChild(p)}}
       notify('AI reply approved. It is now ready to publish to Google.');
+      await refreshReviews();
+      setTimeout(reviewActions,300);
+      setTimeout(reviewActions,1000);
     }catch(e){btn.disabled=false;btn.textContent='Approve Reply';notify(`Approval failed: ${e.message||'Unable to approve reply'}`)}
   }
   async function publish(id,btn){
     if(!confirm('Publish this approved reply to Google Business Profile?\n\nThe reply will be posted publicly on Google.'))return;
     btn.disabled=true;btn.textContent='Publishing…';
-    try{await req(`/reviews/${encodeURIComponent(id)}/publish`,{method:'POST',body:JSON.stringify({confirm:true})},20000);const item=btn.closest('.item');const pill=item?.querySelector('.pill');if(pill)pill.textContent='Published to Google';btn.remove();notify('Reply published to Google successfully.')}catch(e){btn.disabled=false;btn.textContent='Publish to Google';notify(`Publishing failed: ${e.message||'Unable to publish reply to Google'}`)}
+    try{await req(`/reviews/${encodeURIComponent(id)}/publish`,{method:'POST',body:JSON.stringify({confirm:true})},20000);notify('Reply published to Google successfully.');await refreshReviews()}catch(e){btn.disabled=false;btn.textContent='Publish to Google';notify(`Publishing failed: ${e.message||'Unable to publish reply to Google'}`)}
   }
   async function getBusiness(){const s=await req('/business/status').catch(()=>null);if(s?.businessId)return s;const bs=await req('/businesses');if(bs?.[0])return bs[0];throw new Error('No business found.')}
   async function edit(kind,id,btn){const b=await getBusiness();const item=btn.closest('.item');if(kind==='qr'){const currentName=item?.querySelector('b')?.textContent||'';const currentSub=item?.querySelector('.sub')?.textContent||'';const name=prompt('QR name:',currentName);if(name===null)return;const slug=prompt('QR slug:',currentSub.split(' · ')[0]||'');if(slug===null)return;if(!name.trim()||!slug.trim())throw new Error('Name and slug are required.');await req(`/businesses/${b.id}/qr/${id}`,{method:'PUT',body:JSON.stringify({name:name.trim(),slug:slug.trim()})});if(item)item.querySelector('b').textContent=name.trim();notify('QR updated successfully.')}else{const currentName=item?.querySelector('b')?.textContent||'';const name=prompt('Menu name:',currentName);if(name===null)return;if(!name.trim())throw new Error('Menu name is required.');await req(`/businesses/${b.id}/menus/${id}`,{method:'PUT',body:JSON.stringify({name:name.trim()})});if(item)item.querySelector('b').textContent=name.trim();notify('Menu updated successfully.')}}
