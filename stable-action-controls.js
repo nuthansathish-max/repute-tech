@@ -9,6 +9,8 @@
   let decorating=false;
   let rerun=false;
   let reviewsTimer=null;
+  let reviewSyncTimer=null;
+  let reviewSyncing=false;
 
   async function req(path,opts={},timeoutMs=15000){
     const controller=new AbortController();
@@ -49,7 +51,8 @@
 
   function ensureReviewActionsFromDom(){
     const list=$('reviewsList');
-    if(!list||!pageVisible('reviews'))return;
+    if(!list||!pageVisible('reviews'))return false;
+    let needsServerSync=false;
 
     list.querySelectorAll('.item').forEach(item=>{
       const use=item.querySelector('[data-use-review]');
@@ -59,7 +62,10 @@
 
       const nativePublish=item.querySelector('[data-publish-review]');
       const nativeApprove=item.querySelector('[data-approve-review]');
-      if(nativePublish||nativeApprove)return;
+      if(nativePublish||nativeApprove){needsServerSync=true;return;}
+
+      const stableAction=item.querySelector('[data-stable-review-action]');
+      if(stableAction)return;
 
       const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
       const replyText=String(item.querySelector('.reply')?.textContent||'').replace(/^AI reply\s*/i,'').trim();
@@ -75,7 +81,6 @@
         item.appendChild(row);
       }
 
-      row.querySelectorAll('[data-stable-review-action]').forEach(x=>x.remove());
       if(approved){
         const b=button('Publish to Google');
         b.dataset.stablePublish=id;
@@ -93,6 +98,68 @@
         row.appendChild(b);
       }
     });
+
+    return needsServerSync;
+  }
+
+  function scheduleReviewSync(delay=120){
+    clearTimeout(reviewSyncTimer);
+    reviewSyncTimer=setTimeout(()=>{
+      reviewSyncTimer=null;
+      syncReviewActionsFromServer().catch(e=>console.warn('[repute review sync]',e?.message||e));
+    },delay);
+  }
+
+  async function syncReviewActionsFromServer(){
+    const list=$('reviewsList');
+    if(reviewSyncing||!list||!pageVisible('reviews'))return;
+    if(!list.querySelector('[data-publish-review],[data-approve-review]'))return;
+
+    reviewSyncing=true;
+    try{
+      const b=await getBusiness();
+      const rows=await req(`/businesses/${encodeURIComponent(b.id)}/reviews`,{},10000);
+      const byId=new Map((Array.isArray(rows)?rows:[]).map(r=>[String(r.id),r]));
+
+      list.querySelectorAll('.item').forEach(item=>{
+        const use=item.querySelector('[data-use-review]');
+        const id=use?.dataset.useReview||item.dataset.reviewActionId;
+        if(!id)return;
+        const r=byId.get(String(id));
+        if(!r)return;
+
+        const actionRow=item.querySelector('.row');
+        if(!actionRow)return;
+        const nativePublish=item.querySelector('[data-publish-review]');
+        const nativeApprove=item.querySelector('[data-approve-review]');
+        if(!nativePublish&&!nativeApprove)return;
+
+        const status=String(r.replyStatus||'').toUpperCase();
+        const hasReply=!!String(r.aiReply||'').trim();
+        const published=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
+        item.querySelector('.stable-review-actions')?.remove();
+        nativePublish?.remove();
+        nativeApprove?.remove();
+
+        if(published){
+          const b=button('Published to Google');
+          b.disabled=true;
+          actionRow.appendChild(b);
+        }else if(status==='APPROVED'){
+          const b=button('Publish to Google','');
+          b.dataset.stablePublish=id;
+          b.dataset.stableReviewAction='1';
+          actionRow.appendChild(b);
+        }else if(hasReply){
+          const b=button('Approve Reply','secondary');
+          b.dataset.stableApprove=id;
+          b.dataset.stableReviewAction='1';
+          actionRow.appendChild(b);
+        }
+      });
+    }finally{
+      reviewSyncing=false;
+    }
   }
 
   async function decorateList(listId,endpoint,kind){
@@ -131,7 +198,8 @@
     try{
       const overlay=$('authOverlay');
       if(overlay&&getComputedStyle(overlay).display!=='none')return;
-      ensureReviewActionsFromDom();
+      const needsReviewSync=ensureReviewActionsFromDom();
+      if(needsReviewSync)scheduleReviewSync(80);
       if(pageVisible('qr'))await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');
       if(pageVisible('menu'))await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
     }finally{
