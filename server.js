@@ -22,6 +22,7 @@ await import('./authoritative-public-order.js');
 // Do not load qr-public-destination.js: /q/:slug is owned by public-qr.js.
 await import('./qr-history.js');
 await import('./public-menu-links.js');
+await import('./public-google-review-link.js');
 await import('./public-qr.js');
 await import('./business-status.js');
 await import('./menu-order-route.js');
