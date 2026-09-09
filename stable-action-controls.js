@@ -49,6 +49,28 @@
     return !!page&&page.classList.contains('active');
   }
 
+  function isApprovedPill(item){
+    const pill=(item.querySelector('.pill')?.textContent||'').trim().toLowerCase();
+    return pill.includes('approved')||pill.includes('ready to publish');
+  }
+
+  function normalizeApprovedDomItem(item,id){
+    const row=item.querySelector('.row');
+    if(!row)return;
+    const published=(item.querySelector('.pill')?.textContent||'').toLowerCase().includes('published to google');
+    if(published)return;
+    row.querySelectorAll('button').forEach(b=>{
+      const text=(b.textContent||'').trim().toLowerCase();
+      if(text==='approve'||text==='approve reply'||b.hasAttribute('data-approve-review'))b.remove();
+    });
+    row.querySelector('.stable-review-actions')?.remove();
+    if(row.querySelector('[data-publish-review],[data-stable-publish]'))return;
+    const b=button('Publish to Google','');
+    b.dataset.stablePublish=id;
+    b.dataset.stableReviewAction='1';
+    row.appendChild(b);
+  }
+
   function ensureReviewActionsFromDom(){
     const list=$('reviewsList');
     if(!list||!pageVisible('reviews'))return false;
@@ -60,28 +82,15 @@
       if(!id)return;
       item.dataset.reviewActionId=id;
 
+      if(isApprovedPill(item)){
+        normalizeApprovedDomItem(item,id);
+        needsServerSync=true;
+        return;
+      }
+
       const nativePublish=item.querySelector('[data-publish-review]');
       const nativeApprove=item.querySelector('[data-approve-review]');
       if(nativePublish||nativeApprove){
-        const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
-        const actionRow=nativePublish?.closest('.row')||nativeApprove?.closest('.row');
-        const published=pill.includes('published to google');
-        const approved=pill.includes('approved')||pill.includes('ready to publish');
-        if(actionRow&&(published||approved)){
-          nativePublish?.remove();
-          nativeApprove?.remove();
-          actionRow.querySelector('.stable-review-actions')?.remove();
-          if(published){
-            const b=button('Published to Google');
-            b.disabled=true;
-            actionRow.appendChild(b);
-          }else{
-            const b=button('Publish to Google','');
-            b.dataset.stablePublish=id;
-            b.dataset.stableReviewAction='1';
-            actionRow.appendChild(b);
-          }
-        }
         needsServerSync=true;
         return;
       }
@@ -92,7 +101,6 @@
       const pill=(item.querySelector('.pill')?.textContent||'').toLowerCase();
       const replyText=String(item.querySelector('.reply')?.textContent||'').replace(/^AI reply\s*/i,'').trim();
       const published=pill.includes('published to google');
-      const approved=pill.includes('approved')||pill.includes('ready to publish');
       if(published)return;
 
       let row=item.querySelector('.stable-review-actions');
@@ -103,12 +111,7 @@
         item.appendChild(row);
       }
 
-      if(approved){
-        const b=button('Publish to Google');
-        b.dataset.stablePublish=id;
-        b.dataset.stableReviewAction='1';
-        row.appendChild(b);
-      }else if(replyText){
+      if(replyText){
         const b=button('Approve Reply');
         b.dataset.stableApprove=id;
         b.dataset.stableReviewAction='1';
@@ -135,7 +138,6 @@
   async function syncReviewActionsFromServer(){
     const list=$('reviewsList');
     if(reviewSyncing||!list||!pageVisible('reviews'))return;
-    if(!list.querySelector('[data-publish-review],[data-approve-review]'))return;
 
     reviewSyncing=true;
     try{
@@ -149,19 +151,22 @@
         if(!id)return;
         const r=byId.get(String(id));
         if(!r)return;
+        item.dataset.reviewActionId=id;
 
         const actionRow=item.querySelector('.row');
         if(!actionRow)return;
-        const nativePublish=item.querySelector('[data-publish-review]');
-        const nativeApprove=item.querySelector('[data-approve-review]');
-        if(!nativePublish&&!nativeApprove)return;
-
         const status=String(r.replyStatus||'').toUpperCase();
         const hasReply=!!String(r.aiReply||'').trim();
         const published=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
+
         item.querySelector('.stable-review-actions')?.remove();
-        nativePublish?.remove();
-        nativeApprove?.remove();
+        item.querySelectorAll('[data-stable-review-action]').forEach(x=>x.remove());
+        item.querySelectorAll('[data-publish-review],[data-approve-review]').forEach(x=>x.remove());
+
+        actionRow.querySelectorAll('button').forEach(btn=>{
+          const text=(btn.textContent||'').trim().toLowerCase();
+          if(text==='approve'||text==='approve reply'||text==='publish to google'||text==='publishing…')btn.remove();
+        });
 
         if(published){
           const b=button('Published to Google');
@@ -175,6 +180,11 @@
         }else if(hasReply){
           const b=button('Approve Reply','secondary');
           b.dataset.stableApprove=id;
+          b.dataset.stableReviewAction='1';
+          actionRow.appendChild(b);
+        }else{
+          const b=button('Generate AI Reply');
+          b.dataset.stableGenerate=id;
           b.dataset.stableReviewAction='1';
           actionRow.appendChild(b);
         }
@@ -226,7 +236,7 @@
       if(pageVisible('menu'))await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
       if(pageVisible('dashboard')){
         const heading=$('heading');
-        if(heading&&heading.textContent.trim()==='Good morning 👋')heading.textContent='Business overview';
+        if(heading)heading.textContent='Business overview';
       }
     }finally{
       decorating=false;
@@ -323,8 +333,7 @@
     const nativeApprove=e.target.closest?.('[data-approve-review]');
     if(nativeApprove){
       const item=nativeApprove.closest('.item');
-      const pill=(item?.querySelector('.pill')?.textContent||'').toLowerCase();
-      if(pill.includes('approved')||pill.includes('ready to publish')){
+      if(isApprovedPill(item)){
         e.preventDefault();
         e.stopImmediatePropagation();
         publish(nativeApprove.dataset.approveReview,nativeApprove);
