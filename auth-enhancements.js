@@ -6,7 +6,7 @@ function loadOrders(){
 function loadStableActions(){
   if(document.querySelector('script[data-repute-stable-actions]'))return;
   const s=document.createElement('script');
-  s.src='/stable-action-controls.js?v=5';
+  s.src='/stable-action-controls.js?v=6';
   s.dataset.reputeStableActions='1';
   document.head.appendChild(s);
 }
