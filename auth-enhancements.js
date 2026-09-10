@@ -10,6 +10,13 @@ function loadStableActions(){
   s.dataset.reputeStableActions='1';
   document.head.appendChild(s);
 }
+function loadReviewFinalizer(){
+  if(document.querySelector('script[data-repute-review-finalizer]'))return;
+  const s=document.createElement('script');
+  s.src='/review-action-finalizer.js?v=1';
+  s.dataset.reputeReviewFinalizer='1';
+  document.head.appendChild(s);
+}
 function loadRuntimeStability(){
   if(document.querySelector('script[data-repute-runtime-stability]'))return;
   const s=document.createElement('script');
@@ -33,6 +40,7 @@ function boot(){
   }
   loadOrders();
   loadStableActions();
+  loadReviewFinalizer();
 }
 loadRuntimeStability();
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
