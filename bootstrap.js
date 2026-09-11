@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import fs from 'node:fs/promises';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
 import { hashPassword, randomToken, tokenHash, setSessionCookie, getCookie, encrypt } from './auth.js';
 import { googleAuthUrl, exchangeCode, googleUser, oauthState } from './google.js';
 import { createTenantGuard } from './tenantAuth.js';
@@ -92,8 +91,7 @@ express.application.get=function(path,...handlers){
   }catch(e){next(e)}});
   if(path==='/api/businesses') return originalGet.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
-    // Repair older accounts that have a User row but no Business/BusinessMember row.
-    await ensureBusiness(user);
+    // Do not create a business here. New accounts must complete the business setup flow first.
     const where=['SUPER_ADMIN','ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}};
     res.json(await prisma.business.findMany({where,include:{locations:true,subscription:true}}));
   }catch(e){next(e)}});
@@ -122,8 +120,9 @@ express.application.post=function(path,...handlers){
     const email=p.data.email.toLowerCase();
     if(await prisma.user.findUnique({where:{email}}))return res.status(409).json({error:'Email already registered'});
     const user=await prisma.user.create({data:{name:p.data.name,email,passwordHash:hashPassword(p.data.password),role:'OWNER'}});
-    await ensureBusiness(user); const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
-    res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
+    // Business creation is intentionally deferred to /business-setup so the owner can choose the business type.
+    const sessionToken=await startSession(user); setSessionCookie(res,sessionToken);
+    res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role},onboardingRequired:true,onboardingUrl:'/business-setup'});
   }catch(e){next(e)}});
   // Text-only AI generation now uses the same OpenAI/local provider used by review analysis.
   if(path==='/api/reviews/ai-reply') return originalPost.call(this,path,async(req,res,next)=>{try{
