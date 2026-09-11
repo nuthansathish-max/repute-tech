@@ -24,6 +24,25 @@ function loadRuntimeStability(){
   s.dataset.reputeRuntimeStability='1';
   document.head.appendChild(s);
 }
+function installSignupOnboardingRedirect(){
+  if(window.__reputeSignupOnboardingRedirect)return;
+  window.__reputeSignupOnboardingRedirect=true;
+  const originalFetch=window.fetch.bind(window);
+  window.fetch=async function(input,init){
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    const method=String(init?.method||input?.method||'GET').toUpperCase();
+    const response=await originalFetch(input,init);
+    if(method==='POST' && /\/api\/auth\/signup(?:\?|$)/.test(url)){
+      try{
+        const data=await response.clone().json();
+        if(response.ok && data?.onboardingRequired){
+          window.location.href=data.onboardingUrl||'/business-setup';
+        }
+      }catch(e){}
+    }
+    return response;
+  };
+}
 function boot(){
   const o=document.getElementById('authOverlay');
   if(o){
@@ -38,6 +57,7 @@ function boot(){
       const t=document.getElementById('toggleAuth');if(t)t.textContent='Create a business account';
     }
   }
+  installSignupOnboardingRedirect();
   loadOrders();
   loadStableActions();
   loadReviewFinalizer();
