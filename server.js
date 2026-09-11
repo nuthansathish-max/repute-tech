@@ -16,6 +16,7 @@ express.application.listen = function(...args){
 // rather than depending on fragile listen() ordering.
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
+await import('./business-account-flow.js');
 
 // Register QR history, public customer-hub routing, menu-link normalization,
 // business open/closed compatibility, owner management, and customer helpers.
