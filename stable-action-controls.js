@@ -160,7 +160,6 @@
         const hasReply=!!String(r.aiReply||'').trim();
         const published=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
 
-        item.querySelector('.stable-review-actions')?.remove();
         item.querySelectorAll('[data-stable-review-action]').forEach(x=>x.remove());
         item.querySelectorAll('[data-publish-review],[data-approve-review]').forEach(x=>x.remove());
 
