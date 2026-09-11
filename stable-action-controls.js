@@ -155,6 +155,7 @@
 
         const actionRow=item.querySelector('.row');
         if(!actionRow)return;
+        const domApproved=isApprovedPill(item);
         const status=String(r.replyStatus||'').toUpperCase();
         const hasReply=!!String(r.aiReply||'').trim();
         const published=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
@@ -172,7 +173,7 @@
           const b=button('Published to Google');
           b.disabled=true;
           actionRow.appendChild(b);
-        }else if(status==='APPROVED'){
+        }else if(domApproved||status==='APPROVED'){
           const b=button('Publish to Google','');
           b.dataset.stablePublish=id;
           b.dataset.stableReviewAction='1';
