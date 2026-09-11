@@ -157,12 +157,13 @@
         if(!r)return;
         item.dataset.reviewActionId=id;
 
-        const actionRow=item.querySelector('.row');
-        if(!actionRow)return;
         const domApproved=isApprovedPill(item);
         const status=String(r.replyStatus||'').toUpperCase();
         const hasReply=!!String(r.aiReply||'').trim();
         const published=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
+        let actionRow=item.querySelector('.stable-review-actions');
+        if(!actionRow)actionRow=item.querySelector('.row');
+        if(!actionRow)return;
 
         item.querySelectorAll('[data-stable-review-action]').forEach(x=>x.remove());
         item.querySelectorAll('[data-publish-review],[data-approve-review]').forEach(x=>x.remove());
@@ -235,7 +236,8 @@
       const overlay=$('authOverlay');
       if(overlay&&getComputedStyle(overlay).display!=='none')return;
       const needsReviewSync=ensureReviewActionsFromDom();
-      if(needsReviewSync)scheduleReviewSync(80);
+      if(pageVisible('reviews'))scheduleReviewSync(200);
+      else if(needsReviewSync)scheduleReviewSync(80);
       if(pageVisible('qr'))await decorateList('qrList',id=>`/businesses/${encodeURIComponent(id)}/qr`,'qr');
       if(pageVisible('menu'))await decorateList('menuList',id=>`/businesses/${encodeURIComponent(id)}/menus`,'menu');
       if(pageVisible('dashboard')){
