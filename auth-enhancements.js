@@ -24,9 +24,15 @@ function loadRuntimeStability(){
   s.dataset.reputeRuntimeStability='1';
   document.head.appendChild(s);
 }
+function goToBusinessSetup(){
+  if(window.__reputeGoingToBusinessSetup)return;
+  window.__reputeGoingToBusinessSetup=true;
+  window.location.href='/business-setup';
+}
 function installSignupOnboardingRedirect(){
   if(window.__reputeSignupOnboardingRedirect)return;
   window.__reputeSignupOnboardingRedirect=true;
+
   const originalFetch=window.fetch.bind(window);
   window.fetch=async function(input,init){
     const url=typeof input==='string'?input:(input&&input.url)||'';
@@ -35,13 +41,53 @@ function installSignupOnboardingRedirect(){
     if(method==='POST' && /\/api\/auth\/signup(?:\?|$)/.test(url)){
       try{
         const data=await response.clone().json();
-        if(response.ok && data?.onboardingRequired){
-          window.location.href=data.onboardingUrl||'/business-setup';
-        }
+        if(response.ok && data?.onboardingRequired)goToBusinessSetup();
       }catch(e){}
     }
     return response;
   };
+
+  const OriginalXHR=window.XMLHttpRequest;
+  if(OriginalXHR){
+    const open=OriginalXHR.prototype.open;
+    const send=OriginalXHR.prototype.send;
+    OriginalXHR.prototype.open=function(method,url){
+      this.__reputeSignupRequest=String(method||'GET').toUpperCase()==='POST' && /\/api\/auth\/signup(?:\?|$)/.test(String(url||''));
+      return open.apply(this,arguments);
+    };
+    OriginalXHR.prototype.send=function(){
+      if(this.__reputeSignupRequest){
+        this.addEventListener('load',function(){
+          try{
+            const data=JSON.parse(this.responseText||'{}');
+            if(this.status>=200&&this.status<300&&data?.onboardingRequired)goToBusinessSetup();
+          }catch(e){}
+        });
+      }
+      return send.apply(this,arguments);
+    };
+  }
+
+  const button=document.getElementById('authSubmit');
+  if(button){
+    button.addEventListener('click',function(){
+      const name=document.getElementById('authName');
+      if(!name || getComputedStyle(name).display==='none')return;
+      let tries=0;
+      const check=async()=>{
+        if(window.__reputeGoingToBusinessSetup)return;
+        try{
+          const r=await originalFetch('/api/businesses',{cache:'no-store'});
+          if(r.ok){
+            const data=await r.json();
+            if(Array.isArray(data)&&data.length===0){goToBusinessSetup();return;}
+          }
+        }catch(e){}
+        if(++tries<12)setTimeout(check,500);
+      };
+      setTimeout(check,700);
+    },true);
+  }
 }
 function boot(){
   const o=document.getElementById('authOverlay');
