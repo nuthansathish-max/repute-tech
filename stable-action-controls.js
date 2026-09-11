@@ -63,7 +63,11 @@
       const text=(b.textContent||'').trim().toLowerCase();
       if(text==='approve'||text==='approve reply'||b.hasAttribute('data-approve-review'))b.remove();
     });
-    row.querySelector('.stable-review-actions')?.remove();
+    if(row.classList.contains('stable-review-actions')){
+      row.querySelectorAll('[data-stable-review-action],[data-publish-review],[data-approve-review]').forEach(x=>x.remove());
+    }else{
+      row.querySelector('.stable-review-actions')?.remove();
+    }
     if(row.querySelector('[data-publish-review],[data-stable-publish]'))return;
     const b=button('Publish to Google','');
     b.dataset.stablePublish=id;
