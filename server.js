@@ -7,6 +7,7 @@ await import('./order-hardening.js');
 await import('./analytics-ui.js');
 await import('./advanced-analytics.js');
 await import('./whatsapp-automation.js');
+await import('./whatsapp-preview-fix.js');
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
 await import('./business-account-flow.js');
