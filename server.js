@@ -33,8 +33,13 @@ express.application.get=function(path,...handlers){
     handlers=handlers.map(handler=>async(req,res,next)=>{
       const send=res.send.bind(res);
       res.send=function(body){
-        if(typeof body==='string' && body.includes('data-page="analytics"') && !body.includes('reputeAnalyticsNavFix')){
-          body=body.replace('</body>',`<script id="reputeAnalyticsNavFix">document.addEventListener('click',function(e){const el=e.target.closest('[data-page="analytics"]');if(!el)return;e.preventDefault();e.stopImmediatePropagation();location.href='/analytics'});</script></body>`);
+        if(typeof body==='string'){
+          if(body.includes('data-page="analytics"') && !body.includes('reputeAnalyticsNavFix')){
+            body=body.replace('</body>',`<script id="reputeAnalyticsNavFix">document.addEventListener('click',function(e){const el=e.target.closest('[data-page="analytics"]');if(!el)return;e.preventDefault();e.stopImmediatePropagation();location.href='/analytics'});</script></body>`);
+          }
+          if(body.includes('class="nav"') && !body.includes('reputeBillingNavFix')){
+            body=body.replace('</body>',`<script id="reputeBillingNavFix">(function(){function add(){const nav=document.querySelector('.side .nav');if(nav&&!nav.querySelector('[data-page="billing"]')){const b=document.createElement('button');b.type='button';b.dataset.page='billing';b.textContent='▤ Billing & POS';b.onclick=function(){location.href='/billing-pos'};const pricing=nav.querySelector('[data-page="pricing"]');nav.insertBefore(b,pricing||null)}const bar=document.querySelector('.mobilebar');if(bar&&!bar.querySelector('[data-page="billing"]')){const b=document.createElement('button');b.type='button';b.dataset.page='billing';b.textContent='▤ Billing';b.style.minWidth='94px';b.onclick=function(){location.href='/billing-pos'};bar.appendChild(b)}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',add);else add()})();</script></body>`);
+          }
         }
         return send(body);
       };
