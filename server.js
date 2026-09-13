@@ -12,8 +12,10 @@ await import('./whatsapp-preview-fix.js');
 await import('./whatsapp-order-automation.js');
 await import('./billing-pos-entry-fix.js');
 await import('./billing-history-clean.js');
-await import('./billing-invoice-redirect-fix.js');
+// Register Billing POS first, then the isolated invoice route fix so its
+// listen wrapper gets the first opportunity to register the invoice route.
 await import('./billing-pos.js');
+await import('./billing-invoice-redirect-fix.js');
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
 await import('./business-account-flow.js');
