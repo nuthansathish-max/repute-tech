@@ -7,15 +7,26 @@ import path from 'node:path';
 
 const prisma = new PrismaClient();
 let ready = false;
+let setupPromise = null;
 
 async function ensureNotificationTable(){
-  if(ready) return;
-  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Notification" ("id" TEXT PRIMARY KEY,"userId" TEXT NOT NULL,"businessId" TEXT,"type" TEXT NOT NULL,"title" TEXT NOT NULL,"message" TEXT NOT NULL,"readAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Notification_userId_readAt_createdAt_idx" ON "Notification" ("userId","readAt","createdAt")`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Notification_businessId_createdAt_idx" ON "Notification" ("businessId","createdAt")`);
-  ready = true;
+  if(ready) return true;
+  if(setupPromise) return setupPromise;
+  setupPromise=(async()=>{
+    try{
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Notification" ("id" TEXT PRIMARY KEY,"userId" TEXT NOT NULL,"businessId" TEXT,"type" TEXT NOT NULL,"title" TEXT NOT NULL,"message" TEXT NOT NULL,"readAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Notification_userId_readAt_createdAt_idx" ON "Notification" ("userId","readAt","createdAt")`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Notification_businessId_createdAt_idx" ON "Notification" ("businessId","createdAt")`);
+      ready=true;
+      return true;
+    }catch(e){
+      console.error('notification table setup',e);
+      setupPromise=null;
+      return false;
+    }
+  })();
+  return setupPromise;
 }
-await ensureNotificationTable().catch(e=>console.error('notification table setup',e));
 
 async function userFrom(req){
   const token=getCookie(req,'rp_session');
@@ -38,15 +49,15 @@ async function accessibleBusinessIds(user){
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
 
 export async function notifyUser(userId,{businessId=null,type='INFO',title,message}){
-  try{await ensureNotificationTable();return await prisma.notification.create({data:{userId,businessId,type,title,message}})}catch(e){console.error('notification create',e);return null}
+  try{if(!await ensureNotificationTable())return null;return await prisma.notification.create({data:{userId,businessId,type,title,message}})}catch(e){console.error('notification create',e);return null}
 }
 
 export async function notifyBusiness(businessId,{type='INFO',title,message}){
-  try{await ensureNotificationTable();const members=await prisma.businessMember.findMany({where:{businessId},select:{userId:true}});const unique=[...new Set(members.map(x=>x.userId))];if(!unique.length)return [];return await prisma.$transaction(unique.map(userId=>prisma.notification.create({data:{userId,businessId,type,title,message}})))}catch(e){console.error('business notification create',e);return []}
+  try{if(!await ensureNotificationTable())return [];const members=await prisma.businessMember.findMany({where:{businessId},select:{userId:true}});const unique=[...new Set(members.map(x=>x.userId))];if(!unique.length)return [];return await prisma.$transaction(unique.map(userId=>prisma.notification.create({data:{userId,businessId,type,title,message}})))}catch(e){console.error('business notification create',e);return []}
 }
 
 async function handleNotification(req,res){
-  await ensureNotificationTable();
+  if(!await ensureNotificationTable())return json(res,503,{error:'Notification storage is temporarily unavailable'});
   const user=await userFrom(req);
   if(!user)return json(res,401,{error:'Authentication required'});
   const businessIds=await accessibleBusinessIds(user);
