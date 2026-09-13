@@ -11,6 +11,7 @@ await import('./whatsapp-automation.js');
 await import('./whatsapp-preview-fix.js');
 await import('./whatsapp-order-automation.js');
 await import('./billing-pos-entry-fix.js');
+await import('./billing-history-clean.js');
 await import('./billing-pos.js');
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
