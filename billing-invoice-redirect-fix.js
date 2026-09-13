@@ -45,12 +45,20 @@ function register(app){
     if(!order)return res.status(404).send('Bill not found');
     const a=await access(req,order.businessId);if(a.error)return res.status(a.status).send(a.error);
     const meta=await billingMeta(order.id)||{subtotal:order.items.reduce((s,i)=>s+Number(i.lineTotal||0),0),discount:0,taxRate:0,tax:0};
-    res.set('Cache-Control','no-store');res.type('html').send(invoicePage(order.business,order,meta));
+
+    // A previous version of this route could redirect to the dashboard. Mobile
+    // browsers may cache that redirect and later revalidate it as 304 even
+    // after the route is fixed. Force this invoice response to be fresh.
+    delete req.headers['if-none-match'];
+    delete req.headers['if-modified-since'];
+    res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.set('Pragma','no-cache');
+    res.set('Expires','0');
+    res.set('Surrogate-Control','no-store');
+    res.status(200).type('html').send(invoicePage(order.business,order,meta));
   }catch(e){next(e)}});
 }
 
-// Register the invoice route before the existing Billing POS listener registers
-// its routes. This prevents the dashboard fallback from capturing invoice URLs.
 express.application.listen=function billingInvoiceListen(...args){
   register(this);
   return originalListen.apply(this,args);
