@@ -1,40 +1,61 @@
 import express from 'express';
 
-const originalGet = express.application.get;
+const originalUse = express.application.use;
 let installed = false;
 
 function cleanHtml(body){
   if(typeof body !== 'string') return body;
   body = body.replace('</head>', `<style id="billingHistoryClean">
-    .tabs{display:none!important}
-    .billrow .pill{display:none!important}
-    .billrow [class*="pill"]{display:none!important}
+    .pill{display:none!important}
   </style></head>`);
-  body = body.replace('Recent bills and payment status.', 'Recent bills.');
-  body = body.replace('Your recent bills and invoices.', 'Recent bills.');
+  body = body.replace('</body>', `<script id="billingHistoryCleanFix">
+(function(){
+  function clean(){
+    document.querySelectorAll('#history .pill').forEach(function(el){el.remove()});
+  }
+  function wire(){
+    var b=document.getElementById('reload');
+    if(!b || b.dataset.historyFix==='1') return;
+    b.dataset.historyFix='1';
+    b.onclick=async function(){
+      var old=b.textContent;
+      b.disabled=true;
+      b.textContent='Refreshing…';
+      try{
+        if(typeof historyLoad==='function') await historyLoad();
+        if(typeof dailyLoad==='function') await dailyLoad();
+        clean();
+      }catch(e){}
+      finally{b.disabled=false;b.textContent=old}
+    };
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    wire();
+    clean();
+    var h=document.getElementById('history');
+    if(h) new MutationObserver(clean).observe(h,{childList:true,subtree:true});
+  });
+})();
+</script></body>`);
   return body;
-}
-
-function wrapResponse(res){
-  const originalSend = res.send.bind(res);
-  const originalEnd = res.end.bind(res);
-  res.send = body => originalSend(cleanHtml(body));
-  res.end = (chunk, encoding, callback) => originalEnd(cleanHtml(chunk), encoding, callback);
 }
 
 function install(){
   if(installed) return;
   installed = true;
 
-  express.application.get = function(path,...handlers){
-    if(path === '/billing-pos'){
-      const wrapped = handlers.map(handler => async (req,res,next)=>{
-        wrapResponse(res);
-        return handler(req,res,next);
-      });
-      return originalGet.call(this,path,...wrapped);
-    }
-    return originalGet.call(this,path,...handlers);
+  express.application.use = function(...args){
+    const wrapped = args.map((arg)=>{
+      if(typeof arg !== 'function') return arg;
+      return function(req,res,next){
+        if(req.path === '/billing-pos'){
+          const send=res.send.bind(res);
+          res.send=function(body){return send(cleanHtml(body))};
+        }
+        return arg(req,res,next);
+      };
+    });
+    return originalUse.apply(this,wrapped);
   };
 }
 
