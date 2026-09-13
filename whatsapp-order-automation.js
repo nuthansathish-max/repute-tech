@@ -4,37 +4,7 @@ import { sendText, whatsappConfigured } from './whatsapp.js';
 
 const prisma = new PrismaClient();
 const originalRoute = express.application.route;
-const originalGet = express.application.get;
 let installed = false;
-
-function consentHandler(req, res, next) {
-  Promise.resolve().then(async () => {
-    const body = req.body || {};
-    const slug = String(body.slug || '').trim();
-    const phone = String(body.customerPhone || '').trim();
-    const optedIn = body.whatsappMarketingConsent === true;
-    if (!slug || !phone || !optedIn) return next();
-
-    const data = await prisma.smartQr.findUnique({
-      where: { slug },
-      select: { businessId: true, isActive: true }
-    });
-    if (!data?.isActive) return next();
-
-    const customer = await prisma.customer.findFirst({
-      where: { businessId: data.businessId, phone },
-      select: { id: true }
-    });
-    if (customer) {
-      await prisma.consent.upsert({
-        where: { customerId_type: { customerId: customer.id, type: 'WHATSAPP_MARKETING' } },
-        update: { granted: true, grantedAt: new Date(), revokedAt: null },
-        create: { customerId: customer.id, type: 'WHATSAPP_MARKETING', granted: true, grantedAt: new Date() }
-      });
-    }
-    next();
-  }).catch(next);
-}
 
 function wrapOrderResponse(req, res, next) {
   const originalJson = res.json.bind(res);
@@ -43,6 +13,15 @@ function wrapOrderResponse(req, res, next) {
       const phone = String(req.body?.customerPhone || '').trim();
       const name = String(req.body?.customerName || '').trim() || 'Customer';
       const order = payload.order;
+
+      if (req.body?.whatsappMarketingConsent === true && order.customerId) {
+        prisma.consent.upsert({
+          where: { customerId_type: { customerId: order.customerId, type: 'WHATSAPP_MARKETING' } },
+          update: { granted: true, grantedAt: new Date(), revokedAt: null },
+          create: { customerId: order.customerId, type: 'WHATSAPP_MARKETING', granted: true, grantedAt: new Date() }
+        }).catch(() => {});
+      }
+
       if (phone && whatsappConfigured()) {
         const message = `Hi ${name}, your order ${order.orderNumber} has been received. Total: ₹${Number(order.total || 0).toFixed(2)}. Thank you!`;
         sendText(phone, message).catch(() => {});
@@ -53,21 +32,23 @@ function wrapOrderResponse(req, res, next) {
   next();
 }
 
-function install(app) {
+function install() {
   if (installed) return;
   installed = true;
 
   express.application.route = function(path) {
     const route = originalRoute.call(this, path);
+
     if (path === '/api/public/orders') {
       const originalPost = route.post.bind(route);
       route.post = function(...handlers) {
         if (handlers.length > 1) {
-          return originalPost(handlers[0], consentHandler, wrapOrderResponse, ...handlers.slice(1));
+          return originalPost(handlers[0], wrapOrderResponse, ...handlers.slice(1));
         }
         return originalPost(...handlers);
       };
     }
+
     if (path === '/q/:slug/order') {
       const originalRouteGet = route.get.bind(route);
       route.get = function(...handlers) {
@@ -86,13 +67,9 @@ function install(app) {
         return originalRouteGet(...patched);
       };
     }
-    return route;
-  };
 
-  const originalApplicationGet = express.application.get;
-  express.application.get = function(path, ...handlers) {
-    return originalApplicationGet.call(this, path, ...handlers);
+    return route;
   };
 }
 
-install(express.application);
+install();
