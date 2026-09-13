@@ -3,6 +3,7 @@
 import express from 'express';
 import http from 'node:http';
 express.application.listen=function(...args){const server=http.createServer(this);return server.listen(...args)};
+await import('./billing-nav.js');
 await import('./order-hardening.js');
 await import('./analytics-ui.js');
 await import('./advanced-analytics.js');
