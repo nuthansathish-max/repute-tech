@@ -6,12 +6,9 @@ import './order-status-fix.js';
 import http from 'node:http';
 import { PrismaClient } from '@prisma/client';
 
-const schemaPrisma=new PrismaClient();
-await schemaPrisma.$executeRawUnsafe(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS "isOpen" BOOLEAN NOT NULL DEFAULT true`);
-await schemaPrisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "OrderReview" ("id" TEXT PRIMARY KEY,"orderId" TEXT NOT NULL UNIQUE,"businessId" TEXT NOT NULL,"rating" INTEGER NOT NULL,"text" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
-await schemaPrisma.$disconnect();
-
-const { publicOrderStatus } = await import('./public-order.js');
+// Do not run schema-changing SQL during application startup.
+// Render can start the service while the database connection pool is already busy,
+// and these startup queries can exhaust the Supabase session pooler.
 const prisma=new PrismaClient();
 const original=http.createServer;
 const readBody=async req=>{const chunks=[];for await(const c of req)chunks.push(c);const raw=Buffer.concat(chunks).toString('utf8');try{return JSON.parse(raw||'{}')}catch{return {}}};
