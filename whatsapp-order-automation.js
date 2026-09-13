@@ -56,7 +56,7 @@ function install() {
           const send = res.send.bind(res);
           res.send = body => {
             if (typeof body === 'string' && body.includes('id="phone"') && !body.includes('whatsappMarketingConsent')) {
-              const checkbox = `<label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-size:13px;color:#374151;line-height:1.4"><input id="whatsappMarketingConsent" type="checkbox" style="margin-top:3px;width:16px;height:16px"><span>I agree to receive WhatsApp updates and offers from this business.</span></label>`;
+              const checkbox = `<label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-size:13px;color:#374151;line-height:1.4"><input id="whatsappMarketingConsent" type="checkbox" style="margin-top:3px;width:16px;height:16px"><span>I agree to receive WhatsApp notifications about my order and offers from this business.</span></label>`;
               body = body.replace('<button id="submit" class="submit" type="button">Place order</button>', checkbox + '<button id="submit" class="submit" type="button">Place order</button>');
               body = body.replace("notes:$('notes').value.trim(),items", "notes:$('notes').value.trim(),whatsappMarketingConsent:$('whatsappMarketingConsent')?.checked===true,items");
             }
