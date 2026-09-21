@@ -16,6 +16,7 @@ await import('./billing-history-clean.js');
 // listen wrapper gets the first opportunity to register the invoice route.
 await import('./billing-pos.js');
 await import('./billing-day-close-fix.js');
+await import('./billing-day-report.js');
 await import('./billing-invoice-redirect-fix.js');
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
