@@ -37,6 +37,12 @@ async function businessAccess(req,businessId){
 }
 
 async function ensureBucket(url,key){
+  const check=await fetch(url+'/storage/v1/bucket/'+BUCKET,{
+    method:'GET',
+    headers:{apikey:key,Authorization:'Bearer '+key}
+  });
+  if(check.ok)return true;
+
   const r=await fetch(url+'/storage/v1/bucket',{
     method:'POST',
     headers:{apikey:key,Authorization:'Bearer '+key,'content-type':'application/json'},
@@ -46,9 +52,16 @@ async function ensureBucket(url,key){
       file_size_limit:MAX_BYTES
     })
   });
-  if(r.ok || r.status===409)return true;
+  if(r.ok)return true;
+
   const text=await r.text().catch(()=> '');
-  throw new Error('Unable to prepare image storage: '+(text||r.status));
+  let detail=text;
+  try{
+    const parsed=JSON.parse(text);
+    if(parsed?.code==='BucketAlreadyExists' || parsed?.statusCode===409)return true;
+    detail=parsed?.message||text;
+  }catch(_){}
+  throw new Error('Unable to prepare image storage: '+(detail||r.status));
 }
 
 async function uploadImage(url,key,path,mime,bytes){
