@@ -14,7 +14,7 @@ const ALLOWED = new Set(['image/jpeg','image/png','image/webp']);
 function config(){
   return {
     url: String(process.env.SUPABASE_URL || '').replace(/\/$/,''),
-    key: String(process.env.SUPABASE_SERVICE_ROLE_KEY || '')
+    key: String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '')
   };
 }
 
