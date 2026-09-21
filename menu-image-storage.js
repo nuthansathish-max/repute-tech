@@ -96,6 +96,8 @@ function register(app){
   if(app.__reputeMenuImageRouteRegistered)return;
   app.__reputeMenuImageRouteRegistered=true;
 
+  app.get('/api/businesses/:businessId/menu-images/status',async(req,res)=>{ const access=await businessAccess(req,req.params.businessId); if(access.error)return res.status(access.status).json({error:access.error}); const c=config(); res.json({configured:Boolean(c.url&&c.key),bucket:BUCKET}); });
+
   app.post('/api/businesses/:businessId/menu-images',async(req,res,next)=>{
     try{
       const access=await businessAccess(req,req.params.businessId);
