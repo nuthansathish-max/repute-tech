@@ -80,8 +80,7 @@ function injectClientScript(app){
   express.response.send=function(body){
     try{
       const req=this.req;
-      if(req && req.method==='GET' && req.path==='/' && typeof body==='string' &&
-         body.includes('id="addItem"') && !body.includes('/menu-image-ui.js')){
+      if(req && req.method==='GET' && req.path==='/' && typeof body==='string' && !body.includes('/menu-image-ui.js')){
         body=body.replace('</body>','<script src="/menu-image-ui.js"></script></body>');
       }
     }catch(_){}
