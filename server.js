@@ -11,6 +11,7 @@ await import('./whatsapp-automation.js');
 await import('./whatsapp-preview-fix.js');
 await import('./whatsapp-order-automation.js');
 await import('./whatsapp-final-bill.js');
+await import('./menu-image-storage.js');
 await import('./billing-pos-entry-fix.js');
 await import('./billing-history-clean.js');
 // Register Billing POS first, then the isolated invoice route fix so its
