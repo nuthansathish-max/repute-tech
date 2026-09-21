@@ -23,18 +23,25 @@
   async function prepare(file){
     if(!file)return null;
     if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Only JPG, PNG and WebP images are allowed');
-    if(file.size<=MAX_BYTES)return {blob:file,mime:file.type};
+
+    // Keep the JSON upload comfortably below the server's existing 1MB parser limit.
     const bitmap=await createImageBitmap(file);
-    const max=1200;
-    const scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+    const maxDimension=900;
+    const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
     const canvas=document.createElement('canvas');
     canvas.width=Math.max(1,Math.round(bitmap.width*scale));
     canvas.height=Math.max(1,Math.round(bitmap.height*scale));
     const ctx=canvas.getContext('2d');
     ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.82));
+
+    let quality=0.78;
+    let blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+    while(blob && blob.size>650*1024 && quality>0.45){
+      quality-=0.08;
+      blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+    }
     if(!blob)throw new Error('Could not prepare image');
-    if(blob.size>MAX_BYTES)throw new Error('Image must be 2MB or smaller');
+    if(blob.size>700*1024)throw new Error('Image could not be compressed enough. Please choose a smaller image.');
     return {blob,mime:'image/jpeg'};
   }
 
