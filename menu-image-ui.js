@@ -82,14 +82,58 @@
     return j.imageUrl;
   }
 
+  function ensureEditModal(){
+    if($('menuEditModal'))return;
+    const wrap=document.createElement('div');
+    wrap.id='menuEditModal';
+    wrap.style.cssText='display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:10000;align-items:center;justify-content:center;padding:16px';
+    wrap.innerHTML='<div style="background:#fff;width:min(720px,96vw);max-height:90vh;overflow:auto;border-radius:18px;padding:18px"><div style="display:flex;justify-content:space-between;align-items:center"><b>Edit menu & items</b><button type="button" id="menuEditClose">Close</button></div><div id="menuEditBody" style="margin-top:14px"></div></div>';
+    document.body.appendChild(wrap);
+    $('menuEditClose').onclick=()=>wrap.style.display='none';
+  }
+
+  async function openMenuEditor(menuId){
+    ensureEditModal();
+    const modal=$('menuEditModal'),body=$('menuEditBody');
+    modal.style.display='flex';body.innerHTML='<div class="sub">Loading…</div>';
+    try{
+      const businessId=await getBusinessId();
+      const rows=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menus',{credentials:'include'}).then(r=>r.json());
+      const menu=rows.find(m=>m.id===menuId);if(!menu)throw new Error('Menu not found');
+      body.innerHTML='<div class="form"><input id="editMenuName" value="'+escapeHtml(menu.name)+'"><button class="btn" id="saveMenuName">Save menu name</button></div><div style="margin-top:16px;font-weight:700">Items</div><div id="editMenuItems" style="margin-top:8px"></div><div style="margin-top:16px;font-weight:700">Add item</div><div class="form" style="margin-top:8px"><input id="newMenuItemName" placeholder="Item name"><input id="newMenuItemPrice" type="number" min="0" placeholder="Price ₹"><input id="newMenuItemCategory" placeholder="Category"><textarea id="newMenuItemDescription" placeholder="Description"></textarea><button class="btn" id="addMenuEditorItem">Add item</button></div>';
+      const box=$('editMenuItems');
+      box.innerHTML=(menu.items||[]).map(i=>'<div class="item" style="margin:8px 0"><input data-edit-name="'+escapeHtml(i.id)+'" value="'+escapeHtml(i.name)+'" placeholder="Item name"><input data-edit-price="'+escapeHtml(i.id)+'" type="number" min="0" value="'+escapeHtml(i.price)+'" placeholder="Price ₹"><button class="btn secondary" data-save-item="'+escapeHtml(i.id)+'" type="button">Save item</button></div>').join('')||'<div class="sub">No items yet.</div>';
+      $('saveMenuName').onclick=async()=>{try{
+        const name=$('editMenuName').value.trim();if(!name)throw new Error('Enter a menu name');
+        const r=await fetch('/api/menus/'+encodeURIComponent(menu.id),{method:'PATCH',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to save menu');
+        notify('Menu name updated');await refreshMenu();bindEditButtons();await openMenuEditor(menu.id);
+      }catch(e){notify(e.message||'Unable to save menu')}};
+      box.querySelectorAll('[data-save-item]').forEach(btn=>btn.onclick=async()=>{try{
+        const id=btn.dataset.saveItem;const name=box.querySelector('[data-edit-name="'+id+'"]').value.trim();const price=Number(box.querySelector('[data-edit-price="'+id+'"]').value);
+        if(!name)throw new Error('Enter an item name');if(!Number.isFinite(price)||price<0)throw new Error('Enter a valid price');
+        const r=await fetch('/api/menus/'+encodeURIComponent(menu.id)+'/items/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name,price})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to save item');
+        notify('Menu item updated');await refreshMenu();bindEditButtons();await openMenuEditor(menu.id);
+      }catch(e){notify(e.message||'Unable to save item')}});
+      $('addMenuEditorItem').onclick=async()=>{try{
+        const name=$('newMenuItemName').value.trim(),price=Number($('newMenuItemPrice').value);if(!name)throw new Error('Enter an item name');if(!Number.isFinite(price)||price<0)throw new Error('Enter a valid price');
+        const r=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menus/'+encodeURIComponent(menu.id)+'/items',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name,price,category:$('newMenuItemCategory').value.trim(),description:$('newMenuItemDescription').value.trim()})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to add item');
+        notify('Menu item added');await refreshMenu();bindEditButtons();await openMenuEditor(menu.id);
+      }catch(e){notify(e.message||'Unable to add item')}};
+    }catch(e){body.innerHTML='<div class="notice">'+escapeHtml(e.message||'Unable to load menu')+'</div>'}
+  }
+
   async function refreshMenu(){
     try{
       const businessId=await getBusinessId();
       const rows=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menus',{credentials:'include'}).then(r=>r.json());
       const list=$('menuList');
       if(!list||!Array.isArray(rows))return;
-      list.innerHTML=rows.map(m=>'<div class="item"><b>'+escapeHtml(m.name)+'</b><div class="sub">'+(m.isPublished?'Published':'Draft')+' · '+(m.items?.length||0)+' items</div><div style="margin-top:8px">'+((m.items||[]).map(i=>'<div style="display:flex;align-items:center;gap:10px;margin:7px 0"><img src="'+escapeHtml(i.imageUrl||'')+'" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:1px solid #e6e8ef;background:#f3f4f6" onerror="this.style.display=\'none\'"><div class="sub">• '+escapeHtml(i.name)+' — ₹'+escapeHtml(i.price)+(i.category?' · '+escapeHtml(i.category):'')+'</div></div>').join('')||'<div class="sub">No items yet.</div>')+'</div></div>').join('');
+      list.innerHTML=rows.map(m=>'<div class="item"><b>'+escapeHtml(m.name)+'</b><div class="sub">'+(m.isPublished?'Published':'Draft')+' · '+(m.items?.length||0)+' items</div><div style="margin-top:8px">'+((m.items||[]).map(i=>'<div style="display:flex;align-items:center;gap:10px;margin:7px 0"><img src="'+escapeHtml(i.imageUrl||'')+'" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:1px solid #e6e8ef;background:#f3f4f6" onerror="this.style.display=\'none\'"><div class="sub">• '+escapeHtml(i.name)+' — ₹'+escapeHtml(i.price)+(i.category?' · '+escapeHtml(i.category):'')+'</div></div>').join('')||'<div class="sub">No items yet.</div>')+'</div><button class="btn secondary" type="button" data-edit-menu="'+escapeHtml(m.id)+'" style="margin-top:10px">Edit menu & items</button></div>').join('');
     }catch(_){}
+  }
+  function bindEditButtons(){
+    const list=$('menuList');if(!list)return;
+    list.querySelectorAll('[data-edit-menu]').forEach(btn=>{if(btn.dataset.bound==='1')return;btn.dataset.bound='1';btn.onclick=()=>openMenuEditor(btn.dataset.editMenu)});
   }
 
   async function patchAddItem(){
@@ -131,7 +175,7 @@
   const timer=setInterval(async()=>{
     if($('addItem')&&$('menuSelect')){
       clearInterval(timer);
-      try{await getBusinessId();await patchAddItem();await refreshMenu();}catch(_){}
+      try{await getBusinessId();await patchAddItem();await refreshMenu();bindEditButtons();}catch(_){}
     }
   },500);
 })();
