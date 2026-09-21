@@ -4,7 +4,7 @@ import { getCookie, tokenHash } from './auth.js';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
-let installed=false;
+const installedApps=new WeakSet();
 
 const money=v=>Number(v||0).toFixed(2);
 const startOfDay=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
@@ -135,13 +135,13 @@ async function handle(req,res,next){
   }catch(e){next(e)}
 }
 
-function install(){
-  if(installed)return;
-  installed=true;
-  originalGet.call(express.application,'/api/businesses/:businessId/billing/daily/pdf',handle);
+function install(app){
+  if(!app || installedApps.has(app))return;
+  installedApps.add(app);
+  originalGet.call(app,'/api/businesses/:businessId/billing/daily/pdf',handle);
 }
 
 express.application.get=function(path,...handlers){
-  install();
+  install(this);
   return originalGet.call(this,path,...handlers);
 };
