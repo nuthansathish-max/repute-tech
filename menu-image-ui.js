@@ -86,45 +86,32 @@
   }
 
   async function patchAddItem(){
-    const businessId=await getBusinessId();
     const add=$('addItem');
     if(!add||add.dataset.menuImagePatched==='1')return;
     add.dataset.menuImagePatched='1';
     addImageField();
+
     const original=add.onclick;
     add.onclick=async function(event){
       const file=$('menuItemImage')?.files?.[0]||null;
       if(!file)return original?.call(this,event);
 
-      let createdItemId=null;
-      const realFetch=window.fetch;
-      window.fetch=async function(input,init){
-        const url=typeof input==='string'?input:input?.url||'';
-        const method=String(init?.method||input?.method||'GET').toUpperCase();
-        const response=await realFetch.apply(this,arguments);
-        if(method==='POST' && /\/api\/menus\/[^/]+\/items$/.test(url)){
-          try{
-            const copy=response.clone();
-            const json=await copy.json();
-            if(response.ok)createdItemId=json?.id||json?.menuItem?.id||null;
-          }catch(_){}
-        }
-        return response;
-      };
+      const businessId=await getBusinessId();
+      const menuId=$('menuSelect')?.value||'';
+      let before=[];
+      try{
+        const rows=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menus',{credentials:'include'}).then(r=>r.json());
+        before=(rows.find(m=>m.id===menuId)?.items||[]).map(i=>i.id);
+      }catch(_){}
+
+      await Promise.resolve(original?.call(this,event));
 
       try{
-        await Promise.resolve(original?.call(this,event));
-      }finally{
-        window.fetch=realFetch;
-      }
-
-      if(!createdItemId){
-        notify('Menu item was added, but the image could not be attached.');
-        return;
-      }
-
-      try{
-        await upload(createdItemId,file);
+        const rows=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menus',{credentials:'include'}).then(r=>r.json());
+        const items=rows.find(m=>m.id===menuId)?.items||[];
+        const created=items.find(i=>!before.includes(i.id));
+        if(!created)throw new Error('Menu item was added, but its image could not be attached.');
+        await upload(created.id,file);
         if($('menuItemImage'))$('menuItemImage').value='';
         notify('Menu item and image saved successfully');
         await refreshMenu();
