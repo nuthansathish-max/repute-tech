@@ -87,8 +87,6 @@
 
   async function patchAddItem(){
     const businessId=await getBusinessId();
-    const storageStatus=await fetch('/api/businesses/'+encodeURIComponent(businessId)+'/menu-images/status',{credentials:'include'}).then(r=>r.json()).catch(()=>({configured:false}));
-    if(!storageStatus.configured)return;
     const add=$('addItem');
     if(!add||add.dataset.menuImagePatched==='1')return;
     add.dataset.menuImagePatched='1';
