@@ -156,17 +156,6 @@
     });
   }
 
-  // The main dashboard also refreshes #menuList through its own loadMenus()
-  // function. That refresh can replace the injected Edit buttons after they
-  // appear. Keep only the Edit controls attached whenever the list is rerendered.
-  function watchMenuList(){
-    const list=$('menuList');if(!list||list.dataset.editWatch==='1')return;
-    list.dataset.editWatch='1';
-    const observer=new MutationObserver(()=>bindEditButtons());
-    observer.observe(list,{childList:true,subtree:true});
-    bindEditButtons();
-  }
-
   async function patchAddItem(){
     const add=$('addItem');
     if(!add||add.dataset.menuImagePatched==='1')return;
@@ -206,7 +195,7 @@
   const timer=setInterval(async()=>{
     if($('addItem')&&$('menuSelect')){
       clearInterval(timer);
-      try{await getBusinessId();patchAddItem();watchMenuList();await refreshMenu();bindEditButtons();}catch(_){}
+      try{await getBusinessId();patchAddItem();bindEditButtons();}catch(_){}
     }
   },500);
 })();
