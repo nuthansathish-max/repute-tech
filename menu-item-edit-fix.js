@@ -4,6 +4,7 @@ import { getCookie, tokenHash } from './auth.js';
 
 const prisma=new PrismaClient();
 const originalPatch=express.application.patch;
+const originalPut=express.application.put;
 const originalPost=express.application.post;
 const installed=new WeakSet();
 
@@ -44,7 +45,7 @@ function install(app){
     }catch(e){next(e)}
   });
 
-  originalPatch.call(app,'/api/menus/:menuId/items/:itemId',async(req,res,next)=>{
+  const updateMenuItem=async(req,res,next)=>{
     try{
       const access=await menuAccess(req,req.params.menuId);
       if(access.error)return res.status(access.status).json({error:access.error});
@@ -61,7 +62,9 @@ function install(app){
       const updated=await prisma.menuItem.update({where:{id:item.id},data});
       return res.json(updated);
     }catch(e){next(e)}
-  });
+  };
+  originalPatch.call(app,'/api/menus/:menuId/items/:itemId',updateMenuItem);
+  originalPut.call(app,'/api/menus/:menuId/items/:itemId',updateMenuItem);
 
   originalPost.call(app,'/api/businesses/:businessId/menus/:menuId/items',async(req,res,next)=>{
     try{
@@ -84,4 +87,5 @@ function install(app){
 }
 
 express.application.patch=function(path,...handlers){install(this);return originalPatch.call(this,path,...handlers)};
+express.application.put=function(path,...handlers){install(this);return originalPut.call(this,path,...handlers)};
 express.application.post=function(path,...handlers){install(this);return originalPost.call(this,path,...handlers)};
