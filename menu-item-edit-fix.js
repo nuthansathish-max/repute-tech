@@ -29,6 +29,21 @@ function install(app){
   if(!app||installed.has(app))return;
   installed.add(app);
 
+  originalPatch.call(app,'/api/menus/:menuId',async(req,res,next)=>{
+    try{
+      const access=await menuAccess(req,req.params.menuId);
+      if(access.error)return res.status(access.status).json({error:access.error});
+      const body=req.body||{};
+      const data={};
+      if(body.name!==undefined)data.name=String(body.name).trim();
+      if(body.isPublished!==undefined)data.isPublished=Boolean(body.isPublished);
+      if(body.published!==undefined&&body.isPublished===undefined)data.isPublished=Boolean(body.published);
+      if(body.name!==undefined&&!data.name)return res.status(400).json({error:'Enter a menu name'});
+      const updated=await prisma.menu.update({where:{id:access.menu.id},data});
+      return res.json(updated);
+    }catch(e){next(e)}
+  });
+
   originalPatch.call(app,'/api/menus/:menuId/items/:itemId',async(req,res,next)=>{
     try{
       const access=await menuAccess(req,req.params.menuId);
