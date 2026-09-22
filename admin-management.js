@@ -16,7 +16,7 @@ async function sessionUser(req){
 }
 async function requireAdmin(req,res){
   const user=await sessionUser(req);
-  if(!user){res.status(401).json({error:'Authentication required'});return null;}
+  if(!user)return null;
   if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
 }
