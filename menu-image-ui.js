@@ -102,16 +102,20 @@
       const menu=rows.find(m=>m.id===menuId);if(!menu)throw new Error('Menu not found');
       body.innerHTML='<div class="form"><input id="editMenuName" value="'+escapeHtml(menu.name)+'"><button class="btn" id="saveMenuName">Save menu name</button></div><div style="margin-top:16px;font-weight:700">Items</div><div id="editMenuItems" style="margin-top:8px"></div><div style="margin-top:16px;font-weight:700">Add item</div><div class="form" style="margin-top:8px"><input id="newMenuItemName" placeholder="Item name"><input id="newMenuItemPrice" type="number" min="0" placeholder="Price ₹"><input id="newMenuItemCategory" placeholder="Category"><textarea id="newMenuItemDescription" placeholder="Description"></textarea><button class="btn" id="addMenuEditorItem">Add item</button></div>';
       const box=$('editMenuItems');
-      box.innerHTML=(menu.items||[]).map(i=>'<div class="item" style="margin:8px 0"><input data-edit-name="'+escapeHtml(i.id)+'" value="'+escapeHtml(i.name)+'" placeholder="Item name"><input data-edit-price="'+escapeHtml(i.id)+'" type="number" min="0" value="'+escapeHtml(i.price)+'" placeholder="Price ₹"><button class="btn secondary" data-save-item="'+escapeHtml(i.id)+'" type="button">Save item</button></div>').join('')||'<div class="sub">No items yet.</div>';
+      box.innerHTML=(menu.items||[]).map(i=>'<div class="item" style="margin:8px 0;padding:10px;border:1px solid #e6e8ef;border-radius:12px"><input data-edit-name="'+escapeHtml(i.id)+'" value="'+escapeHtml(i.name)+'" placeholder="Item name"><input data-edit-price="'+escapeHtml(i.id)+'" type="number" min="0" value="'+escapeHtml(i.price)+'" placeholder="Price ₹"><input data-edit-category="'+escapeHtml(i.id)+'" value="'+escapeHtml(i.category||'')+'" placeholder="Category"><textarea data-edit-description="'+escapeHtml(i.id)+'" placeholder="Description">'+escapeHtml(i.description||'')+'</textarea><button class="btn secondary" data-save-item="'+escapeHtml(i.id)+'" type="button">Save item</button></div>').join('')||'<div class="sub">No items yet.</div>';
       $('saveMenuName').onclick=async()=>{try{
         const name=$('editMenuName').value.trim();if(!name)throw new Error('Enter a menu name');
         const r=await fetch('/api/menus/'+encodeURIComponent(menu.id),{method:'PATCH',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to save menu');
         notify('Menu name updated');await refreshMenu();bindEditButtons();await openMenuEditor(menu.id);
       }catch(e){notify(e.message||'Unable to save menu')}};
       box.querySelectorAll('[data-save-item]').forEach(btn=>btn.onclick=async()=>{try{
-        const id=btn.dataset.saveItem;const name=box.querySelector('[data-edit-name="'+id+'"]').value.trim();const price=Number(box.querySelector('[data-edit-price="'+id+'"]').value);
+        const id=btn.dataset.saveItem;const name=box.querySelector('[data-edit-name="'+id+'"]').value.trim();const price=Number(box.querySelector('[data-edit-price="'+id+'"]').value);const category=box.querySelector('[data-edit-category="'+id+'"]').value.trim();const description=box.querySelector('[data-edit-description="'+id+'"]').value.trim();
         if(!name)throw new Error('Enter an item name');if(!Number.isFinite(price)||price<0)throw new Error('Enter a valid price');
-        const r=await fetch('/api/menus/'+encodeURIComponent(menu.id)+'/items/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name,price})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to save item');
+        const payload={name,price,category,description};
+        let r=await fetch('/api/menus/'+encodeURIComponent(menu.id)+'/items/'+encodeURIComponent(id),{method:'PUT',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+        let j=await r.json().catch(()=>({}));
+        if(!r.ok){r=await fetch('/api/menus/'+encodeURIComponent(menu.id)+'/items/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});j=await r.json().catch(()=>({}));}
+        if(!r.ok)throw new Error(j.error||'Unable to save item');
         notify('Menu item updated');await refreshMenu();bindEditButtons();await openMenuEditor(menu.id);
       }catch(e){notify(e.message||'Unable to save item')}});
       $('addMenuEditorItem').onclick=async()=>{try{
