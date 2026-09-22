@@ -24,6 +24,7 @@ await import('./billing-invoice-redirect-fix.js');
 await import('./authoritative-business-status.js');
 await import('./authoritative-public-order.js');
 await import('./business-account-flow.js');
+await import('./admin-management.js');
 await import('./onboarding-guard.js');
 await import('./qr-history.js');
 await import('./public-menu-links.js');
