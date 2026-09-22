@@ -137,7 +137,23 @@
   }
   function bindEditButtons(){
     const list=$('menuList');if(!list)return;
-    list.querySelectorAll('[data-edit-menu]').forEach(btn=>{if(btn.dataset.bound==='1')return;btn.dataset.bound='1';btn.onclick=()=>openMenuEditor(btn.dataset.editMenu)});
+    list.querySelectorAll('[data-edit-menu]').forEach(btn=>{
+      if(btn.dataset.bound==='1')return;
+      btn.dataset.bound='1';
+      btn.onclick=e=>{e.preventDefault();e.stopPropagation();openMenuEditor(btn.dataset.editMenu)};
+    });
+  }
+
+  // Use event delegation as a fallback so the Edit action still works even
+  // when another dashboard refresh replaces the menu list after binding.
+  if(!document.documentElement.dataset.reputeMenuEditClick){
+    document.documentElement.dataset.reputeMenuEditClick='1';
+    document.addEventListener('click',e=>{
+      const btn=e.target?.closest?.('[data-edit-menu]');
+      if(!btn||btn.dataset.bound==='1')return;
+      e.preventDefault();
+      openMenuEditor(btn.dataset.editMenu);
+    });
   }
 
   // The main dashboard also refreshes #menuList through its own loadMenus()
