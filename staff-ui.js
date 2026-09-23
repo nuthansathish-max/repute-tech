@@ -38,10 +38,22 @@
     const list = document.getElementById('staffList');
     if (!businessId || !list) return;
 
+    const isOwner = String(window.currentUser?.role || '').toUpperCase() === 'OWNER';
+    const form = document.getElementById('staffForm');
+    if (form && !isOwner) {
+      form.style.display = 'none';
+      const parent = form.parentElement;
+      if (parent && !parent.querySelector('[data-owner-permission-note]')) {
+        const note = document.createElement('div');
+        note.className = 'notice';
+        note.dataset.ownerPermissionNote = '1';
+        note.textContent = 'Only the business owner can add staff or change their permissions.';
+        parent.appendChild(note);
+      }
+    }
+
     try {
       const rows = await staffApi('/businesses/' + encodeURIComponent(businessId) + '/staff');
-      const isOwner = String(window.currentUser?.role || '').toUpperCase() === 'OWNER';
-
       list.innerHTML = (Array.isArray(rows) ? rows : []).map(row => {
         const permissions = row.permissions || {};
         const permissionEditor = isOwner ? (
