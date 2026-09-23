@@ -108,11 +108,12 @@ export async function businessPermissionMiddleware(req, res, next) {
     const businessId = await businessIdForRequest(req);
     if (!businessId) return next();
 
-    const member = await prisma.businessMember.findUnique({
-      where: { userId_businessId: { userId: user.id, businessId } },
-      select: { role: true, permissions: true }
-    });
-
+    await permissionColumnReady;
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT role, permissions FROM "BusinessMember" WHERE "userId"=$1 AND "businessId"=$2 LIMIT 1`,
+      user.id, businessId
+    );
+    const member = rows[0];
     if (!member) return res.status(403).json({ error: 'Business access denied' });
     if (member.role === 'OWNER') return next();
 
