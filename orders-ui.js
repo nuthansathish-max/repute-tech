@@ -101,10 +101,11 @@
     return role==='OWNER'||p.ORDERS===true||window.canBusinessPermission?.('ORDERS')===true;
   }
   function boot(){
-    if(!allowed())return;
-    addNav();addSection();addAvailability();setTimeout(()=>loadOrders(),700);
-    setInterval(()=>{if(allowed())addNav()},3000);
+    addAvailability();
     setInterval(loadAvailability,30000);
+    if(!allowed())return;
+    addNav();addSection();setTimeout(()=>loadOrders(),700);
+    setInterval(()=>{if(allowed())addNav()},3000);
     setInterval(()=>{if(allowed()&&$('orders')?.classList.contains('active'))loadOrders()},15000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
