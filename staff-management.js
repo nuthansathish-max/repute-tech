@@ -53,6 +53,14 @@ function install(app){
   await prisma.user.update({where:{id:user.id},data:{role}});
   res.json({ok:true});
  }catch(e){next(e)}});
+ originalGet.call(app,'/api/businesses/:businessId/permissions/me',async(req,res,next)=>{try{
+  const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});
+  await permissionColumnReady;
+  if(a.member.role==='OWNER')return res.json({role:'OWNER',permissions:Object.fromEntries(PERMISSION_KEYS.map(k=>[k,true]))});
+  const m=await prisma.$queryRawUnsafe(`SELECT role, permissions FROM "BusinessMember" WHERE id=$1`,a.member.id);
+  res.json({role:a.member.role,permissions:normalizePermissions(m[0]?.permissions)});
+ }catch(e){next(e)}});
+
  originalGet.call(app,'/api/businesses/:businessId/staff/:memberId/permissions',async(req,res,next)=>{try{
   const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});
   await permissionColumnReady;
