@@ -214,21 +214,43 @@
       window.businessPermissions=d.permissions||{};
       window.businessRole=d.role||window.currentUser?.role||'STAFF';
       const owner=String(window.businessRole).toUpperCase()==='OWNER';
+
+      const pagePermission={
+        dashboard:'DASHBOARD', reviews:'REVIEWS', ai:'AI', qr:'QR',
+        menu:'MENU', customers:'CUSTOMERS', campaigns:'WHATSAPP',
+        analytics:'ANALYTICS', pricing:'PRICING', staff:'STAFF',
+        settings:'SETTINGS', orders:'ORDERS'
+      };
+
+      const can=k=>owner||window.businessPermissions[k]===true;
+      window.canBusinessPermission=can;
+
       document.querySelectorAll('[data-page]').forEach(el=>{
-        const page=String(el.dataset.page||'').toUpperCase();
-        if(!page)return;
-        el.style.display=owner || window.businessPermissions[page]===true ? '' : 'none';
+        const page=String(el.dataset.page||'').toLowerCase();
+        const key=pagePermission[page];
+        if(key)el.style.display=can(key)?'':'none';
       });
+
+      document.querySelectorAll('[data-business-permission]').forEach(el=>{
+        const key=String(el.dataset.businessPermission||'').toUpperCase();
+        el.style.display=can(key)?'':'none';
+      });
+
+      const billingAllowed=can('BILLING');
+      document.querySelectorAll('[data-repute-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
+      document.querySelectorAll('[data-repute-mobile-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
+
       if(!owner){
         const active=document.querySelector('.page.active');
-        const activeKey=active?.id?.toUpperCase();
-        if(activeKey && activeKey!=='DASHBOARD' && window.businessPermissions[activeKey]!==true){
-          navigate(window.businessPermissions.DASHBOARD===true?'dashboard':Object.keys(window.businessPermissions).find(k=>window.businessPermissions[k])?.toLowerCase()||'dashboard');
+        const activePage=active?.id?.toLowerCase();
+        const activeKey=pagePermission[activePage];
+        if(activeKey&&!can(activeKey)){
+          const first=Object.entries(pagePermission).find(([,key])=>can(key));
+          if(first)navigate(first[0]);
         }
       }
     }catch(e){}
   }
-
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
