@@ -38,12 +38,12 @@
 
   function notify(msg){if(typeof window.toast==='function')window.toast(msg);else alert(msg)}
 
-  const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI Assistant'],['qr','▣ Smart QR'],['menu','☰ Digital Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['pricing','💳 Plans & Pricing'],['staff','👥 Staff Management'],['settings','⚙ Account Settings']];
+  const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI Assistant'],['qr','▣ Smart QR'],['menu','☰ Digital Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['orders','▤ Orders'],['pricing','💳 Plans & Pricing'],['staff','👥 Staff Management'],['settings','⚙ Account Settings']];
 
   function navigate(page){
     document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===page));
     document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
-    const labels={dashboard:'Good morning 👋',reviews:'Review inbox',ai:'AI Review Assistant',qr:'Smart QR',menu:'Digital Menu',customers:'Customer CRM',campaigns:'WhatsApp',analytics:'Business analytics',pricing:'Plans & pricing',staff:'Staff Management',settings:'Account Settings'};
+    const labels={dashboard:'Good morning 👋',reviews:'Review inbox',ai:'AI Review Assistant',qr:'Smart QR',menu:'Digital Menu',customers:'Customer CRM',campaigns:'WhatsApp',analytics:'Business analytics',pricing:'Plans & pricing',staff:'Staff Management',settings:'Account Settings',orders:'Orders'};
     if($('heading'))$('heading').textContent=labels[page]||'repute-tech.in';
     if(page==='staff'&&typeof window.loadStaff==='function')setTimeout(window.loadStaff,50);
     window.scrollTo({top:0,behavior:'smooth'});
