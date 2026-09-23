@@ -79,8 +79,8 @@ function permissionForPath(path, method) {
   if (path.includes('/billing') || path === '/api/billing-pos') return 'BILLING';
   if (path.includes('/orders')) return 'ORDERS';
   if (path.includes('/analytics')) return 'ANALYTICS';
+  if (path.includes('/ai-settings') || (path.startsWith('/api/reviews/') && path.includes('ai-'))) return 'AI';
   if (path.includes('/reviews') || path.startsWith('/api/reviews') || path.includes('/google/')) return 'REVIEWS';
-  if (path.includes('/ai-settings') || path.startsWith('/api/reviews/') && path.includes('ai-')) return 'AI';
   if (path.includes('/qr') || path.startsWith('/api/qr')) return 'QR';
   if (path.includes('/menus') || path.startsWith('/api/menus')) return 'MENU';
   if (path.includes('/customers') || path.startsWith('/api/customers')) return 'CUSTOMERS';
