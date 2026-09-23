@@ -207,9 +207,32 @@
     try{const d=await req('/plans');draw(Array.isArray(d)&&d.length?d:fallback)}catch{draw(fallback)}
   }
 
+  async function enhancePermissions(){
+    if(!window.businessId)return;
+    try{
+      const d=await req('/businesses/'+encodeURIComponent(window.businessId)+'/permissions/me');
+      window.businessPermissions=d.permissions||{};
+      window.businessRole=d.role||window.currentUser?.role||'STAFF';
+      const owner=String(window.businessRole).toUpperCase()==='OWNER';
+      document.querySelectorAll('[data-page]').forEach(el=>{
+        const page=String(el.dataset.page||'').toUpperCase();
+        if(!page)return;
+        el.style.display=owner || window.businessPermissions[page]===true ? '' : 'none';
+      });
+      if(!owner){
+        const active=document.querySelector('.page.active');
+        const activeKey=active?.id?.toUpperCase();
+        if(activeKey && activeKey!=='DASHBOARD' && window.businessPermissions[activeKey]!==true){
+          navigate(window.businessPermissions.DASHBOARD===true?'dashboard':Object.keys(window.businessPermissions).find(k=>window.businessPermissions[k])?.toLowerCase()||'dashboard');
+        }
+      }
+    }catch(e){}
+  }
+
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
+    await enhancePermissions();
     await Promise.allSettled([enhanceReviews(),enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
   let tries=0;const timer=setInterval(async()=>{if(++tries>40)return;if($('authOverlay')?.style.display==='none'){clearInterval(timer);await enhance()}},500);
