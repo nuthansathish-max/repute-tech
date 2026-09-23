@@ -53,8 +53,8 @@ express.application.listen=function(...args){
         const isOpen=req.body?.isOpen;
         if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
         const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
-        await prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
         res.json({ok:true,businessId:updated.id,name:updated.name,isOpen:Boolean(updated.isOpen)});
+        prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
       }catch(e){next(e)}
     });
     this.get('/api/businesses/:businessId/status',async(req,res,next)=>{
@@ -71,8 +71,8 @@ express.application.listen=function(...args){
         const isOpen=req.body?.isOpen;
         if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
         const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
-        await prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
         res.json({ok:true,businessId:updated.id,isOpen:Boolean(updated.isOpen)});
+        prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
       }catch(e){next(e)}
     });
   }
