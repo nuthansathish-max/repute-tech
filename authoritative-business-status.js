@@ -33,8 +33,10 @@ async function setStatus(req,res,next,businessId=null){
   try{
     const a=await businessFor(req,businessId);
     if(!a.business)return res.status(a.status).json({error:a.error});
-    if(typeof req.body?.isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
-    const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen:req.body.isOpen}});
+    const raw=req.body?.isOpen;
+    const isOpen=typeof raw==='boolean'?raw:(raw==='true'?true:(raw==='false'?false:null));
+    if(isOpen===null)return res.status(400).json({error:'isOpen must be true or false'});
+    const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
     res.json({ok:true,businessId:updated.id,businessName:updated.name,isOpen:Boolean(updated.isOpen)});
   }catch(e){next(e)}
 }
