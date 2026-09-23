@@ -64,8 +64,8 @@ function register(app){if(registered)return;registered=true;
     const business=await prisma.business.findFirst({where:{members:{some:{userId:u.id}}},select:{id:true}});
     if(!business)return res.status(403).send('Business access denied');
     if(!['ADMIN','SUPER_ADMIN','OWNER'].includes(String(u.role||'').toUpperCase())){
-      const member=await prisma.businessMember.findFirst({where:{userId:u.id,businessId:business.id},select:{permissions:true}});
-      const permissions=member?.permissions&&typeof member.permissions==='object'?member.permissions:{};
+      const rows=await prisma.$queryRawUnsafe(`SELECT permissions FROM "BusinessMember" WHERE "userId"=$1 AND "businessId"=$2 LIMIT 1`,u.id,business.id);
+      const permissions=rows[0]?.permissions&&typeof rows[0].permissions==='object'?rows[0].permissions:{};
       if(permissions.BILLING!==true)return res.status(403).send('Billing & POS access has not been granted by the business owner.');
     }
     res.set('Cache-Control','no-store');res.type('html').send(page)
