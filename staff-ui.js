@@ -1,147 +1,131 @@
 (() => {
-  async function staffApi(path, opts = {}) {
-    const r = await fetch('/api' + path, {
+  const escStaff = v => String(v ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[c]));
+
+  async function staffApi(path, options = {}) {
+    const response = await fetch('/api' + path, {
       credentials: 'include',
-      ...opts,
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
     });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || 'Request failed');
-    return d;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || data.message || 'Request failed');
+    return data;
   }
 
   async function loadStaff() {
-    if (!window.businessId) return;
+    const businessId = window.businessId;
     const list = document.getElementById('staffList');
-    if (!list) return;
+    if (!businessId || !list) return;
 
     try {
-      const rows = await staffApi(
-        '/businesses/' + encodeURIComponent(window.businessId) + '/staff'
-      );
-
-      list.innerHTML =
-        rows.map(x =>
-          '<div class="item"><b>' + esc(x.name) + '</b>' +
-          '<div class="sub">' + esc(x.email) + ' · ' + esc(x.role) + '</div>' +
-          '<div class="row" style="margin-top:8px">' +
-          '<button class="btn secondary" type="button" onclick="changeStaff(\\'' + x.id + '\\',\\'' + x.role + '\\')">Change role</button>' +
-          '<button class="btn secondary" type="button" onclick="removeStaff(\\'' + x.id + '\\')">Remove</button>' +
-          '</div></div>'
-        ).join('') || '<div class="sub">No staff members yet.</div>';
-    } catch (e) {
-      list.innerHTML = '<div class="notice">' + esc(e.message) + '</div>';
+      const rows = await staffApi('/businesses/' + encodeURIComponent(businessId) + '/staff');
+      list.innerHTML = (Array.isArray(rows) ? rows : []).map(row =>
+        '<div class="item">' +
+          '<b>' + escStaff(row.name || row.email || 'Staff member') + '</b>' +
+          '<div class="sub">' + escStaff(row.email || '') + ' · ' + escStaff(row.role || 'STAFF') + '</div>' +
+        '</div>'
+      ).join('') || '<div class="sub">No staff members yet.</div>';
+    } catch (error) {
+      list.innerHTML = '<div class="notice">' + escStaff(error.message) + '</div>';
     }
   }
 
-  let submitting = false;
-
-  window.addStaff = async function () {
-    const msg = document.getElementById('staffMsg');
-    const form = document.getElementById('staffForm');
+  async function submitStaff() {
     const emailInput = document.getElementById('staffEmail');
     const roleInput = document.getElementById('staffRole');
+    const message = document.getElementById('staffMsg');
     const button = document.getElementById('staffAddButton');
+    const businessId = window.businessId;
 
-    if (!form || !emailInput || !roleInput) return;
+    if (!emailInput || !roleInput || !message) return;
 
-    msg.textContent = '';
-
-    // Read the actual input value directly. Do not depend on FormData.
     const email = String(emailInput.value || '').trim();
-    const role = String(roleInput.value || 'STAFF').toUpperCase();
+    const role = String(roleInput.value || 'STAFF').trim().toUpperCase();
+
+    message.textContent = '';
 
     if (!email) {
-      msg.textContent = 'Enter the staff member email';
+      message.textContent = 'Enter the staff member email';
       emailInput.focus();
       return;
     }
 
-    if (submitting) return;
+    if (!businessId) {
+      message.textContent = 'Business is still loading. Please try again.';
+      return;
+    }
 
-    submitting = true;
-    button.disabled = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Adding…';
+    }
 
     try {
-      await staffApi(
-        '/businesses/' + encodeURIComponent(window.businessId) + '/staff',
-        {
-          method: 'POST',
-          body: JSON.stringify({ email, role })
-        }
-      );
+      await staffApi('/businesses/' + encodeURIComponent(businessId) + '/staff', {
+        method: 'POST',
+        body: JSON.stringify({ email: email, role: role })
+      });
 
-      msg.textContent = 'Staff member added.';
-      form.reset();
+      message.textContent = 'Staff member added successfully.';
+      emailInput.value = '';
       await loadStaff();
-    } catch (e) {
-      msg.textContent = e.message;
+    } catch (error) {
+      message.textContent = error.message || 'Unable to add staff member.';
     } finally {
-      submitting = false;
-      button.disabled = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Add staff';
+      }
     }
-  };
+  }
 
-  function bindStaffAdd() {
+  function bindStaffForm() {
     const form = document.getElementById('staffForm');
-    if (!form || form.dataset.bound === '1') return;
+    const button = document.getElementById('staffAddButton');
 
-    form.dataset.bound = '1';
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      window.addStaff();
+    if (!form || !button || form.dataset.staffBound === '1') return;
+
+    form.dataset.staffBound = '1';
+
+    // Explicitly prevent the browser from submitting the form and navigating/reloading.
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      submitStaff();
+    });
+
+    button.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      submitStaff();
     });
   }
 
-  window.changeStaff = async function (id, current) {
-    const role = prompt('Enter MANAGER or STAFF', current);
-    if (!role) return;
-
-    try {
-      await staffApi(
-        '/businesses/' + encodeURIComponent(window.businessId) + '/staff/' + encodeURIComponent(id),
-        {
-          method: 'PUT',
-          body: JSON.stringify({ role })
-        }
-      );
-      await loadStaff();
-    } catch (e) {
-      alert(e.message);
-    }
-  };
-
-  window.removeStaff = async function (id) {
-    if (!confirm('Remove this staff member from this business?')) return;
-
-    try {
-      await staffApi(
-        '/businesses/' + encodeURIComponent(window.businessId) + '/staff/' + encodeURIComponent(id),
-        { method: 'DELETE' }
-      );
-      await loadStaff();
-    } catch (e) {
-      alert(e.message);
-    }
-  };
-
   window.loadStaff = loadStaff;
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindStaffAdd);
-  } else {
-    bindStaffAdd();
+  function start() {
+    bindStaffForm();
+    loadStaff();
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const b = document.querySelector('[data-page="staff"]');
-    if (b) {
-      b.addEventListener('click', function () {
-        setTimeout(function () {
-          bindStaffAdd();
-          loadStaff();
-        }, 50);
-      });
-    }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+
+  // The Staff section is a single-page view; re-bind whenever it is opened.
+  document.addEventListener('click', function(event) {
+    const nav = event.target.closest('[data-page="staff"]');
+    if (!nav) return;
+    setTimeout(function() {
+      bindStaffForm();
+      loadStaff();
+    }, 50);
   });
 })();
