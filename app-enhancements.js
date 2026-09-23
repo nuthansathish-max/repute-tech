@@ -236,6 +236,7 @@
         el.style.display=can(key)?'':'none';
       });
 
+      if(window.reputeOrdersBoot) window.reputeOrdersBoot();
       const billingAllowed=can('BILLING');
       document.querySelectorAll('[data-repute-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
       document.querySelectorAll('[data-repute-mobile-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
