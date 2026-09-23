@@ -13,6 +13,7 @@ import { syncLocationReviews, mockSyncLocationReviews, analyzeAndDraft, publishG
 import { startReviewSyncScheduler } from './scheduler.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 import { whatsappConfigured, verifyMetaWebhook, verifyMetaSignature, sendText, sendTemplate } from './whatsapp.js';
+import { businessPermissionMiddleware } from './business-permissions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
@@ -52,6 +53,7 @@ app.post('/api/whatsapp/webhook',express.raw({type:'application/json',limit:'2mb
   }catch(e){ console.error('WhatsApp webhook error',e); res.sendStatus(400); }
 });
 app.use(express.json({limit:'1mb'}));
+app.use(businessPermissionMiddleware);
 app.use(morgan('dev'));
 
 app.get('/health', (_req,res)=>res.json({ok:true,service:'repute-tech.in-api',version:'1.9.6'}));
