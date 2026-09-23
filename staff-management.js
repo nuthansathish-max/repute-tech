@@ -29,7 +29,7 @@ function install(app){
   const rows=await prisma.businessMember.findMany({where:{businessId:req.params.businessId,role:{in:['MANAGER','STAFF']}},include:{user:true},orderBy:{user:{name:'asc'}}});
   res.json(rows.map(m=>({id:m.id,userId:m.userId,name:m.user.name,email:m.user.email,role:m.role})));
  }catch(e){next(e)}});
- originalPost.call(app,'/api/businesses/:businessId/staff',async(req,res,next)=>{try{
+ originalPost.call(app,'/api/businesses/:businessId/staff',express.json(),async(req,res,next)=>{try{
   const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});
   if(a.member.role!=='OWNER')return res.status(403).json({error:'Only the business owner can add staff'});
   const email=String(req.body?.email||'').trim().toLowerCase(),role=String(req.body?.role||'STAFF').toUpperCase();
