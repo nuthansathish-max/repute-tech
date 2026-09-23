@@ -95,6 +95,17 @@
   }
   function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('orders').classList.add('active');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
   window.showOrders=showOrders;window.updateOrderStatus=updateOrderStatus;
-  function boot(){addNav();addSection();addAvailability();setTimeout(()=>loadOrders(),700);setInterval(addNav,3000);setInterval(loadAvailability,30000);setInterval(()=>{if($('orders')?.classList.contains('active'))loadOrders()},15000)}
+  function allowed(){
+    const p=window.businessPermissions||{};
+    const role=String(window.businessRole||window.currentUser?.role||'').toUpperCase();
+    return role==='OWNER'||p.ORDERS===true||window.canBusinessPermission?.('ORDERS')===true;
+  }
+  function boot(){
+    if(!allowed())return;
+    addNav();addSection();addAvailability();setTimeout(()=>loadOrders(),700);
+    setInterval(()=>{if(allowed())addNav()},3000);
+    setInterval(loadAvailability,30000);
+    setInterval(()=>{if(allowed()&&$('orders')?.classList.contains('active'))loadOrders()},15000);
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
