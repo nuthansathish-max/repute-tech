@@ -251,6 +251,8 @@
       }
     }catch(e){}
   }
+  window.reputeApplyPermissions=enhancePermissions;
+
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
