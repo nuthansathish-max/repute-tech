@@ -44,7 +44,52 @@ async function loadPricing(){try{const d=await get('/plans');$('pricingGrid').in
 async function loadPlanRequests(){try{const d=await get('/plan-requests');$('myPlanRequests').innerHTML=d.map(r=>`<div class="item"><b>${esc(r.planName||r.planCode)}</b><div class="sub">₹${r.price} · ${esc(r.status)} · ${esc(r.paymentStatus||'MANUAL')}</div></div>`).join('')||'<div class="sub">No plan requests yet.</div>'}catch(e){$('myPlanRequests').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
 async function loadAdminPlans(){try{const d=await get('/admin/plans');$('planCatalog').innerHTML=d.map(p=>`<div class="item"><b>${esc(p.name)}</b><div class="sub">₹${p.price}/${p.billingInterval==='YEAR'?'year':'month'}</div></div>`).join('')}catch{$('planCatalog').innerHTML='<div class="notice">Admin controls require an Admin or Super Admin account.</div>'}}
 async function loadAdminPlanRequests(){try{const d=await get('/admin/plan-requests');$('adminPlanRequests').innerHTML=d.map(r=>`<div class="item"><b>${esc(r.business?.name||'Business')}</b><div class="sub">${esc(r.plan?.name||r.planCode)} · ${esc(r.status)}</div></div>`).join('')||'<div class="sub">No pending requests.</div>'}catch{$('adminPlanRequests').innerHTML='<div class="notice">Admin controls require an Admin or Super Admin account.</div>'}}
-async function load(){try{const bs=await get('/businesses');if(!bs.length)throw new Error('No business found. Complete onboarding first.');businessId=bs[0].id;window.businessId=businessId;$('businessName').textContent=`${bs[0].name} · ${bs[0].type||'Business'}`;const d=await get(`/businesses/${businessId}/dashboard`);$('rating').textContent=`${d.metrics.averageRating} ★`;$('reviewCount').textContent=d.metrics.reviewCount;$('qrScans').textContent=d.metrics.qrScans;$('customers').textContent=d.metrics.customers;$('positiveRate').textContent=`${d.metrics.positiveRate}%`;$('messages').textContent=d.metrics.messagesDelivered||0;$('plan').textContent=d.business.subscription?.plan||'—';$('aReviews').textContent=d.metrics.reviewCount;$('aQr').textContent=d.metrics.qrScans;$('aDelivered').textContent=d.metrics.messagesDelivered||0;$('positiveBar').style.width=`${d.metrics.positiveRate}%`;$('adminBusinesses').textContent=bs.length;$('adminPlan').textContent=d.business.subscription?.plan||'—';renderRecent(d.recentReviews);await Promise.all([loadReviews(),loadQr(),loadMenus(),loadCustomers(),loadCampaigns(),loadPricing(),loadPlanRequests(),loadAdminPlans(),loadAdminPlanRequests()])}catch(e){$('businessName').textContent='Setup needed: '+e.message}}
+async function load(){
+  try{
+    const bs=await get('/businesses');
+    if(!bs.length)throw new Error('No business found. Complete onboarding first.');
+    businessId=bs[0].id;
+    window.businessId=businessId;
+    $('businessName').textContent=`${bs[0].name} · ${bs[0].type||'Business'}`;
+
+    let access={role:window.currentUser?.role||'STAFF',permissions:{}};
+    try{access=await get(`/businesses/${businessId}/permissions/me`)}catch{}
+    window.businessPermissions=access.permissions||{};
+    window.businessRole=access.role||window.currentUser?.role||'STAFF';
+    const owner=String(window.businessRole).toUpperCase()==='OWNER';
+    const can=k=>owner||window.businessPermissions[k]===true;
+
+    if(can('DASHBOARD')){
+      try{
+        const d=await get(`/businesses/${businessId}/dashboard`);
+        $('rating').textContent=`${d.metrics.averageRating} ★`;
+        $('reviewCount').textContent=d.metrics.reviewCount;
+        $('qrScans').textContent=d.metrics.qrScans;
+        $('customers').textContent=d.metrics.customers;
+        $('positiveRate').textContent=`${d.metrics.positiveRate}%`;
+        $('messages').textContent=d.metrics.messagesDelivered||0;
+        $('plan').textContent=d.business.subscription?.plan||'—';
+        $('aReviews').textContent=d.metrics.reviewCount;
+        $('aQr').textContent=d.metrics.qrScans;
+        $('aDelivered').textContent=d.metrics.messagesDelivered||0;
+        $('positiveBar').style.width=`${d.metrics.positiveRate}%`;
+        $('adminBusinesses').textContent=bs.length;
+        $('adminPlan').textContent=d.business.subscription?.plan||'—';
+        renderRecent(d.recentReviews);
+      }catch{}
+    }
+
+    const jobs=[];
+    if(can('REVIEWS'))jobs.push(loadReviews());
+    if(can('QR'))jobs.push(loadQr());
+    if(can('MENU'))jobs.push(loadMenus());
+    if(can('CUSTOMERS'))jobs.push(loadCustomers());
+    if(can('WHATSAPP'))jobs.push(loadCampaigns());
+    if(can('PRICING'))jobs.push(loadPricing(),loadPlanRequests());
+    if(['ADMIN','SUPER_ADMIN'].includes(String(window.currentUser?.role||'').toUpperCase()))jobs.push(loadAdminPlans(),loadAdminPlanRequests());
+    await Promise.allSettled(jobs);
+  }catch(e){$('businessName').textContent='Setup needed: '+e.message}
+}
 function useReview(id){const r=cache.reviews.find(x=>x.id===id);if(!r)return;$('aiText').value=r.text||'';showPage('ai')}
 async function approve(id){try{await post(`/reviews/${id}/approve`,{});toast('AI reply approved');await loadReviews()}catch(e){toast(e.message)}}
 async function requestPlan(code){if(!businessId){toast('Please sign in first');return}try{const name=window.currentUser?.name||'Business owner';const contact=window.currentUser?.email||'';await post('/plan-requests',{businessId,planCode:code,ownerName:name,contact});toast('Plan request submitted. The platform owner will confirm it directly.');await loadPlanRequests()}catch(e){toast(e.message)}}
