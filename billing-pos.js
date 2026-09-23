@@ -59,7 +59,17 @@ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.qu
 </script></body></html>`;
 
 function register(app){if(registered)return;registered=true;
-  app.get('/billing-pos',async(req,res,next)=>{try{const u=await userFrom(req);if(!u)return res.redirect('/');res.set('Cache-Control','no-store');res.type('html').send(page)}catch(e){next(e)}});
+  app.get('/billing-pos',async(req,res,next)=>{try{
+    const u=await userFrom(req);if(!u)return res.redirect('/');
+    const business=await prisma.business.findFirst({where:{members:{some:{userId:u.id}}},select:{id:true}});
+    if(!business)return res.status(403).send('Business access denied');
+    if(!['ADMIN','SUPER_ADMIN','OWNER'].includes(String(u.role||'').toUpperCase())){
+      const member=await prisma.businessMember.findFirst({where:{userId:u.id,businessId:business.id},select:{permissions:true}});
+      const permissions=member?.permissions&&typeof member.permissions==='object'?member.permissions:{};
+      if(permissions.BILLING!==true)return res.status(403).send('Billing & POS access has not been granted by the business owner.');
+    }
+    res.set('Cache-Control','no-store');res.type('html').send(page)
+  }catch(e){next(e)}});
   app.get('/api/businesses/:businessId/billing/menu',async(req,res,next)=>{try{const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});const menus=await prisma.menu.findMany({where:{businessId:a.business.id,isPublished:true},orderBy:{createdAt:'desc'},include:{items:{where:{available:true},orderBy:{name:'asc'}}}});res.json(menus.map(m=>({id:m.id,name:m.name,items:m.items.map(i=>({id:i.id,name:i.name,price:Number(i.price),category:i.category||'',menuName:m.name}))})))}catch(e){next(e)}});
   app.get('/api/businesses/:businessId/billing/history',async(req,res,next)=>{try{const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});const filter=String(req.query.filter||'ALL');const where={businessId:a.business.id,...(filter==='PAID'?{paymentStatus:'PAID'}:filter==='UNPAID'?{paymentStatus:'UNPAID'}:{})};const orders=await prisma.order.findMany({where,include:{items:true},orderBy:{createdAt:'desc'},take:100});res.json(orders)}catch(e){next(e)}});
   app.get('/api/businesses/:businessId/billing/daily',async(req,res,next)=>{try{const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});const start=new Date();start.setHours(0,0,0,0);const orders=await prisma.order.findMany({where:{businessId:a.business.id,createdAt:{gte:start},paymentStatus:'PAID'},select:{total:true,paymentMethod:true}});const revenue=orders.reduce((s,o)=>s+Number(o.total||0),0);const sums={CASH:0,UPI:0,CARD:0};for(const o of orders){if(sums[o.paymentMethod]!=null)sums[o.paymentMethod]+=Number(o.total||0)}const close=await prisma.auditLog.findFirst({where:{businessId:undefined,action:'BILLING_DAY_CLOSED',entity:'Business',entityId:a.business.id,createdAt:{gte:start}},orderBy:{createdAt:'desc'}}).catch(()=>null);res.json({paidBills:orders.length,revenue,cash:sums.CASH,upi:sums.UPI,card:sums.CARD,closed:!!close,closedAt:close?.createdAt||null})}catch(e){next(e)}});
