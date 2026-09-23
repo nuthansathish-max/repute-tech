@@ -47,6 +47,9 @@ express.application.listen=function(...args){
       try{
         const a=await currentBusiness(req);
         if(!a.business)return res.status(a.status).json({error:a.error});
+        const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:a.user.id,businessId:a.business.id}},select:{role:true}});
+        const role=String(a.user.role||'').toUpperCase();
+        if(role!=='ADMIN'&&role!=='SUPER_ADMIN'&&member?.role!=='OWNER')return res.status(403).json({error:'Only the business owner can change business availability'});
         const isOpen=req.body?.isOpen;
         if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
         const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
