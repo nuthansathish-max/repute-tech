@@ -56,6 +56,7 @@ async function load(){
     try{access=await get(`/businesses/${businessId}/permissions/me`)}catch{}
     window.businessPermissions=access.permissions||{};
     window.businessRole=access.role||window.currentUser?.role||'STAFF';
+    if(window.reputeApplyPermissions) await window.reputeApplyPermissions();
     const owner=String(window.businessRole).toUpperCase()==='OWNER';
     const can=k=>owner||window.businessPermissions[k]===true;
 
@@ -103,5 +104,5 @@ function showPage(page){const target=$(page);if(!target)return;document.querySel
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
 initAuth();
 </script>
-<script src="/app-enhancements.js?v=20260923-5"></script><script src="/orders-ui.js?v=20260923-2></script><script src="/auth-enhancements.js"></script><script src="/reliability-enhancements.js"></script><script src="/staff-ui.js?v=20260923-4"></script>
+<script src="/app-enhancements.js?v=20260923-6"></script><script src="/orders-ui.js?v=20260923-2></script><script src="/auth-enhancements.js"></script><script src="/reliability-enhancements.js"></script><script src="/staff-ui.js?v=20260923-4"></script>
 </body></html>
