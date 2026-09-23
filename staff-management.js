@@ -54,11 +54,16 @@ function install(app){
   res.json({ok:true});
  }catch(e){next(e)}});
  originalGet.call(app,'/api/businesses/:businessId/permissions/me',async(req,res,next)=>{try{
-  const a=await access(req,req.params.businessId);if(a.error)return res.status(a.status).json({error:a.error});
+  const user=await currentUser(req);
+  if(!user)return res.status(401).json({error:'Authentication required'});
   await permissionColumnReady;
-  if(a.member.role==='OWNER')return res.json({role:'OWNER',permissions:Object.fromEntries(PERMISSION_KEYS.map(k=>[k,true]))});
-  const m=await prisma.$queryRawUnsafe(`SELECT role, permissions FROM "BusinessMember" WHERE id=$1`,a.member.id);
-  res.json({role:a.member.role,permissions:normalizePermissions(m[0]?.permissions)});
+  const member=await prisma.businessMember.findUnique({
+    where:{userId_businessId:{userId:user.id,businessId:req.params.businessId}},
+    select:{role:true,permissions:true}
+  });
+  if(!member)return res.status(403).json({error:'Business access denied'});
+  if(member.role==='OWNER')return res.json({role:'OWNER',permissions:Object.fromEntries(PERMISSION_KEYS.map(k=>[k,true]))});
+  res.json({role:member.role,permissions:normalizePermissions(member.permissions)});
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/businesses/:businessId/staff/:memberId/permissions',async(req,res,next)=>{try{
