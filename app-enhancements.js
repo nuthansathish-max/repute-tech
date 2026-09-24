@@ -44,7 +44,7 @@
     document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===page));
     document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
     const labels={dashboard:'Good morning 👋',reviews:'Review inbox',ai:'AI Review Assistant',qr:'Smart QR',menu:'Digital Menu',customers:'Customer CRM',campaigns:'WhatsApp',analytics:'Business analytics',pricing:'Plans & pricing',staff:'Staff Management',settings:'Account Settings',orders:'Orders'};
-    if($('heading'))$('heading').textContent=labels[page]||'repute-tech.in';
+    if($('heading'))$('heading').textContent=labels[page]||'reputetechs.in';
     if(page==='staff'&&typeof window.loadStaff==='function')setTimeout(window.loadStaff,50);
     window.scrollTo({top:0,behavior:'smooth'});
   }
