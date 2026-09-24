@@ -45,7 +45,7 @@ function install(app){
   if(!email)return res.status(400).json({error:'Enter the staff member email'});
   if(!['MANAGER','STAFF'].includes(role))return res.status(400).json({error:'Invalid staff role'});
   const user=await prisma.user.findUnique({where:{email}});
-  if(!user)return res.status(404).json({error:'No Repute Tech account exists for this email. Ask the person to create an account first, then add them here.'});
+  if(!user)return res.status(404).json({error:'No reputetechs.in account exists for this email. Ask the person to create an account first, then add them here.'});
   if(['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(400).json({error:'Admin accounts cannot be added as business staff'});
   const existing=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId:req.params.businessId}}});
   if(existing)return res.status(409).json({error:'This user is already a member of this business'});
