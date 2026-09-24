@@ -3,9 +3,17 @@
   const api=async(url,opt={})=>{const r=await fetch('/api'+url,{credentials:'include',headers:{'content-type':'application/json',...(opt.headers||{})},...opt});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Request failed');return j};
   function addNav(){
     const nav=document.querySelector('.side .nav')||document.querySelector('.nav');
-    if(nav&&!nav.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';nav.insertBefore(b,nav.querySelector('[data-page="pricing"]')||null);b.addEventListener('click',showOrders)}
+    if(nav){
+      let b=nav.querySelector('[data-page="orders"]');
+      if(!b){b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';nav.insertBefore(b,nav.querySelector('[data-page="pricing"]')||null)}
+      if(b.dataset.ordersBound!=='1'){b.dataset.ordersBound='1';b.addEventListener('click',e=>{e.preventDefault();showOrders()})}
+    }
     const bar=document.querySelector('.mobilebar');
-    if(bar&&!bar.querySelector('[data-page="orders"]')){const b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';b.style.minWidth='94px';b.addEventListener('click',showOrders);bar.appendChild(b)}
+    if(bar){
+      let b=bar.querySelector('[data-page="orders"]');
+      if(!b){b=document.createElement('button');b.type='button';b.dataset.page='orders';b.textContent='▤ Orders';b.style.minWidth='94px';bar.appendChild(b)}
+      if(b.dataset.ordersBound!=='1'){b.dataset.ordersBound='1';b.addEventListener('click',e=>{e.preventDefault();showOrders()})}
+    }
   }
   function addAvailability(){
     if($('businessAvailability'))return;
