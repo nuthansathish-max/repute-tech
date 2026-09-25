@@ -33,6 +33,13 @@ async function access(req,businessId){
   return {user,business,status:200};
 }
 
+function parseIsOpen(value){
+  if(typeof value==='boolean')return value;
+  if(value==='true')return true;
+  if(value==='false')return false;
+  return null;
+}
+
 express.application.listen=function(...args){
   if(!registered){
     registered=true;
@@ -50,8 +57,8 @@ express.application.listen=function(...args){
         const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:a.user.id,businessId:a.business.id}},select:{role:true}});
         const role=String(a.user.role||'').toUpperCase();
         if(role!=='ADMIN'&&role!=='SUPER_ADMIN'&&member?.role!=='OWNER')return res.status(403).json({error:'Only the business owner can change business availability'});
-        const isOpen=req.body?.isOpen;
-        if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
+        const isOpen=parseIsOpen(req.body?.isOpen);
+        if(isOpen===null)return res.status(400).json({error:'isOpen must be true or false'});
         const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
         res.json({ok:true,businessId:updated.id,name:updated.name,isOpen:Boolean(updated.isOpen)});
         prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
@@ -68,8 +75,8 @@ express.application.listen=function(...args){
       try{
         const a=await access(req,req.params.businessId);
         if(!a.business)return res.status(a.status).json({error:a.error});
-        const isOpen=req.body?.isOpen;
-        if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
+        const isOpen=parseIsOpen(req.body?.isOpen);
+        if(isOpen===null)return res.status(400).json({error:'isOpen must be true or false'});
         const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
         res.json({ok:true,businessId:updated.id,isOpen:Boolean(updated.isOpen)});
         prisma.auditLog.create({data:{actorUserId:a.user.id,action:isOpen?'BUSINESS_OPENED':'BUSINESS_CLOSED',entity:'Business',entityId:updated.id,metadata:{isOpen}}}).catch(()=>{});
