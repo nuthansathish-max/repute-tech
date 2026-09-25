@@ -29,11 +29,22 @@ async function businessFor(req,businessId=null){
   return {user,business,status:200};
 }
 
+async function readJsonBody(req){
+  if(req.body && typeof req.body==='object')return req.body;
+  return await new Promise(resolve=>{
+    let raw='';
+    req.on('data',chunk=>{raw+=chunk});
+    req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{})}catch{resolve({})}});
+    req.on('error',()=>resolve({}));
+  });
+}
+
 async function setStatus(req,res,next,businessId=null){
   try{
     const a=await businessFor(req,businessId);
     if(!a.business)return res.status(a.status).json({error:a.error});
-    const raw=req.body?.isOpen;
+    const body=await readJsonBody(req);
+    const raw=body?.isOpen;
     const isOpen=typeof raw==='boolean'?raw:(raw==='true'?true:(raw==='false'?false:null));
     if(isOpen===null)return res.status(400).json({error:'isOpen must be true or false'});
     const updated=await prisma.business.update({where:{id:a.business.id},data:{isOpen}});
