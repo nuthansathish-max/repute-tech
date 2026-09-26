@@ -3,11 +3,12 @@ import { PrismaClient } from '@prisma/client';
 import { hashPassword } from './auth.js';
 const prisma=new PrismaClient();
 const plans=[
-  {code:'STARTER',name:'Starter',price:199,billingInterval:'MONTH',description:'Essential reputation tools for small local businesses',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
-  {code:'GROWTH',name:'Growth',price:499,billingInterval:'MONTH',description:'Growth tools for active local businesses',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
-  {code:'PRO',name:'Pro',price:999,billingInterval:'MONTH',description:'Advanced automation for growing businesses',features:['Everything in Growth','Advanced analytics','AI insights','Higher usage limits']},
-  {code:'HIGH_TRAFFIC',name:'High Traffic',price:1999,billingInterval:'MONTH',description:'For theatres, grocery stores, supermarkets and high-traffic shops',features:['Everything in Pro','High-volume usage','Priority support','Multi-location ready']},
-  {code:'ALL_IN_ONE_YEARLY',name:'All-in-One Yearly',price:8999,billingInterval:'YEAR',description:'All features in one yearly package',features:['Everything in High Traffic','All features','Best yearly value','Priority support']}
+  {code:'STARTER',name:'Starter',price:499,billingInterval:'MONTH',description:'Essential reputation tools for small local businesses',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
+  {code:'GROWTH',name:'Growth Pro',price:999,billingInterval:'MONTH',description:'Growth tools for active local businesses',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
+  {code:'PRO',name:'Pro Plus',price:1499,billingInterval:'MONTH',description:'Advanced automation for growing businesses',features:['Everything in Growth Pro','Advanced analytics','AI insights','Higher usage limits']},
+  {code:'STARTER_YEARLY',name:'Starter Yearly',price:4999,billingInterval:'YEAR',description:'Starter plan billed yearly',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
+  {code:'GROWTH_PRO_YEARLY',name:'Growth Pro Yearly',price:9999,billingInterval:'YEAR',description:'Growth Pro plan billed yearly',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
+  {code:'PRO_YEARLY',name:'Pro Yearly',price:12999,billingInterval:'YEAR',description:'Pro plan billed yearly',features:['Everything in Growth Pro','Advanced analytics','AI insights','Higher usage limits']}
 ];
 for(const p of plans) await prisma.planCatalog.upsert({where:{code:p.code},update:{name:p.name,price:p.price,billingInterval:p.billingInterval,description:p.description,features:p.features,active:true},create:p});
 const user=await prisma.user.upsert({where:{email:'demo@repute-tech.in.local'},update:{},create:{name:'Demo Owner',email:'demo@repute-tech.in.local',passwordHash:hashPassword('DemoPass123!'),role:'OWNER'}});
