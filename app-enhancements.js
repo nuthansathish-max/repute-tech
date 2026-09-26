@@ -197,11 +197,12 @@
   async function enhancePlans(){
     const grid=$('pricingGrid');if(!grid)return;
     const fallback=[
-      {code:'STARTER',name:'Starter',price:199,billingInterval:'MONTH',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
-      {code:'GROWTH',name:'Growth',price:499,billingInterval:'MONTH',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
-      {code:'PRO',name:'Pro',price:999,billingInterval:'MONTH',features:['Everything in Growth','Advanced analytics','AI insights','Higher usage limits']},
-      {code:'HIGH_TRAFFIC',name:'High Traffic',price:1999,billingInterval:'MONTH',features:['Everything in Pro','High-volume usage','Priority support','Multi-location ready']},
-      {code:'ALL_IN_ONE_YEARLY',name:'All-in-One Yearly',price:8999,billingInterval:'YEAR',features:['Everything in High Traffic','All features','Best yearly value','Priority support']}
+      {code:'STARTER',name:'Starter',price:499,billingInterval:'MONTH',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
+      {code:'GROWTH',name:'Growth Pro',price:999,billingInterval:'MONTH',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
+      {code:'PRO',name:'Pro Plus',price:1499,billingInterval:'MONTH',features:['Everything in Growth Pro','Advanced analytics','AI insights','Higher usage limits']},
+      {code:'STARTER_YEARLY',name:'Starter Yearly',price:4999,billingInterval:'YEAR',features:['Reviews','AI reply suggestions','Smart QR','Basic analytics']},
+      {code:'GROWTH_PRO_YEARLY',name:'Growth Pro Yearly',price:9999,billingInterval:'YEAR',features:['Everything in Starter','Digital menu','Customer CRM','WhatsApp marketing']},
+      {code:'PRO_YEARLY',name:'Pro Yearly',price:12999,billingInterval:'YEAR',features:['Everything in Growth Pro','Advanced analytics','AI insights','Higher usage limits']}
     ];
     function draw(data){grid.style.gridTemplateColumns='repeat(auto-fit,minmax(190px,1fr))';grid.innerHTML=data.map(p=>`<div class="card ${p.code==='PRO'?'featured':''}"><div class="section-title">${esc(p.name)}</div><div class="price">₹${esc(p.price)}<small>/${p.billingInterval==='YEAR'?'year':'month'}</small></div><div class="features">${(p.features||[]).map(f=>`<div>✓ ${esc(f)}</div>`).join('')}</div><button class="btn" data-plan-code="${esc(p.code)}">Request plan</button></div>`).join('');grid.querySelectorAll('[data-plan-code]').forEach(btn=>btn.onclick=async()=>{try{await requestPlan(btn.dataset.planCode)}catch(e){notify(e.message)}})}
     try{const d=await req('/plans');draw(Array.isArray(d)&&d.length?d:fallback)}catch{draw(fallback)}
