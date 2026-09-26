@@ -325,6 +325,8 @@ model Subscription {
   providerPlanId String?
   providerSubscriptionId String?
   currentPeriodEnd DateTime?
+  trialStartedAt DateTime?
+  trialEndsAt DateTime?
   business Business @relation(fields:[businessId],references:[id])
 }
 model AuditLog {
