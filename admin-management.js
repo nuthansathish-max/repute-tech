@@ -167,7 +167,7 @@ function adminPage(){
     '<div class="kv"><b>Owner</b>'+esc(owner?.name||'—')+'<div class="sub">'+esc(owner?.email||'')+'</div></div>'+
     '<div class="kv"><b>Phone</b>'+esc(ownerPhone||'—')+(ownerPhone?'<div style="margin-top:7px"><a class="smallbtn" href="tel:'+esc(ownerPhone)+'">🤙 Call Owner</a></div>':'')+'</div>'+
     '<div class="kv"><b>Business Address</b>'+esc(address||'—')+'</div>'+
-    '<div class="kv"><b>Business Availability</b><div style="margin-top:5px">'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div><button class="smallbtn" style="margin-top:8px" onclick="toggleBusinessAvailability(\''+esc(b.id)+'\','+(b.isOpen?'false':'true')+',this)">'+(b.isOpen?'Turn OFF Business':'Turn ON Business')+'</button></div>'+
+    '<div class="kv"><b>Business Availability</b><div style="margin-top:5px">'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div><button class="smallbtn" style="margin-top:8px" data-admin-status="'+esc(b.id)+'" data-admin-open="'+(b.isOpen?'false':'true')+'">'+(b.isOpen?'Turn OFF Business':'Turn ON Business')+'</button></div>'+
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||'—')+'</div>'+
     '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+(subscriptionDays!==null?'<div class="sub">'+subscriptionDays+' day'+(subscriptionDays===1?'':'s')+' left · ends '+date(sub.currentPeriodEnd)+'</div>':'')+'</div>'+
     '<div class="kv"><b>WhatsApp Connection</b>'+statusPill(waStatus)+(b.whatsappConnected?'<div class="sub">Connected and configured</div>':'<div class="sub">No active connection</div>')+'</div>'+
@@ -185,7 +185,7 @@ function adminPage(){
       featureRow('QR','QR & Public Links','Allow QR/public menu features')+
       featureRow('BILLING','Billing & POS','Allow billing and POS features')+
     '</div></div>'+
-    '<div class="wide"><div class="section-title"><h2>Account Security</h2><span>Owner access</span></div><div class="kv"><b>Owner Login</b>'+esc(owner?.email||'—')+'<div class="sub">Changing the owner password signs out all existing owner sessions.</div><button class="smallbtn" style="margin-top:8px" onclick="resetOwnerPassword(\''+esc(b.id)+'\')">Change Owner Password</button></div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Account Security</h2><span>Owner access</span></div><div class="kv"><b>Owner Login</b>'+esc(owner?.email||'—')+'<div class="sub">Changing the owner password signs out all existing owner sessions.</div><button class="smallbtn" style="margin-top:8px" data-admin-reset="'+esc(b.id)+'">Change Owner Password</button></div></div>'+
     '<div class="wide"><div class="section-title"><h2>Members / Owners</h2><span>'+((b.members||[]).length)+' account(s)</span></div><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
     '</div></div>';
    $('businessDetail').classList.remove('hidden');
@@ -347,6 +347,10 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   async function refreshCurrent(){await show(currentView)}
  document.querySelectorAll('.nav[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
  document.addEventListener('click',e=>{
+  const statusBtn=e.target.closest('[data-admin-status]');
+  if(statusBtn){e.preventDefault();toggleBusinessAvailability(statusBtn.dataset.adminStatus,statusBtn.dataset.adminOpen==='true',statusBtn);return}
+  const resetBtn=e.target.closest('[data-admin-reset]');
+  if(resetBtn){e.preventDefault();resetOwnerPassword(resetBtn.dataset.adminReset);return}
   const viewBtn=e.target.closest('[data-action="view-business"]');
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
