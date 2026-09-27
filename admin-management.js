@@ -1,11 +1,17 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import { getCookie, tokenHash } from './auth.js';
+import { getCookie, tokenHash, hashPassword } from './auth.js';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
 const originalPost=express.application.post;
 let installed=false;
+const ADMIN_FEATURE_KEYS=['GOOGLE','WHATSAPP','AI','REVIEWS','ORDERS','MENU','QR','BILLING'];
+try{
+  await prisma.$executeRawUnsafe('ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS "adminFeatureFlags" JSONB');
+}catch(e){
+  console.error('Admin feature-control column check failed:',e?.message||e);
+}
 
 async function sessionUser(req){
   const token=getCookie(req,'rp_admin_session');
@@ -147,21 +153,91 @@ function adminPage(){
    const address=b.address||'';
    const members=(b.members||[]).map(m=>'<div class="kv"><b>Member · '+esc(m.role)+'</b>'+esc(m.user?.name||'')+'<div class="sub">'+esc(m.user?.email||'')+'</div></div>').join('');
    const subscriptionDays=sub.currentPeriodEnd?Math.max(0,Math.ceil((new Date(sub.currentPeriodEnd).getTime()-Date.now())/(24*60*60*1000))):null;
-   $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><h2>'+esc(b.name)+'</h2><button class="smallbtn" onclick="closeBusiness()">Close</button></div><div class="detail">'+
+   const flags=b.featureFlags||{};
+   const flagOn=k=>flags[k]!==false;
+   const featureRow=(key,label,subtext)=>{
+     const on=flagOn(key);
+     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button class="smallbtn '+(on?'':'pill bad')+'" data-admin-feature="'+key+'" data-business-id="'+esc(b.id)+'" onclick="toggleAdminFeature(\''+key+'\',\''+esc(b.id)+'\',this)">'+(on?'ON':'OFF')+'</button></div>';
+   };
+   const pending=d.pendingPlanRequest;
+   const waStatus=b.whatsappStatus||'NOT CONNECTED';
+   $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><div><h2>'+esc(b.name)+'</h2><div class="sub">Business Management Center · '+esc(b.id)+'</div></div><button class="smallbtn" onclick="closeBusiness()">Close</button></div>'+
+    '<div class="detail">'+
     '<div class="kv"><b>Business Type</b>'+esc(b.type||'—')+'</div>'+
     '<div class="kv"><b>Owner</b>'+esc(owner?.name||'—')+'<div class="sub">'+esc(owner?.email||'')+'</div></div>'+
     '<div class="kv"><b>Phone</b>'+esc(ownerPhone||'—')+(ownerPhone?'<div style="margin-top:7px"><a class="smallbtn" href="tel:'+esc(ownerPhone)+'">🤙 Call Owner</a></div>':'')+'</div>'+
     '<div class="kv"><b>Business Address</b>'+esc(address||'—')+'</div>'+
-    '<div class="kv"><b>Status</b>'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div>'+
+    '<div class="kv"><b>Business Availability</b><div style="margin-top:5px">'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div><button class="smallbtn" style="margin-top:8px" onclick="toggleBusinessAvailability(\''+esc(b.id)+'\','+(b.isOpen?'false':'true')+',this)">'+(b.isOpen?'Turn OFF Business':'Turn ON Business')+'</button></div>'+
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||'—')+'</div>'+
     '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+(subscriptionDays!==null?'<div class="sub">'+subscriptionDays+' day'+(subscriptionDays===1?'':'s')+' left · ends '+date(sub.currentPeriodEnd)+'</div>':'')+'</div>'+
-    '<div class="kv"><b>Created</b>'+date(b.createdAt)+'</div>'+
-    '<div class="wide"><b style="display:block;font-size:8px;text-transform:uppercase;color:#7b879a;margin-bottom:6px">Members / Owners</b><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
-    '</div></div>';   $('businessDetail').classList.remove('hidden');
+    '<div class="kv"><b>WhatsApp Connection</b>'+statusPill(waStatus)+(b.whatsappConnected?'<div class="sub">Connected and configured</div>':'<div class="sub">No active connection</div>')+'</div>'+
+    '<div class="kv"><b>Google Business</b><div style="margin-top:5px">'+(b.googleConnections>0?'<span class="pill good">CONNECTED</span>':'<span class="pill">NOT CONNECTED</span>')+'</div><div class="sub">'+b.googleConnections+' connection'+(b.googleConnections===1?'':'s')+'</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
+      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">Approve Subscription</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" style="margin-left:5px">Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
+    '</div>'+
+    '<div class="wide"><div class="section-title"><h2>Business Feature Controls</h2><span>Admin control state</span></div><div class="detail">'+
+      featureRow('GOOGLE','Google Business API','Allow this business to use Google integration')+
+      featureRow('WHATSAPP','WhatsApp Cloud','Allow WhatsApp automation and messaging')+
+      featureRow('AI','AI Replies','Allow AI-assisted review reply features')+
+      featureRow('REVIEWS','Reviews','Allow review management features')+
+      featureRow('ORDERS','Orders','Allow customer order management')+
+      featureRow('MENU','Digital Menu','Allow menu management and publishing')+
+      featureRow('QR','QR & Public Links','Allow QR/public menu features')+
+      featureRow('BILLING','Billing & POS','Allow billing and POS features')+
+    '</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Account Security</h2><span>Owner access</span></div><div class="kv"><b>Owner Login</b>'+esc(owner?.email||'—')+'<div class="sub">Changing the owner password signs out all existing owner sessions.</div><button class="smallbtn" style="margin-top:8px" onclick="resetOwnerPassword(\''+esc(b.id)+'\')">Change Owner Password</button></div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Members / Owners</h2><span>'+((b.members||[]).length)+' account(s)</span></div><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
+    '</div></div>';
+   $('businessDetail').classList.remove('hidden');
   }catch(e){
    $('businessDetail').innerHTML='<div class="card danger"><b>Unable to load business</b><div class="sub">'+esc(e.message)+'</div></div>';
    $('businessDetail').classList.remove('hidden');
   }
+ }
+ async function toggleBusinessAvailability(id,isOpen,button){
+  if(!id)return;
+  if(!confirm((isOpen?'Turn ON ':'Turn OFF ')+'this business?'))return;
+  if(button){button.disabled=true;button.textContent='Updating…'}
+  try{
+   await api('/admin/businesses/'+encodeURIComponent(id)+'/status',{method:'POST',body:JSON.stringify({isOpen})});
+   await loadBusinesses(); await openBusiness(id);
+  }catch(e){alert('Unable to update business status: '+e.message);if(button){button.disabled=false;button.textContent=isOpen?'Turn ON Business':'Turn OFF Business'}}
+ }
+ async function toggleAdminFeature(key,id,button){
+  if(!ADMIN_FEATURE_KEYS.includes(key))return;
+  const current=button?.textContent==='ON';
+  const enabled=!current;
+  if(!confirm((enabled?'Enable ':'Disable ')+key+' for this business?'))return;
+  if(button){button.disabled=true;button.textContent='…'}
+  try{
+   await api('/admin/businesses/'+encodeURIComponent(id)+'/features',{method:'POST',body:JSON.stringify({feature:key,enabled})});
+   await openBusiness(id);
+  }catch(e){alert('Unable to update feature: '+e.message);if(button){button.disabled=false;button.textContent=current?'ON':'OFF'}}
+ }
+ async function resetOwnerPassword(id){
+  const password=prompt('Enter a new owner password (minimum 8 characters):');
+  if(password===null)return;
+  if(password.length<8){alert('Password must be at least 8 characters.');return}
+  const confirmPassword=prompt('Re-enter the new owner password:');
+  if(confirmPassword!==password){alert('Passwords do not match.');return}
+  if(!confirm('Change the owner password and sign out all existing owner sessions?'))return;
+  try{
+   await api('/admin/businesses/'+encodeURIComponent(id)+'/reset-password',{method:'POST',body:JSON.stringify({password})});
+   alert('Owner password changed successfully. All existing owner sessions were signed out.');
+   await openBusiness(id);
+  }catch(e){alert('Unable to change owner password: '+e.message)}
+ }
+ async function rejectPlanRequest(id,button){
+  const reason=prompt('Reason for rejecting this subscription request:');
+  if(reason===null)return;
+  if(!reason.trim()){alert('Please enter a rejection reason.');return}
+  if(button){button.disabled=true;button.textContent='Rejecting…'}
+  try{
+   await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/reject',{method:'POST',body:JSON.stringify({reason:reason.trim()})});
+   alert('Subscription request rejected.');
+   await loadBusinesses();
+   await openBusiness(new URLSearchParams(location.search).get('businessId')||'');
+  }catch(e){alert('Unable to reject subscription: '+e.message);if(button){button.disabled=false;button.textContent='Reject'}}
  }
  function closeBusiness(){if($('businessDetail')){$('businessDetail').classList.add('hidden');$('businessDetail').innerHTML='';}}
  async function loadBusinesses(){try{const d=await api('/admin/businesses');rows=d.businesses||[];$('ovBusinesses').textContent=rows.length;$('ovActive').textContent=rows.filter(x=>x.subscription?.status==='ACTIVE').length;$('ovTrials').textContent=rows.filter(x=>x.subscription?.status==='TRIAL').length;$('ovPending').textContent=d.pendingPlanRequests||0;renderRows()}catch(e){$('overviewRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
@@ -275,6 +351,8 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
+  const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
+  if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn);return}
  });
  $('refreshBtn').addEventListener('click',()=>refreshCurrent());
  $('exportBtn').addEventListener('click',()=>{
@@ -308,17 +386,89 @@ function install(app){
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses/:businessId',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
+  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}},googleConnections:true,whatsappConnection:true}});
   if(!b)return res.status(404).json({error:'Business not found'});
   const members=b.members.map(m=>({id:m.id,role:m.role,user:m.user}));
+  const flagRows=await prisma.$queryRawUnsafe('SELECT "adminFeatureFlags" FROM "Business" WHERE "id" = $1',b.id);
+  let featureFlags=flagRows?.[0]?.adminFeatureFlags||{};
+  if(typeof featureFlags==='string'){try{featureFlags=JSON.parse(featureFlags)}catch{featureFlags={}}}
+  const pendingPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id,status:'PENDING'},orderBy:{createdAt:'asc'}});
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
    address:b.locations?.[0]?.address||null,
-   subscription:b.subscription,members
+   subscription:b.subscription,members,
+   featureFlags,googleConnections:b.googleConnections?.length||0,
+   whatsappConnected:b.whatsappConnection?.status==='CONNECTED',
+   whatsappStatus:b.whatsappConnection?.status||'NOT CONNECTED',
+   pendingPlanRequest:pendingPlanRequest?{id:pendingPlanRequest.id,planCode:pendingPlanRequest.planCode,planName:pendingPlanRequest.planName,price:pendingPlanRequest.price,billingInterval:pendingPlanRequest.billingInterval,createdAt:pendingPlanRequest.createdAt}:null
   });
  } catch(e) { next(e); }
  });
+ originalPost.call(app,'/api/admin/businesses/:businessId/status',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const isOpen=req.body?.isOpen;
+  if(typeof isOpen!=='boolean')return res.status(400).json({error:'isOpen must be true or false'});
+  const business=await prisma.business.findUnique({where:{id:req.params.businessId},select:{id:true,name:true}});
+  if(!business)return res.status(404).json({error:'Business not found'});
+  const updated=await prisma.business.update({where:{id:business.id},data:{isOpen}});
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:isOpen?'ADMIN_BUSINESS_OPENED':'ADMIN_BUSINESS_CLOSED',entity:'Business',entityId:business.id,metadata:{isOpen}}});
+  res.json({ok:true,isOpen:Boolean(updated.isOpen)});
+}catch(e){next(e)}});
+
+ originalPost.call(app,'/api/admin/businesses/:businessId/features',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const feature=String(req.body?.feature||'').toUpperCase();
+  const enabled=req.body?.enabled;
+  if(!ADMIN_FEATURE_KEYS.includes(feature))return res.status(400).json({error:'Unknown feature control'});
+  if(typeof enabled!=='boolean')return res.status(400).json({error:'enabled must be true or false'});
+  const business=await prisma.business.findUnique({where:{id:req.params.businessId},select:{id:true,name:true}});
+  if(!business)return res.status(404).json({error:'Business not found'});
+  const currentRows=await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id" = $1',business.id);
+  let flags=currentRows?.[0]?.flags||{};
+  if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
+  flags={...flags,[feature]:enabled};
+  await prisma.$executeRawUnsafe('UPDATE "Business" SET "adminFeatureFlags" = $1::jsonb WHERE "id" = $2',JSON.stringify(flags),business.id);
+  if(feature==='WHATSAPP'){
+    const connection=await prisma.whatsAppConnection.findUnique({where:{businessId:business.id}});
+    if(connection){
+      const nextStatus=enabled?(connection.accessTokenEnc?'CONNECTED':'DISCONNECTED'):'DISABLED';
+      await prisma.whatsAppConnection.update({where:{businessId:business.id},data:{status:nextStatus}});
+    }
+  }
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:enabled?'ADMIN_FEATURE_ENABLED':'ADMIN_FEATURE_DISABLED',entity:'Business',entityId:business.id,metadata:{feature,enabled}}});
+  res.json({ok:true,feature,enabled,flags});
+}catch(e){next(e)}});
+
+ originalPost.call(app,'/api/admin/businesses/:businessId/reset-password',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const password=String(req.body?.password||'');
+  if(password.length<8||password.length>200)return res.status(400).json({error:'Password must be between 8 and 200 characters'});
+  const business=await prisma.business.findUnique({where:{id:req.params.businessId},include:{members:{where:{role:'OWNER'},select:{userId:true}}}});
+  if(!business)return res.status(404).json({error:'Business not found'});
+  const ownerIds=business.members.map(m=>m.userId).filter(Boolean);
+  if(!ownerIds.length)return res.status(400).json({error:'No business owner account found'});
+  const passwordHash=hashPassword(password);
+  await prisma.$transaction(async tx=>{
+    await tx.user.updateMany({where:{id:{in:ownerIds}},data:{passwordHash}});
+    await tx.session.deleteMany({where:{userId:{in:ownerIds}}});
+    await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_OWNER_PASSWORD_CHANGED',entity:'Business',entityId:business.id,metadata:{ownerCount:ownerIds.length}}});
+  });
+  res.json({ok:true});
+}catch(e){next(e)}});
+
+ originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/reject',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const reason=String(req.body?.reason||'').trim();
+  if(!reason)return res.status(400).json({error:'Rejection reason is required'});
+  const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
+  if(!request)return res.status(404).json({error:'Plan request not found'});
+  if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
+  const rejected=await prisma.planRequest.update({where:{id:request.id},data:{status:'REJECTED',rejectionReason:reason,rejectedAt:new Date()}});
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'REJECT_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,reason}}});
+  res.json({ok:true,request:rejected});
+}catch(e){next(e)}});
+
  originalGet.call(app,'/api/admin/trials',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'TRIAL'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{trialEndsAt:'asc'}});
