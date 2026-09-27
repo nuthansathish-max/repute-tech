@@ -132,6 +132,7 @@ function adminPage(){
   </div>
  </div>
  <script>
+ const ADMIN_FEATURE_KEYS=['GOOGLE','WHATSAPP','AI','REVIEWS','ORDERS','MENU','QR','BILLING'];
  let rows=[],users=[],currentView='overview';
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
