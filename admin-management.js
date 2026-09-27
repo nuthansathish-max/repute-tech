@@ -157,7 +157,7 @@ function adminPage(){
    const flagOn=k=>flags[k]!==false;
    const featureRow=(key,label,subtext)=>{
      const on=flagOn(key);
-     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button class="smallbtn '+(on?'':'pill bad')+'" data-admin-feature="'+key+'" data-business-id="'+esc(b.id)+'" onclick="toggleAdminFeature(\''+key+'\',\''+esc(b.id)+'\',this)">'+(on?'ON':'OFF')+'</button></div>';
+     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button class="smallbtn '+(on?'':'pill bad')+'" data-admin-feature="'+esc(key)+'" data-business-id="'+esc(b.id)+'">'+(on?'ON':'OFF')+'</button></div>';
    };
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
@@ -351,6 +351,8 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(statusBtn){e.preventDefault();toggleBusinessAvailability(statusBtn.dataset.adminStatus,statusBtn.dataset.adminOpen==='true',statusBtn);return}
   const resetBtn=e.target.closest('[data-admin-reset]');
   if(resetBtn){e.preventDefault();resetOwnerPassword(resetBtn.dataset.adminReset);return}
+  const featureBtn=e.target.closest('[data-admin-feature]');
+  if(featureBtn){e.preventDefault();toggleAdminFeature(featureBtn.dataset.adminFeature,featureBtn.dataset.businessId,featureBtn);return}
   const viewBtn=e.target.closest('[data-action="view-business"]');
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
@@ -498,7 +500,7 @@ function install(app){
 
  originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'},orderBy:{id:'desc'}});
+  const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'}});
   const businessIds=[...new Set(subs.map(s=>s.businessId).filter(Boolean))];
   const businesses=businessIds.length?await prisma.business.findMany({where:{id:{in:businessIds}},include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}):[];
   const businessMap=new Map(businesses.map(b=>[b.id,b]));
