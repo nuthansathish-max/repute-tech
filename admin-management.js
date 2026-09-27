@@ -173,7 +173,7 @@ function adminPage(){
     '<div class="kv"><b>WhatsApp Connection</b>'+statusPill(waStatus)+(b.whatsappConnected?'<div class="sub">Connected and configured</div>':'<div class="sub">No active connection</div>')+'</div>'+
     '<div class="kv"><b>Google Business</b><div style="margin-top:5px">'+(b.googleConnections>0?'<span class="pill good">CONNECTED</span>':'<span class="pill">NOT CONNECTED</span>')+'</div><div class="sub">'+b.googleConnections+' connection'+(b.googleConnections===1?'':'s')+'</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
-      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">Approve Subscription</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" style="margin-left:5px">Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
+      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">Approve Subscription</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
     '</div>'+
     '<div class="wide"><div class="section-title"><h2>Business Feature Controls</h2><span>Admin control state</span></div><div class="detail">'+
       featureRow('GOOGLE','Google Business API','Allow this business to use Google integration')+
@@ -227,7 +227,7 @@ function adminPage(){
    await openBusiness(id);
   }catch(e){alert('Unable to change owner password: '+e.message)}
  }
- async function rejectPlanRequest(id,button){
+ async function rejectPlanRequest(id,button,businessId){
   const reason=prompt('Reason for rejecting this subscription request:');
   if(reason===null)return;
   if(!reason.trim()){alert('Please enter a rejection reason.');return}
@@ -236,7 +236,7 @@ function adminPage(){
    await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/reject',{method:'POST',body:JSON.stringify({reason:reason.trim()})});
    alert('Subscription request rejected.');
    await loadBusinesses();
-   await openBusiness(new URLSearchParams(location.search).get('businessId')||'');
+   if(businessId)await openBusiness(businessId);
   }catch(e){alert('Unable to reject subscription: '+e.message);if(button){button.disabled=false;button.textContent='Reject'}}
  }
  function closeBusiness(){if($('businessDetail')){$('businessDetail').classList.add('hidden');$('businessDetail').innerHTML='';}}
@@ -352,7 +352,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
-  if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn);return}
+  if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn,rejectBtn.dataset.businessId);return}
  });
  $('refreshBtn').addEventListener('click',()=>refreshCurrent());
  $('exportBtn').addEventListener('click',()=>{
@@ -449,9 +449,16 @@ function install(app){
   const ownerIds=business.members.map(m=>m.userId).filter(Boolean);
   if(!ownerIds.length)return res.status(400).json({error:'No business owner account found'});
   const passwordHash=hashPassword(password);
+  const adminToken=getCookie(req,'rp_admin_session');
+  const adminTokenHash=adminToken?tokenHash(adminToken):null;
   await prisma.$transaction(async tx=>{
     await tx.user.updateMany({where:{id:{in:ownerIds}},data:{passwordHash}});
-    await tx.session.deleteMany({where:{userId:{in:ownerIds}}});
+    await tx.session.deleteMany({
+      where:{
+        userId:{in:ownerIds},
+        ...(adminTokenHash?{tokenHash:{not:adminTokenHash}}:{})
+      }
+    });
     await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_OWNER_PASSWORD_CHANGED',entity:'Business',entityId:business.id,metadata:{ownerCount:ownerIds.length}}});
   });
   res.json({ok:true});
