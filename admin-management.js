@@ -250,7 +250,7 @@ function adminPage(){
 }
 function install(app){
  if(installed)return;installed=true;
- originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.type('html').send(adminPage())}catch(e){next(e)}});
+ originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage())}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const businesses=await prisma.business.findMany({include:{subscription:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true}}}}},orderBy:{createdAt:'desc'}});
