@@ -21,7 +21,7 @@ async function requireAdmin(req,res){
   return user;
 }
 function adminPage(){
- return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Repute Techs · Admin SaaS</title>
+ return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Repute Techs · Admin SaaS</title>
  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
  <style>
  :root{--nav:#0f172a;--nav2:#1e293b;--primary:#4f46e5;--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--muted:#64748b;--ink:#0f172a;--good:#059669;--warn:#d97706;--bad:#dc2626}
@@ -73,7 +73,7 @@ function adminPage(){
  async function refreshCurrent(){if(currentView==='dashboard'||currentView==='businesses')await load();else await show(currentView)}
  document.querySelectorAll('.nav[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
  $('businessSearch').addEventListener('input',render);$('businessStatus').addEventListener('change',render);$('userSearch').addEventListener('input',loadUsers);load();
- </script></body></html>\`;
+ </script></body></html>`;
 }
 function install(app){
  if(installed)return;installed=true;
