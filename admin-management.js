@@ -60,9 +60,9 @@ function adminPage(){
    <section id="overview">
     <div class="grid4">
      <div class="card metric-card clickable" onclick="show('tenants')"><div class="label">Connected Businesses</div><div class="metric" id="ovBusinesses">—</div><div class="sub" id="ovBusinessSub">Live tenant registry · View all</div><div class="accent">▦</div></div>
-     <div class="card metric-card clickable" onclick="show('subscriptions')"><div class="label">Active Subscriptions</div><div class="metric" id="ovActive">—</div><div class="sub">Currently active · View plans</div><div class="accent">◈</div></div>
-     <div class="card metric-card"><div class="label">7-Day Trials</div><div class="metric" id="ovTrials">—</div><div class="sub">Trial subscriptions</div><div class="accent">◷</div></div>
-     <div class="card metric-card clickable" onclick="show('subscriptions')"><div class="label">Pending Plan Requests</div><div class="metric" id="ovPending">—</div><div class="sub">Awaiting admin review · Open plans</div><div class="accent">!</div></div>
+     <div class="card metric-card clickable" onclick="openMetricPanel('active')"><div class="label">Active Subscriptions</div><div class="metric" id="ovActive">—</div><div class="sub">Currently active · View subscriptions</div><div class="accent">◈</div></div>
+     <div class="card metric-card clickable" onclick="openMetricPanel('trials')"><div class="label">7-Day Trials</div><div class="metric" id="ovTrials">—</div><div class="sub">Trial businesses · View trial status</div><div class="accent">◷</div></div>
+     <div class="card metric-card clickable" onclick="openMetricPanel('pending')"><div class="label">Pending Plan Requests</div><div class="metric" id="ovPending">—</div><div class="sub">Awaiting admin review · View requests</div><div class="accent">!</div></div>
     </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Platform Activity</h2><span>24H · verified audit events</span></div><div id="overviewActivity" class="activity-bars"><div class="empty">Loading verified activity…</div></div><div class="legend"><span><i style="background:#5146e5"></i>Administrative events recorded in the platform audit log</span></div></div>
@@ -110,6 +110,12 @@ function adminPage(){
    <section id="kill" class="hidden"><div class="card danger"><div class="section-title"><h2>Emergency Kill Switch</h2><span>Security & Config</span></div><div class="kv"><b>Global state</b><span class="pill good">OFF · NORMAL OPERATIONS</span></div><div class="notice" style="margin-top:10px">No destructive or global shutdown action is wired to this UI. This prevents accidental changes to live business operations.</div></div></section>
   </div>
  </main></div>
+ <div id="metricModal" class="hidden" style="position:fixed;inset:0;background:#0b122080;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card" style="width:min(920px,96vw);max-height:86vh;overflow:auto">
+   <div class="section-title"><h2 id="metricModalTitle">Details</h2><button class="smallbtn" onclick="closeMetricPanel()">Close</button></div>
+   <div id="metricModalBody"><div class="empty">Loading…</div></div>
+  </div>
+ </div>
  <script>
  let rows=[],users=[],currentView='overview';
  const $=id=>document.getElementById(id);
@@ -118,7 +124,7 @@ function adminPage(){
  const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';
  async function api(path,opt={}){const r=await fetch('/api'+path,{credentials:'include',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
  function statusPill(s){const x=String(s||'NO SUBSCRIPTION');return '<span class="pill '+(x==='ACTIVE'?'good':x==='TRIAL'?'warn':x==='FAILED'?'bad':'')+'">'+esc(x)+'</span>'}
- function row(b){return '<div class="row"><div><div class="name">'+esc(b.name)+'</div><div class="sub">'+esc(b.type||'')+' · '+(b.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(b.ownerName||'No owner')+'<div class="sub">'+esc(b.ownerEmail||'')+'</div></div><div>'+statusPill(b.subscription?.status)+'<div class="sub">'+esc(b.subscription?.plan||'No plan')+'</div></div><div>'+(b.isOpen?'<span class="pill good">OPEN</span>':'<span class="pill">CLOSED</span>')+'</div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business">View</button></div></div>'}
+ function row(b){return '<div class="row"><div><div class="name">'+esc(b.name)+'</div><div class="sub">'+esc(b.type||'')+' · '+(b.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(b.ownerName||'No owner')+'<div class="sub">'+esc(b.ownerEmail||'')+'</div></div><div>'+statusPill(b.subscription?.status)+'<div class="sub">'+esc(b.subscription?.plan||'No plan')+'</div></div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business" title="View operating state">'+(b.isOpen?'OPEN':'CLOSED')+'</button></div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business">View</button></div></div>'}
  function renderRows(){
   const q=($('businessSearch')?.value||'').trim().toLowerCase();
   const st=$('businessStatus')?.value||'';
@@ -132,6 +138,7 @@ function adminPage(){
  }
  async function openBusiness(id){
   try{
+   if(currentView!=='tenants')await show('tenants');
    const d=await api('/admin/businesses/'+encodeURIComponent(id));
    const b=d;
    const sub=b.subscription||{};
@@ -153,7 +160,27 @@ function adminPage(){
  }
  function closeBusiness(){if($('businessDetail')){$('businessDetail').classList.add('hidden');$('businessDetail').innerHTML='';}}
  async function loadBusinesses(){try{const d=await api('/admin/businesses');rows=d.businesses||[];$('ovBusinesses').textContent=rows.length;$('ovActive').textContent=rows.filter(x=>x.subscription?.status==='ACTIVE').length;$('ovTrials').textContent=rows.filter(x=>x.subscription?.status==='TRIAL').length;$('ovPending').textContent=d.pendingPlanRequests||0;renderRows()}catch(e){$('overviewRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
- async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
+ function closeMetricPanel(){const m=$('metricModal');if(m)m.classList.add('hidden')}
+async function openMetricPanel(kind){
+ const m=$('metricModal'),title=$('metricModalTitle'),body=$('metricModalBody');
+ if(!m)return;
+ m.classList.remove('hidden');
+ title.textContent=kind==='trials'?'7-Day Trial Businesses':kind==='pending'?'Pending Plan Requests':'Active Subscriptions';
+ body.innerHTML='<div class="empty">Loading verified data…</div>';
+ try{
+  if(kind==='trials'){
+   const d=await api('/admin/trials');
+   body.innerHTML=d.trials.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Plan</div><div>Trial Ends</div><div>Days Left</div></div>'+d.trials.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.trialEndsAt)+'</div><div><span class="pill '+(x.daysRemaining>2?'good':'warn')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span></div></div>').join('')+'</div>':'<div class="empty">No businesses are currently on a 7-day trial.</div>';
+  }else if(kind==='pending'){
+   const d=await api('/admin/pending-plan-requests');
+   body.innerHTML=d.requests.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Requested Plan</div><div>Price</div><div>Requested</div></div>'+d.requests.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||x.requesterName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||x.requesterEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+date(x.createdAt)+'</div></div>').join('')+'</div>':'<div class="empty">No pending plan requests.</div>';
+  }else{
+   const d=await api('/admin/active-subscriptions');
+   body.innerHTML=d.subscriptions.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Plan</div><div>Price</div><div>Period End</div></div>'+d.subscriptions.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.monthlyPrice)+'</div><div>'+date(x.currentPeriodEnd)+'</div></div>').join('')+'</div>':'<div class="empty">No active subscriptions found.</div>';
+  }
+ }catch(e){body.innerHTML='<div class="card danger"><b>Unable to load details</b><div class="sub">'+esc(e.message)+'</div></div>'}
+}
+async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
  async function loadPlans(){const d=await api('/admin/plans');$('planCount').textContent=d.plans.length;$('planActive').textContent=d.plans.filter(x=>x.active).length;$('planPending').textContent=d.pending;$('planRows').innerHTML=d.plans.map(p=>'<div class="row"><div><div class="name">'+esc(p.name)+'</div><div class="sub">'+esc(p.code)+'</div></div><div>'+money(p.price)+'</div><div>'+esc(p.billingInterval)+'</div><div>'+statusPill(p.active?'ACTIVE':'INACTIVE')+'</div><div></div></div>').join('')||'<div class="empty">No plans.</div>'}
  async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
  async function loadReviews(){const d=await api('/admin/reviews');$('reviewCount').textContent=d.count;$('reviewApproved').textContent=d.approved;$('reviewPublished').textContent=d.published;$('reviewFailed').textContent=d.failed;$('reviewFailed2').textContent=d.failed;$('anReviews').textContent=d.count}
@@ -270,6 +297,28 @@ function install(app){
   });
  } catch(e) { next(e); }
  });
+ originalGet.call(app,'/api/admin/trials',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const subs=await prisma.subscription.findMany({where:{status:'TRIAL'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{trialEndsAt:'asc'}});
+  const now=Date.now();
+  const trials=subs.map(s=>{const owner=s.business.members[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.trialEndsAt||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,trialStartedAt:s.trialStartedAt,trialEndsAt:s.trialEndsAt,daysRemaining}});
+  res.json({trials});
+ }catch(e){next(e)}});
+
+ originalGet.call(app,'/api/admin/pending-plan-requests',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const requests=await prisma.planRequest.findMany({where:{status:'PENDING'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'asc'}});
+  const mapped=requests.map(x=>{const owner=x.business.members[0]?.user;return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||null,ownerEmail:owner?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,status:x.status,paymentStatus:x.paymentStatus,createdAt:x.createdAt}});
+  res.json({requests:mapped});
+ }catch(e){next(e)}});
+
+ originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
+  const subscriptions=subs.map(s=>{const owner=s.business.members[0]?.user;return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,status:s.status}});
+  res.json({subscriptions});
+ }catch(e){next(e)}});
+
  originalGet.call(app,'/api/admin/users',async(req,res,next)=>{
   try {
    const user=await requireAdmin(req,res); if(!user)return;
