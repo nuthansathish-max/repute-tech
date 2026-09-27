@@ -13,6 +13,15 @@ try{
   console.error('Admin feature-control column check failed:',e?.message||e);
 }
 
+async function readAdminJsonBody(req){
+  if(req.body && typeof req.body==='object')return req.body;
+  return await new Promise(resolve=>{
+    let raw='';
+    req.on('data',chunk=>{raw+=chunk});
+    req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{})}catch{resolve({})}});
+    req.on('error',()=>resolve({}));
+  });
+}
 async function sessionUser(req){
   const token=getCookie(req,'rp_admin_session');
   if(!token)return null;
@@ -449,7 +458,8 @@ function install(app){
 
  originalPost.call(app,'/api/admin/businesses/:businessId/reset-password',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const password=String(req.body?.password||'');
+  const body=await readAdminJsonBody(req);
+  const password=typeof body?.password==='string'?body.password:'';
   if(password.length<8||password.length>200)return res.status(400).json({error:'Password must be between 8 and 200 characters'});
   const business=await prisma.business.findUnique({where:{id:req.params.businessId},include:{members:{where:{role:'OWNER'},select:{userId:true}}}});
   if(!business)return res.status(404).json({error:'Business not found'});
