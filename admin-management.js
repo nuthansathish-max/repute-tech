@@ -21,7 +21,7 @@ async function requireAdmin(req,res){
   return user;
 }
 function adminPage(){
- return \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in · SaaS Owner Console</title>
+ return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in · SaaS Owner Console</title>
  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
  <style>
  :root{--nav:#0b1220;--nav2:#111b2e;--primary:#5146e5;--primary2:#6d63ff;--bg:#f4f7fb;--card:#fff;--line:#e4e9f2;--muted:#6b778c;--ink:#172033;--good:#08a57a;--warn:#e6a11a;--bad:#e0525b;--cyan:#16a6c9}
@@ -125,7 +125,7 @@ function adminPage(){
  async function refreshCurrent(){await show(currentView)}
  document.querySelectorAll('.nav[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
  $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();
- </script></body></html>\`;
+ </script></body></html>`;
 }
 function install(app){
  if(installed)return;installed=true;
