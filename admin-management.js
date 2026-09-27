@@ -166,7 +166,7 @@ function adminPage(){
    const flagOn=k=>flags[k]!==false;
    const featureRow=(key,label,subtext)=>{
      const on=flagOn(key);
-     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button aria-label="'+esc(label)+' '+(on?'enabled':'disabled')+'" class="admin-feature-toggle '+(on?'on':'off')+'" data-admin-feature="'+esc(key)+'" data-business-id="'+esc(b.id)+'" data-admin-enabled="'+(on?'true':'false')+'">'+(on?'ON':'OFF')+'</button></div>';
+     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button type="button" aria-label="'+esc(label)+' '+(on?'enabled':'disabled')+'" class="admin-feature-toggle '+(on?'on':'off')+'" data-admin-feature="'+esc(key)+'" data-business-id="'+esc(b.id)+'" data-admin-enabled="'+(on?'true':'false')+'" onclick="toggleAdminFeature(this.dataset.adminFeature,this.dataset.businessId,this);return false;">'+(on?'ON':'OFF')+'</button></div>';
    };
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
@@ -380,8 +380,6 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(statusBtn){e.preventDefault();toggleBusinessAvailability(statusBtn.dataset.adminStatus,statusBtn.dataset.adminOpen==='true',statusBtn);return}
   const resetBtn=e.target.closest('[data-admin-reset]');
   if(resetBtn){e.preventDefault();resetOwnerPassword(resetBtn.dataset.adminReset);return}
-  const featureBtn=e.target.closest('[data-admin-feature]');
-  if(featureBtn){e.preventDefault();toggleAdminFeature(featureBtn.dataset.adminFeature,featureBtn.dataset.businessId,featureBtn);return}
   const deleteBtn=e.target.closest('[data-admin-delete-business]');
   if(deleteBtn){e.preventDefault();deleteBusiness(deleteBtn.dataset.adminDeleteBusiness,deleteBtn);return}
   const viewBtn=e.target.closest('[data-action="view-business"]');
