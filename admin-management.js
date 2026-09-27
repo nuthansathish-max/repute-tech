@@ -142,17 +142,22 @@ function adminPage(){
    const d=await api('/admin/businesses/'+encodeURIComponent(id));
    const b=d;
    const sub=b.subscription||{};
+   const owner=(b.members||[]).find(m=>m.role==='OWNER')?.user||null;
+   const ownerPhone=b.phone||'';
+   const address=b.address||'';
    const members=(b.members||[]).map(m=>'<div class="kv"><b>Member · '+esc(m.role)+'</b>'+esc(m.user?.name||'')+'<div class="sub">'+esc(m.user?.email||'')+'</div></div>').join('');
+   const subscriptionDays=sub.currentPeriodEnd?Math.max(0,Math.ceil((new Date(sub.currentPeriodEnd).getTime()-Date.now())/(24*60*60*1000))):null;
    $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><h2>'+esc(b.name)+'</h2><button class="smallbtn" onclick="closeBusiness()">Close</button></div><div class="detail">'+
     '<div class="kv"><b>Business Type</b>'+esc(b.type||'—')+'</div>'+
-    '<div class="kv"><b>Phone</b>'+esc(b.phone||'—')+'</div>'+
+    '<div class="kv"><b>Owner</b>'+esc(owner?.name||'—')+'<div class="sub">'+esc(owner?.email||'')+'</div></div>'+
+    '<div class="kv"><b>Phone</b>'+esc(ownerPhone||'—')+(ownerPhone?'<div style="margin-top:7px"><a class="smallbtn" href="tel:'+esc(ownerPhone)+'">🤙 Call Owner</a></div>':'')+'</div>'+
+    '<div class="kv"><b>Business Address</b>'+esc(address||'—')+'</div>'+
     '<div class="kv"><b>Status</b>'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div>'+
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||'—')+'</div>'+
-    '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+'</div>'+
+    '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+(subscriptionDays!==null?'<div class="sub">'+subscriptionDays+' day'+(subscriptionDays===1?'':'s')+' left · ends '+date(sub.currentPeriodEnd)+'</div>':'')+'</div>'+
     '<div class="kv"><b>Created</b>'+date(b.createdAt)+'</div>'+
     '<div class="wide"><b style="display:block;font-size:8px;text-transform:uppercase;color:#7b879a;margin-bottom:6px">Members / Owners</b><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
-    '</div></div>';
-   $('businessDetail').classList.remove('hidden');
+    '</div></div>';   $('businessDetail').classList.remove('hidden');
   }catch(e){
    $('businessDetail').innerHTML='<div class="card danger"><b>Unable to load business</b><div class="sub">'+esc(e.message)+'</div></div>';
    $('businessDetail').classList.remove('hidden');
@@ -170,15 +175,29 @@ async function openMetricPanel(kind){
  try{
   if(kind==='trials'){
    const d=await api('/admin/trials');
-   body.innerHTML=d.trials.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Plan</div><div>Trial Ends</div><div>Days Left</div></div>'+d.trials.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.trialEndsAt)+'</div><div><span class="pill '+(x.daysRemaining>2?'good':'warn')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span></div></div>').join('')+'</div>':'<div class="empty">No businesses are currently on a 7-day trial.</div>';
+   body.innerHTML=d.trials.length?'<div class="table"><div class="row head" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div>Business</div><div>Owner</div><div>Plan</div><div>Trial Ends</div><div>Days Left</div><div>Action</div></div>'+d.trials.map(x=>'<div class="row" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.trialEndsAt)+'</div><div><span class="pill '+(x.daysRemaining>2?'good':'warn')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span></div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>'+(x.ownerEmail?'<a class="smallbtn" href="mailto:'+esc(x.ownerEmail)+'" style="margin-left:4px">Email</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No businesses are currently on a 7-day trial.</div>';
   }else if(kind==='pending'){
    const d=await api('/admin/pending-plan-requests');
-   body.innerHTML=d.requests.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Requested Plan</div><div>Price</div><div>Requested</div></div>'+d.requests.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||x.requesterName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||x.requesterEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+date(x.createdAt)+'</div></div>').join('')+'</div>':'<div class="empty">No pending plan requests.</div>';
+   body.innerHTML=d.requests.length?'<div class="table"><div class="row head" style="grid-template-columns:1.4fr 1fr 1fr 90px 90px 190px;min-width:980px"><div>Business</div><div>Owner</div><div>Requested Plan</div><div>Price</div><div>Requested</div><div>Actions</div></div>'+d.requests.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1fr 1fr 90px 90px 190px;min-width:980px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||x.requesterName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||x.requesterEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+date(x.createdAt)+'</div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button><button class="smallbtn" data-action="approve-subscription" data-request-id="'+esc(x.id)+'" style="margin-left:4px">Approve</button>'+(x.contact?'<a class="smallbtn" href="tel:'+esc(x.contact)+'" style="margin-left:4px">🤙 Call</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No pending plan requests.</div>';
   }else{
    const d=await api('/admin/active-subscriptions');
-   body.innerHTML=d.subscriptions.length?'<div class="table"><div class="row head"><div>Business</div><div>Owner</div><div>Plan</div><div>Price</div><div>Period End</div></div>'+d.subscriptions.map(x=>'<div class="row"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.monthlyPrice)+'</div><div>'+date(x.currentPeriodEnd)+'</div></div>').join('')+'</div>':'<div class="empty">No active subscriptions found.</div>';
-  }
- }catch(e){body.innerHTML='<div class="card danger"><b>Unable to load details</b><div class="sub">'+esc(e.message)+'</div></div>'}
+   body.innerHTML=d.subscriptions.length?'<div class="table"><div class="row head" style="grid-template-columns:1.4fr 1fr 1fr 90px 110px 170px;min-width:980px"><div>Business</div><div>Owner</div><div>Plan</div><div>Price</div><div>Days Left</div><div>Actions</div></div>'+d.subscriptions.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1fr 1fr 90px 110px 170px;min-width:980px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.monthlyPrice)+'</div><div><span class="pill '+(x.daysRemaining>7?'good':x.daysRemaining>2?'warn':'bad')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span><div class="sub">Ends '+date(x.currentPeriodEnd)+'</div></div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>'+(x.ownerEmail?'<a class="smallbtn" href="mailto:'+esc(x.ownerEmail)+'" style="margin-left:4px">Email</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No active subscriptions found.</div>';
+  } }catch(e){body.innerHTML='<div class="card danger"><b>Unable to load details</b><div class="sub">'+esc(e.message)+'</div></div>'}
+}
+async function approvePlanRequest(id,button){
+ if(!id)return;
+ if(!confirm('Approve this subscription and start its paid billing period now?'))return;
+ const old=button?.textContent;
+ if(button){button.disabled=true;button.textContent='Approving…';}
+ try{
+  await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/approve',{method:'POST',body:JSON.stringify({})});
+  alert('Subscription approved successfully.');
+  await openMetricPanel('pending');
+  await loadBusinesses();
+ }catch(e){
+  alert('Unable to approve subscription: '+e.message);
+  if(button){button.disabled=false;button.textContent=old||'Approve';}
+ }
 }
 async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
  async function loadPlans(){const d=await api('/admin/plans');$('planCount').textContent=d.plans.length;$('planActive').textContent=d.plans.filter(x=>x.active).length;$('planPending').textContent=d.pending;$('planRows').innerHTML=d.plans.map(p=>'<div class="row"><div><div class="name">'+esc(p.name)+'</div><div class="sub">'+esc(p.code)+'</div></div><div>'+money(p.price)+'</div><div>'+esc(p.billingInterval)+'</div><div>'+statusPill(p.active?'ACTIVE':'INACTIVE')+'</div><div></div></div>').join('')||'<div class="empty">No plans.</div>'}
@@ -254,6 +273,8 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
  document.addEventListener('click',e=>{
   const viewBtn=e.target.closest('[data-action="view-business"]');
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
+  const approveBtn=e.target.closest('[data-action="approve-subscription"]');
+  if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
  });
  $('refreshBtn').addEventListener('click',()=>refreshCurrent());
  $('exportBtn').addEventListener('click',()=>{
@@ -287,12 +308,13 @@ function install(app){
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses/:businessId',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
+  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
   if(!b)return res.status(404).json({error:'Business not found'});
   const members=b.members.map(m=>({id:m.id,role:m.role,user:m.user}));
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
+   address:b.locations?.[0]?.address||null,
    subscription:b.subscription,members
   });
  } catch(e) { next(e); }
@@ -315,8 +337,31 @@ function install(app){
  originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
-  const subscriptions=subs.map(s=>{const owner=s.business.members[0]?.user;return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,status:s.status}});
+  const now=Date.now();
+  const subscriptions=subs.map(s=>{const owner=s.business.members[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.currentPeriodEnd||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,daysRemaining,status:s.status}});
   res.json({subscriptions});
+ }catch(e){next(e)}});
+
+ originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/approve',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId},include:{business:true}});
+  if(!request)return res.status(404).json({error:'Plan request not found'});
+  if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
+  const now=new Date();
+  const periodEnd=new Date(now);
+  if(request.billingInterval==='YEAR')periodEnd.setFullYear(periodEnd.getFullYear()+1);
+  else periodEnd.setMonth(periodEnd.getMonth()+1);
+  const result=await prisma.$transaction(async tx=>{
+    const subscription=await tx.subscription.upsert({
+      where:{businessId:request.businessId},
+      create:{businessId:request.businessId,plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd},
+      update:{plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd,trialStartedAt:null,trialEndsAt:null}
+    });
+    const approved=await tx.planRequest.update({where:{id:request.id},data:{status:'APPROVED',approvedAt:now,approvedByUserId:user.id,paymentStatus:'PAID'}});
+    await tx.auditLog.create({data:{actorUserId:user.id,action:'APPROVE_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planCode:request.planCode}}});
+    return {subscription,approved};
+  });
+  res.json({ok:true,subscription:result.subscription,request:result.approved});
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/users',async(req,res,next)=>{
