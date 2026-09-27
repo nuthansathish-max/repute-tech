@@ -47,7 +47,7 @@ express.application.listen=function(...args){
       try{
         const a=await currentBusiness(req);
         if(!a.business)return res.status(a.status).json({error:a.error});
-        res.json({businessId:a.business.id,name:a.business.name,isOpen:Boolean(a.business.isOpen)});
+        res.json({businessId:a.business.id,name:a.business.name,isOpen:Boolean(a.business.isOpen),adminFeatureFlags:a.business.adminFeatureFlags||{}});
       }catch(e){next(e)}
     });
     this.patch('/api/business/status',async(req,res,next)=>{
