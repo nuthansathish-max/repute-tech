@@ -97,11 +97,14 @@ function install(app){
   });
  } catch(e) { next(e); }
  });
- originalGet.call(app,'/api/admin/users',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
-  const users=await prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}});
-  res.json({users:users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,businessCount:u.memberships.length,createdAt:u.createdAt}))});
- }catch(e){next(e)}}});
+ originalGet.call(app,'/api/admin/users',async(req,res,next)=>{
+  try {
+   const user=await requireAdmin(req,res); if(!user)return;
+   const users=await prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}});
+   const mapped=users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,businessCount:u.memberships.length,createdAt:u.createdAt}));
+   res.json({users:mapped});
+  } catch(e) { next(e); }
+ });
  originalGet.call(app,'/api/admin/plans',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const plans=await prisma.planCatalog.findMany({orderBy:{price:'asc'}});
