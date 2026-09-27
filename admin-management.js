@@ -232,7 +232,7 @@ function adminPage(){
  $('exportBtn').addEventListener('click',()=>{
   const headers=['Business','Type','Owner','Email','Plan','Subscription','Open'];
   const data=rows.map(b=>[b.name||'',b.type||'',b.ownerName||'',b.ownerEmail||'',b.subscription?.plan||'',b.subscription?.status||'',b.isOpen?'OPEN':'CLOSED']);
-  const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='reputetechs-tenant-registry.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
  $('maintenanceBtn').addEventListener('click',()=>alert('Maintenance Mode is not connected to a platform-wide maintenance service yet. It is intentionally read-only until the backend control is implemented.'));
