@@ -89,6 +89,7 @@ model Business {
   aiInstructions String?
   aiAutoDraft Boolean @default(true)
   aiRequireApproval Boolean @default(true)
+  adminFeatureFlags Json?
   createdAt DateTime @default(now())
   locations Location[]
   members BusinessMember[]
