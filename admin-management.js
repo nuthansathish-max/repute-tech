@@ -186,8 +186,43 @@ function adminPage(){
   }
  }
  const titles={overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],kill:['Emergency Kill Switch','Emergency operational controls']};
- async function show(view){currentView=view;document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));$(view).classList.remove('hidden');document.querySelectorAll('.nav[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));$('title').textContent=titles[view][0];$('desc').textContent=titles[view][1];if(view==='overview'||view==='tenants'||view==='analytics')await loadBusinesses();if(view==='analytics'){const u=await loadUsers();$('activeBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='ACTIVE').length/rows.length*100:0)+'%';$('trialBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='TRIAL').length/rows.length*100:0)+'%';$('pendingBar').style.width=Math.min(100,(Number($('ovPending').textContent)||0)*10)+'%';$('anBiz').textContent=rows.length}if(view==='subscriptions'||view==='billing')await loadPlans();if(view==='orders'||view==='revenue')await loadOrders();if(view==='reviews')await loadReviews();if(view==='google'||view==='whatsapp'||view==='overview')await loadIntegrations();if(view==='audit')await loadAudit();if(view==='overview'){await loadSystem();await loadOverviewInsights()}if(view==='tenants')closeBusiness()}
- async function refreshCurrent(){await show(currentView)}
+ async function show(view){
+   const section=$(view);
+   if(!section)return;
+   currentView=view;
+   document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));
+   section.classList.remove('hidden');
+   document.querySelectorAll('.nav[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view===view));
+   $('title').textContent=titles[view]?.[0]||view;
+   $('desc').textContent=titles[view]?.[1]||'';
+   try{
+    if(view==='overview'||view==='tenants'||view==='analytics')await loadBusinesses();
+    if(view==='analytics'){
+     await loadUsers();
+     $('activeBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='ACTIVE').length/rows.length*100:0)+'%';
+     $('trialBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='TRIAL').length/rows.length*100:0)+'%';
+     $('pendingBar').style.width=Math.min(100,(Number($('ovPending').textContent)||0)*10)+'%';
+     $('anBiz').textContent=rows.length;
+    }
+    if(view==='subscriptions'||view==='billing')await loadPlans();
+    if(view==='orders'||view==='revenue')await loadOrders();
+    if(view==='reviews')await loadReviews();
+    if(view==='google'||view==='whatsapp'||view==='overview')await loadIntegrations();
+    if(view==='audit')await loadAudit();
+    if(view==='overview'){await loadSystem();await loadOverviewInsights();}
+    if(view==='tenants')closeBusiness();
+   }catch(e){
+    const existing=section.querySelector('.admin-load-error');
+    if(!existing){
+     const n=document.createElement('div');
+     n.className='card danger admin-load-error';
+     n.style.marginBottom='12px';
+     n.innerHTML='<b>Unable to load this section</b><div class="sub">'+esc(e.message)+'</div>';
+     section.prepend(n);
+    }
+   }
+  }
+  async function refreshCurrent(){await show(currentView)}
  document.querySelectorAll('.nav[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
  document.addEventListener('click',e=>{
   const viewBtn=e.target.closest('[data-action="view-business"]');
