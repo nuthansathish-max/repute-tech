@@ -108,6 +108,9 @@
     const role=String(window.businessRole||window.currentUser?.role||'').toUpperCase();
     return role==='OWNER'||p.ORDERS===true||window.canBusinessPermission?.('ORDERS')===true;
   }
+  async function adminOrdersEnabled(){
+    try{const d=await api('/business/status');return d.adminFeatureFlags?.ORDERS!==false}catch{return true}
+  }
   function boot(){
     addAvailability();
     setInterval(loadAvailability,30000);
