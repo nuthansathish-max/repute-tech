@@ -386,7 +386,7 @@ function install(app){
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses/:businessId',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}},googleConnections:true,whatsappConnection:true}});
+  const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
   if(!b)return res.status(404).json({error:'Business not found'});
   const members=b.members.map(m=>({id:m.id,role:m.role,user:m.user}));
   const flagRows=await prisma.$queryRawUnsafe('SELECT "adminFeatureFlags" FROM "Business" WHERE "id" = $1',b.id);
@@ -398,9 +398,10 @@ function install(app){
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
    address:b.locations?.[0]?.address||null,
    subscription:b.subscription,members,
-   featureFlags,googleConnections:b.googleConnections?.length||0,
-   whatsappConnected:b.whatsappConnection?.status==='CONNECTED',
-   whatsappStatus:b.whatsappConnection?.status||'NOT CONNECTED',
+   featureFlags,
+   googleConnections:0,
+   whatsappConnected:false,
+   whatsappStatus:'NOT CONNECTED',
    pendingPlanRequest:pendingPlanRequest?{id:pendingPlanRequest.id,planCode:pendingPlanRequest.planCode,planName:pendingPlanRequest.planName,price:pendingPlanRequest.price,billingInterval:pendingPlanRequest.billingInterval,createdAt:pendingPlanRequest.createdAt}:null
   });
  } catch(e) { next(e); }
