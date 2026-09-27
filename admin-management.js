@@ -119,6 +119,39 @@ function adminPage(){
  async function api(path,opt={}){const r=await fetch('/api'+path,{credentials:'include',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
  function statusPill(s){const x=String(s||'NO SUBSCRIPTION');return '<span class="pill '+(x==='ACTIVE'?'good':x==='TRIAL'?'warn':x==='FAILED'?'bad':'')+'">'+esc(x)+'</span>'}
  function row(b){return '<div class="row"><div><div class="name">'+esc(b.name)+'</div><div class="sub">'+esc(b.type||'')+' · '+(b.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(b.ownerName||'No owner')+'<div class="sub">'+esc(b.ownerEmail||'')+'</div></div><div>'+statusPill(b.subscription?.status)+'<div class="sub">'+esc(b.subscription?.plan||'No plan')+'</div></div><div>'+(b.isOpen?'<span class="pill good">OPEN</span>':'<span class="pill">CLOSED</span>')+'</div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business">View</button></div></div>'}
+ function renderRows(){
+  const q=($('businessSearch')?.value||'').trim().toLowerCase();
+  const st=$('businessStatus')?.value||'';
+  const filtered=rows.filter(b=>{
+   const hay=[b.name,b.ownerName,b.ownerEmail,b.type,b.slug,b.subscription?.plan,b.subscription?.status].join(' ').toLowerCase();
+   return (!q||hay.includes(q))&&(!st||b.subscription?.status===st);
+  });
+  if($('tenantBadge'))$('tenantBadge').textContent=rows.length;
+  if($('overviewRows'))$('overviewRows').innerHTML=filtered.slice(0,8).map(row).join('')||'<div class="empty">No businesses found.</div>';
+  if($('allRows'))$('allRows').innerHTML=filtered.map(row).join('')||'<div class="empty">No businesses found.</div>';
+ }
+ async function openBusiness(id){
+  try{
+   const d=await api('/admin/businesses/'+encodeURIComponent(id));
+   const b=d;
+   const sub=b.subscription||{};
+   const members=(b.members||[]).map(m=>'<div class="kv"><b>Member · '+esc(m.role)+'</b>'+esc(m.user?.name||'')+'<div class="sub">'+esc(m.user?.email||'')+'</div></div>').join('');
+   $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><h2>'+esc(b.name)+'</h2><button class="smallbtn" onclick="closeBusiness()">Close</button></div><div class="detail">'+
+    '<div class="kv"><b>Business Type</b>'+esc(b.type||'—')+'</div>'+
+    '<div class="kv"><b>Phone</b>'+esc(b.phone||'—')+'</div>'+
+    '<div class="kv"><b>Status</b>'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div>'+
+    '<div class="kv"><b>Plan</b>'+esc(sub.plan||'—')+'</div>'+
+    '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+'</div>'+
+    '<div class="kv"><b>Created</b>'+date(b.createdAt)+'</div>'+
+    '<div class="wide"><b style="display:block;font-size:8px;text-transform:uppercase;color:#7b879a;margin-bottom:6px">Members / Owners</b><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
+    '</div></div>';
+   $('businessDetail').classList.remove('hidden');
+  }catch(e){
+   $('businessDetail').innerHTML='<div class="card danger"><b>Unable to load business</b><div class="sub">'+esc(e.message)+'</div></div>';
+   $('businessDetail').classList.remove('hidden');
+  }
+ }
+ function closeBusiness(){if($('businessDetail')){$('businessDetail').classList.add('hidden');$('businessDetail').innerHTML='';}}
  async function loadBusinesses(){try{const d=await api('/admin/businesses');rows=d.businesses||[];$('ovBusinesses').textContent=rows.length;$('ovActive').textContent=rows.filter(x=>x.subscription?.status==='ACTIVE').length;$('ovTrials').textContent=rows.filter(x=>x.subscription?.status==='TRIAL').length;$('ovPending').textContent=d.pendingPlanRequests||0;renderRows()}catch(e){$('overviewRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
  async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
  async function loadPlans(){const d=await api('/admin/plans');$('planCount').textContent=d.plans.length;$('planActive').textContent=d.plans.filter(x=>x.active).length;$('planPending').textContent=d.pending;$('planRows').innerHTML=d.plans.map(p=>'<div class="row"><div><div class="name">'+esc(p.name)+'</div><div class="sub">'+esc(p.code)+'</div></div><div>'+money(p.price)+'</div><div>'+esc(p.billingInterval)+'</div><div>'+statusPill(p.active?'ACTIVE':'INACTIVE')+'</div><div></div></div>').join('')||'<div class="empty">No plans.</div>'}
