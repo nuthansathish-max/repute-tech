@@ -110,7 +110,8 @@ function install(app){
   const plans=await prisma.planCatalog.findMany({orderBy:{price:'asc'}});
   const pending=await prisma.planRequest.count({where:{status:'PENDING'}});
   res.json({plans,pending});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/orders',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const [count,pending,paid,sum]=await Promise.all([
@@ -120,7 +121,8 @@ function install(app){
    prisma.order.aggregate({_sum:{total:true}})
   ]);
   res.json({count,pending,paid,value:Number(sum._sum.total||0)});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/reviews',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const [count,approved,published,failed]=await Promise.all([
@@ -130,7 +132,8 @@ function install(app){
    prisma.review.count({where:{replyStatus:'FAILED'}})
   ]);
   res.json({count,approved,published,failed});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/integrations',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const [google,googleAccounts,whatsapp,whatsappConnected]=await Promise.all([
@@ -140,7 +143,8 @@ function install(app){
    prisma.whatsAppConnection.count({where:{status:'CONNECTED'}})
   ]);
   res.json({google,googleAccounts,whatsapp,whatsappConnected});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/menus',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const [menus,published,qr,scans]=await Promise.all([
@@ -150,7 +154,8 @@ function install(app){
    prisma.qrScan.count()
   ]);
   res.json({menus,published,qr,scans});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/audit',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const logs=await prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:100});
@@ -158,7 +163,8 @@ function install(app){
   const actors=ids.length?await prisma.user.findMany({where:{id:{in:ids}},select:{id:true,name:true,email:true}}):[];
   const map=new Map(actors.map(x=>[x.id,x.name||x.email]));
   res.json({logs:logs.map(x=>({...x,actor:x.actorUserId?map.get(x.actorUserId)||'Unknown':'System'}))});
- }catch(e){next(e)}}});
+ }catch(e){ next(e); }
+ });
  originalGet.call(app,'/api/admin/system',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$queryRawUnsafe('SELECT 1');
