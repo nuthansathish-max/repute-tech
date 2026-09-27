@@ -336,9 +336,12 @@ function install(app){
 
  originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
+  const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'},orderBy:{createdAt:'desc'}});
+  const businessIds=[...new Set(subs.map(s=>s.businessId).filter(Boolean))];
+  const businesses=businessIds.length?await prisma.business.findMany({where:{id:{in:businessIds}},include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}):[];
+  const businessMap=new Map(businesses.map(b=>[b.id,b]));
   const now=Date.now();
-  const subscriptions=subs.map(s=>{const owner=s.business.members[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.currentPeriodEnd||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,daysRemaining,status:s.status}});
+  const subscriptions=subs.map(s=>{const business=businessMap.get(s.businessId);const owner=business?.members?.[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.currentPeriodEnd||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:business?.name||'Unknown Business',businessType:business?.type||null,isOpen:business?.isOpen??false,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,daysRemaining,status:s.status}});
   res.json({subscriptions});
  }catch(e){next(e)}});
 
