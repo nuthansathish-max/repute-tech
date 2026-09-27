@@ -166,7 +166,7 @@ function adminPage(){
    const flagOn=k=>flags[k]!==false;
    const featureRow=(key,label,subtext)=>{
      const on=flagOn(key);
-     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button type="button" aria-label="'+esc(label)+' '+(on?'enabled':'disabled')+'" class="admin-feature-toggle '+(on?'on':'off')+'" data-admin-feature="'+esc(key)+'" data-business-id="'+esc(b.id)+'" data-admin-enabled="'+(on?'true':'false')+'" onclick="toggleAdminFeature(this.dataset.adminFeature,this.dataset.businessId,this);return false;">'+(on?'ON':'OFF')+'</button></div>';
+     return '<div class="kv" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>'+esc(label)+'</b><div class="sub">'+esc(subtext)+'</div></div><button type="button" aria-label="'+esc(label)+' '+(on?'enabled':'disabled')+'" class="admin-feature-toggle '+(on?'on':'off')+'" data-admin-feature="'+esc(key)+'" data-business-id="'+esc(b.id)+'" data-admin-enabled="'+(on?'true':'false')+'">'+(on?'ON':'OFF')+'</button></div>';
    };
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
@@ -199,6 +199,7 @@ function adminPage(){
     '<div class="wide"><div class="section-title"><h2>Members / Owners</h2><span>'+((b.members||[]).length)+' account(s)</span></div><div class="detail">'+(members||'<div class="empty">No members.</div>')+'</div></div>'+
     '</div></div>';
    $('businessDetail').classList.remove('hidden');
+   $('businessDetail').querySelectorAll('[data-admin-feature]').forEach(button=>button.addEventListener('click',e=>{e.preventDefault();toggleAdminFeature(button.dataset.adminFeature,button.dataset.businessId,button)}));
   }catch(e){
    $('businessDetail').innerHTML='<div class="card danger"><b>Unable to load business</b><div class="sub">'+esc(e.message)+'</div></div>';
    $('businessDetail').classList.remove('hidden');
