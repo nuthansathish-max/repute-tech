@@ -89,8 +89,14 @@ function install(app){
   const user=await requireAdmin(req,res);if(!user)return;
   const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
   if(!b)return res.status(404).json({error:'Business not found'});
-  res.json({id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,subscription:b.subscription,members:b.members.map(m=>({id:m.id,role:m.role,user:m.user}))});
- }catch(e){next(e)}});
+  const members=b.members.map(m=>({id:m.id,role:m.role,user:m.user}));
+  res.json({
+   id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
+   phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
+   subscription:b.subscription,members
+  });
+ } catch(e) { next(e); }
+ });
  originalGet.call(app,'/api/admin/users',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const users=await prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}});
