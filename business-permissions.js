@@ -92,24 +92,21 @@ function permissionForPath(path, method) {
 }
 
 function adminFeatureForPath(path) {
+  path = String(path || '').toLowerCase();
+
+  if (path.includes('google')) return 'GOOGLE';
+  if (path.includes('whatsapp')) return 'WHATSAPP';
+  if (path.includes('ai')) return 'AI';
+  if (path.includes('review')) return 'REVIEWS';
+  if (path.includes('order')) return 'ORDERS';
   if (
-    path === '/api/google/status' ||
-    path.startsWith('/auth/google') ||
-    path.includes('/google/') ||
-    (path.startsWith('/api/reviews/') && path.endsWith('/publish'))
-  ) return 'GOOGLE';
-  if (path.includes('/whatsapp') || path.includes('/campaigns')) return 'WHATSAPP';
-  if (
-    path.includes('/ai-settings') ||
-    path.endsWith('/analyze') ||
-    path.endsWith('/ai-reply') ||
-    path.includes('/ai-')
-  ) return 'AI';
-  if (path.includes('/reviews') || path.startsWith('/api/reviews')) return 'REVIEWS';
-  if (path.includes('/orders')) return 'ORDERS';
-  if (path.includes('/billing') || path === '/api/billing-pos') return 'BILLING';
-  if (path.includes('/menus') || path.startsWith('/api/menus')) return 'MENU';
-  if (path.includes('/qr') || path.startsWith('/api/qr')) return 'QR';
+    path.includes('billing') ||
+    path.includes('pos') ||
+    path.includes('invoice')
+  ) return 'BILLING';
+  if (path.includes('menu')) return 'MENU';
+  if (path.includes('qr')) return 'QR';
+
   return null;
 }
 
@@ -130,14 +127,12 @@ async function enforceAdminFeature(req, res, user) {
   const businessId = await businessIdForFeature(req, user);
   if (!businessId) return true;
 
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { adminFeatureFlags: true }
-  });
-  if (!business) return true;
-
-  const flags = business.adminFeatureFlags && typeof business.adminFeatureFlags === 'object'
-    ? business.adminFeatureFlags
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT COALESCE("adminFeatureFlags", '{}'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1`,
+    businessId
+  );
+  const flags = rows?.[0]?.flags && typeof rows[0].flags === 'object'
+    ? rows[0].flags
     : {};
 
   if (flags[feature] === false) {
