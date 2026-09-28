@@ -67,6 +67,34 @@ export function createTenantGuard({prisma, sessionUser}){
     return null;
   }
 
+  function adminFeatureForPath(path){
+    path=String(path||'').toLowerCase();
+    if(path.includes('google')) return 'GOOGLE';
+    if(path.includes('whatsapp')) return 'WHATSAPP';
+    if(path.includes('ai')) return 'AI';
+    if(path.includes('review')) return 'REVIEWS';
+    if(path.includes('order')) return 'ORDERS';
+    if(path.includes('billing')||path.includes('pos')||path.includes('invoice')) return 'BILLING';
+    if(path.includes('menu')) return 'MENU';
+    if(path.includes('qr')) return 'QR';
+    return null;
+  }
+
+  async function enforceAdminFeature(req,user,businessId){
+    const feature=adminFeatureForPath(req.path);
+    if(!feature||!businessId) return true;
+    const rows=await prisma.$queryRawUnsafe(
+      `SELECT COALESCE("adminFeatureFlags", '{}'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1`,
+      String(businessId)
+    );
+    const flags=rows?.[0]?.flags&&typeof rows[0].flags==='object'?rows[0].flags:{};
+    if(flags[feature]===false){
+      req.adminFeatureDisabled=feature;
+      return false;
+    }
+    return true;
+  }
+
   return async function tenantGuard(req,res,next){
     try{
       if(!needsTenant(req)) return next();
@@ -74,8 +102,24 @@ export function createTenantGuard({prisma, sessionUser}){
       if(!user) return res.status(401).json({error:'Authentication required'});
       req.user=req.user||user;
       if(adminRoles.has(user.role)) return next();
-      const businessId=await resolveBusinessId(req);
+      let businessId=await resolveBusinessId(req);
+      if(!businessId){
+        const owned=await prisma.business.findFirst({
+          where:{members:{some:{userId:user.id}}},
+          orderBy:{createdAt:'asc'},
+          select:{id:true}
+        });
+        businessId=owned?.id||null;
+      }
       if(!businessId) return res.status(400).json({error:'Business context is required'});
+      if(!(await enforceAdminFeature(req,user,businessId))){
+        const feature=req.adminFeatureDisabled||'FEATURE';
+        return res.status(403).json({
+          error:`This feature has been disabled by the platform administrator.`,
+          feature,
+          featureDisabled:true
+        });
+      }
       const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}},select:{id:true,role:true}});
       if(!member) return res.status(403).json({error:'Business access denied'});
       req.businessId=businessId;
