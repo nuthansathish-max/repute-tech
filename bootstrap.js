@@ -41,6 +41,29 @@ async function sessionUser(req){
 const tenantGuard=createTenantGuard({prisma,sessionUser});
 const guardHandlers=(handlers)=>[tenantGuard,businessPermissionMiddleware,...handlers];
 
+async function adminFeatureAllowed(req,res,feature,businessId){
+  const user=await sessionUser(req);
+  if(!user){res.status(401).json({error:'Authentication required'});return false;}
+  if(['ADMIN','SUPER_ADMIN'].includes(user.role))return true;
+  const id=String(businessId||'');
+  if(!id){
+    const owned=await prisma.business.findFirst({where:{members:{some:{userId:user.id}}},orderBy:{createdAt:'asc'},select:{id:true}});
+    businessId=owned?.id||'';
+  }
+  if(!businessId)return true;
+  const rows=await prisma.$queryRawUnsafe(
+    `SELECT COALESCE("adminFeatureFlags", '{}'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1`,
+    String(businessId)
+  );
+  let flags=rows?.[0]?.flags??{};
+  if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
+  if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags[feature]===false){
+    res.status(403).json({error:'This feature has been disabled by the platform administrator.',feature,featureDisabled:true});
+    return false;
+  }
+  return true;
+}
+
 // Keep the original UI and inject enhancement bundles. Static index handling is disabled
 // so the final sendFile fallback can add the bundles without replacing the user's design.
 express.static=function(root,options={}){return originalStatic.call(express,root,{...options,index:false});};
@@ -128,6 +151,8 @@ express.application.post=function(path,...handlers){
   // Text-only AI generation now uses the same OpenAI/local provider used by review analysis.
   if(path==='/api/reviews/ai-reply') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    const ownerBusiness=await prisma.business.findFirst({where:{members:{some:{userId:user.id}}},orderBy:{createdAt:'asc'},select:{id:true}});
+    if(!(await adminFeatureAllowed(req,res,'AI',ownerBusiness?.id)))return;
     const text=String(req.body?.text||'').trim(); if(!text)return res.status(400).json({error:'Review text is required'});
     const review={authorName:String(req.body?.authorName||'Customer').trim().slice(0,80)||'Customer',rating:Number(req.body?.rating||3),text};
     const result=await aiReviewAnalysis(review,String(req.body?.businessName||'your business').trim().slice(0,120)||'your business',String(req.body?.tone||'WARM'));
@@ -135,7 +160,8 @@ express.application.post=function(path,...handlers){
   }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/qr') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
-    const businessId=String(req.params.businessId); const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}}});
+    const businessId=String(req.params.businessId);
+    if(!(await adminFeatureAllowed(req,res,'QR',businessId)))return; const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}}});
     if(!member && !['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Business access denied'});
     const p=z.object({name:z.string().trim().min(1).max(100),slug:z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/i,'Slug may contain only letters, numbers and hyphens')}).safeParse(req.body);
     if(!p.success)return res.status(400).json({error:p.error.issues[0]?.message||'Invalid QR details'});
@@ -148,6 +174,7 @@ express.application.post=function(path,...handlers){
   if(path==='/api/businesses/:businessId/menus') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const businessId=String(req.params.businessId);
+    if(!(await adminFeatureAllowed(req,res,'MENU',businessId)))return;
     const member=await prisma.businessMember.findUnique({where:{userId_businessId:{userId:user.id,businessId}}});
     if(!member && !['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Business access denied'});
     const p=z.object({name:z.string().trim().min(1).max(120),published:z.boolean().optional(),isPublished:z.boolean().optional()}).safeParse(req.body);
@@ -167,6 +194,7 @@ express.application.post=function(path,...handlers){
   }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/reviews/sync') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    if(!(await adminFeatureAllowed(req,res,'REVIEWS',String(req.params.businessId))))return;
     const business=await prisma.business.findFirst({where:{id:req.params.businessId,...(['SUPER_ADMIN','ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})},include:{locations:true}});
     if(!business)return res.status(404).json({error:'Business not found'});
     const locationId=req.body?.locationId||business.locations[0]?.id;
