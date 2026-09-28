@@ -8,6 +8,7 @@ import { createTenantGuard } from './tenantAuth.js';
 import { analyzeReview, generateReply } from './ai.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
+import { businessPermissionMiddleware } from './business-permissions.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -38,7 +39,7 @@ async function sessionUser(req){
   return s.user;
 }
 const tenantGuard=createTenantGuard({prisma,sessionUser});
-const guardHandlers=(handlers)=>[tenantGuard,...handlers];
+const guardHandlers=(handlers)=>[tenantGuard,businessPermissionMiddleware,...handlers];
 
 // Keep the original UI and inject enhancement bundles. Static index handling is disabled
 // so the final sendFile fallback can add the bundles without replacing the user's design.
