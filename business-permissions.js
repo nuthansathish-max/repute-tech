@@ -91,6 +91,66 @@ function permissionForPath(path, method) {
   return null;
 }
 
+function adminFeatureForPath(path) {
+  if (
+    path === '/api/google/status' ||
+    path.startsWith('/auth/google') ||
+    path.includes('/google/') ||
+    (path.startsWith('/api/reviews/') && path.endsWith('/publish'))
+  ) return 'GOOGLE';
+  if (path.includes('/whatsapp') || path.includes('/campaigns')) return 'WHATSAPP';
+  if (
+    path.includes('/ai-settings') ||
+    path.endsWith('/analyze') ||
+    path.endsWith('/ai-reply') ||
+    path.includes('/ai-')
+  ) return 'AI';
+  if (path.includes('/reviews') || path.startsWith('/api/reviews')) return 'REVIEWS';
+  if (path.includes('/orders')) return 'ORDERS';
+  if (path.includes('/billing') || path === '/api/billing-pos') return 'BILLING';
+  if (path.includes('/menus') || path.startsWith('/api/menus')) return 'MENU';
+  if (path.includes('/qr') || path.startsWith('/api/qr')) return 'QR';
+  return null;
+}
+
+async function businessIdForFeature(req, user) {
+  const direct = await businessIdForRequest(req);
+  if (direct) return direct;
+  const business = await prisma.business.findFirst({
+    where: { members: { some: { userId: user.id } } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true }
+  });
+  return business?.id || null;
+}
+
+async function enforceAdminFeature(req, res, user) {
+  const feature = adminFeatureForPath(req.path);
+  if (!feature) return true;
+  const businessId = await businessIdForFeature(req, user);
+  if (!businessId) return true;
+
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { adminFeatureFlags: true }
+  });
+  if (!business) return true;
+
+  const flags = business.adminFeatureFlags && typeof business.adminFeatureFlags === 'object'
+    ? business.adminFeatureFlags
+    : {};
+
+  if (flags[feature] === false) {
+    res.status(403).json({
+      error: 'This feature has been disabled by the platform administrator.',
+      feature,
+      featureDisabled: true
+    });
+    return false;
+  }
+  return true;
+}
+
 export async function businessPermissionMiddleware(req, res, next) {
   try {
     if (!req.path.startsWith('/api/') || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
@@ -103,6 +163,8 @@ export async function businessPermissionMiddleware(req, res, next) {
     if (!user) return next();
 
     if (['ADMIN','SUPER_ADMIN'].includes(user.role)) return next();
+
+    if (!(await enforceAdminFeature(req, res, user))) return;
 
     await permissionColumnReady;
     const businessId = await businessIdForRequest(req);
