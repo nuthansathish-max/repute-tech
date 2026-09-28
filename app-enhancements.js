@@ -223,7 +223,18 @@
         settings:'SETTINGS', orders:'ORDERS'
       };
 
-      const can=k=>owner||window.businessPermissions[k]===true;
+      const adminFeatureByPermission={REVIEWS:'REVIEWS',AI:'AI',QR:'QR',MENU:'MENU',WHATSAPP:'WHATSAPP',ORDERS:'ORDERS',BILLING:'BILLING'};
+      let adminFeatureFlags={};
+      try{
+        const status=await req('/business/status');
+        adminFeatureFlags=status?.adminFeatureFlags&&typeof status.adminFeatureFlags==='object'?status.adminFeatureFlags:{};
+      }catch{}
+      window.adminFeatureFlags=adminFeatureFlags;
+      const can=k=>{
+        const feature=adminFeatureByPermission[k];
+        if(feature&&adminFeatureFlags[feature]===false)return false;
+        return owner||window.businessPermissions[k]===true;
+      };
       window.canBusinessPermission=can;
 
       document.querySelectorAll('[data-page]').forEach(el=>{
