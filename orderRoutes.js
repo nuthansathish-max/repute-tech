@@ -33,6 +33,14 @@ async function access(req,businessId){
   if(!user) return {error:'Authentication required',status:401};
   const business=await prisma.business.findFirst({where:{id:String(businessId),...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})}});
   if(!business) return {error:'Business access denied',status:403};
+  if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){
+    const rows=await prisma.$queryRawUnsafe(`SELECT COALESCE("adminFeatureFlags", '{}'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1`,String(business.id));
+    let flags=rows?.[0]?.flags??{};
+    if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
+    if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags.ORDERS===false){
+      return {error:'This feature has been disabled by the platform administrator.',status:403,feature:'ORDERS',featureDisabled:true};
+    }
+  }
   return {user,business};
 }
 
