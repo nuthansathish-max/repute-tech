@@ -153,11 +153,13 @@ async function enforceAdminFeature(req, res, user) {
 
 export async function businessPermissionMiddleware(req, res, next) {
   try {
-    if (!req.path.startsWith('/api/') || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
-        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') return next();
+    const googleAuthPath = req.path === '/auth/google' || req.path === '/auth/google/callback';
+    if ((!req.path.startsWith('/api/') || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
+        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') && !googleAuthPath) return next();
 
     const needed = permissionForPath(req.path, req.method);
-    if (!needed) return next();
+    const adminFeature = adminFeatureForPath(req.path);
+    if (!needed && !adminFeature) return next();
 
     const user = await currentUser(req);
     if (!user) return next();
