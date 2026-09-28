@@ -21,8 +21,12 @@ async function userFrom(req){
 async function access(req,businessId){
   const user=await userFrom(req);
   if(!user)return {status:401,error:'Authentication required'};
-  const business=await prisma.business.findFirst({where:{id:String(businessId),...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})},select:{id:true,name:true,type:true,phone:true}});
+  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(user.role||'').toUpperCase());
+  const business=await prisma.business.findFirst({where:{id:String(businessId),...(isAdmin?{}:{members:{some:{userId:user.id}}})},select:{id:true,name:true,type:true,phone:true,adminFeatureFlags:true}});
   if(!business)return {status:403,error:'Business access denied'};
+  if(!isAdmin && business.adminFeatureFlags && typeof business.adminFeatureFlags==='object' && business.adminFeatureFlags.BILLING===false){
+    return {status:403,error:'Billing & POS has been disabled by the platform administrator.',featureDisabled:true};
+  }
   return {user,business};
 }
 
@@ -61,11 +65,15 @@ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.qu
 function register(app){if(registered)return;registered=true;
   app.get('/billing-pos',async(req,res,next)=>{try{
     const u=await userFrom(req);if(!u)return res.redirect('/');
-    const business=await prisma.business.findFirst({where:{members:{some:{userId:u.id}}},select:{id:true}});
+    const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(u.role||'').toUpperCase());
+    const business=await prisma.business.findFirst({where:{members:{some:{userId:u.id}}},select:{id:true,adminFeatureFlags:true}});
     if(!business)return res.status(403).send('Business access denied');
+    if(!isAdmin && business.adminFeatureFlags && typeof business.adminFeatureFlags==='object' && business.adminFeatureFlags.BILLING===false){
+      return res.status(403).send('Billing & POS has been disabled by the platform administrator.');
+    }
     if(!['ADMIN','SUPER_ADMIN','OWNER'].includes(String(u.role||'').toUpperCase())){
       const rows=await prisma.$queryRawUnsafe(`SELECT permissions FROM "BusinessMember" WHERE "userId"=$1 AND "businessId"=$2 LIMIT 1`,u.id,business.id);
-      const permissions=rows[0]?.permissions&&typeof rows[0].permissions==='object'?rows[0].permissions:{};
+      const permissions=rows[0]?.permissions&&typeof rows[0]?.permissions==='object'?rows[0].permissions:{};
       if(permissions.BILLING!==true)return res.status(403).send('Billing & POS access has not been granted by the business owner.');
     }
     res.set('Cache-Control','no-store');res.type('html').send(page)
