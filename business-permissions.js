@@ -114,8 +114,8 @@ function adminFeatureForPath(path) {
 }
 
 async function businessIdForFeature(req, user) {
-  const direct = await businessIdForRequest(req);
-  if (direct) return direct;
+  const direct = req.businessId || await businessIdForRequest(req);
+  if (direct) return String(direct);
   const business = await prisma.business.findFirst({
     where: { members: { some: { userId: user.id } } },
     orderBy: { createdAt: 'asc' },
@@ -154,11 +154,13 @@ async function enforceAdminFeature(req, res, user) {
 export async function businessPermissionMiddleware(req, res, next) {
   try {
     const googleAuthPath = req.path === '/auth/google' || req.path === '/auth/google/callback';
-    if ((!req.path.startsWith('/api/') || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
-        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') && !googleAuthPath) return next();
+    const adminFeature = adminFeatureForPath(req.path);
+    const apiPath = req.path.startsWith('/api/');
+    if (!apiPath && !googleAuthPath && !adminFeature) return next();
+    if (apiPath && (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
+        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') && !adminFeature) return next();
 
     const needed = permissionForPath(req.path, req.method);
-    const adminFeature = adminFeatureForPath(req.path);
     if (!needed && !adminFeature) return next();
 
     const user = await currentUser(req);
