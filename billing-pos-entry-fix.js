@@ -11,8 +11,9 @@ async function billingFeatureAllowed(req,res){
   const session=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}});
   if(!session||session.expiresAt<new Date())return true;
   if(['ADMIN','SUPER_ADMIN'].includes(session.user.role))return true;
+  const selectedBusinessId=getCookie(req,'rp_business_id');
   const business=await prisma.business.findFirst({
-    where:{members:{some:{userId:session.user.id}}},
+    where:{members:{some:{userId:session.user.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
     orderBy:{createdAt:'asc'},
     select:{adminFeatureFlags:true}
   });
