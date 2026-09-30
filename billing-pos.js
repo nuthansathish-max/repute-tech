@@ -66,7 +66,11 @@ function register(app){if(registered)return;registered=true;
   app.get('/billing-pos',async(req,res,next)=>{try{
     const u=await userFrom(req);if(!u)return res.redirect('/');
     const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(u.role||'').toUpperCase());
-    const business=await prisma.business.findFirst({where:{members:{some:{userId:u.id}}},select:{id:true,adminFeatureFlags:true}});
+    const selectedBusinessId=getCookie(req,'rp_business_id');
+  const business=await prisma.business.findFirst({
+    where:{members:{some:{userId:u.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
+    select:{id:true,adminFeatureFlags:true}
+  });
     if(!business)return res.status(403).send('Business access denied');
     if(!isAdmin && business.adminFeatureFlags && typeof business.adminFeatureFlags==='object' && business.adminFeatureFlags.BILLING===false){
       return res.status(403).send('Billing & POS has been disabled by the platform administrator.');
