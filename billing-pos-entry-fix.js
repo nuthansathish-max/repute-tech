@@ -15,9 +15,11 @@ async function billingFeatureAllowed(req,res){
   const business=await prisma.business.findFirst({
     where:{members:{some:{userId:session.user.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
     orderBy:{createdAt:'asc'},
-    select:{adminFeatureFlags:true}
+    select:{id:true}
   });
-  const flags=business?.adminFeatureFlags;
+  const rows=business?await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',business.id):[];
+  let flags=rows?.[0]?.flags??{};
+  if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
   if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags.BILLING===false){
     res.status(403).type('html').send('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Billing disabled</title></head><body><main style="font-family:system-ui;padding:40px;max-width:620px;margin:auto"><h2>Billing & POS is currently unavailable</h2><p>This feature has been disabled by the platform administrator for your business.</p></main></body></html>');
     return false;
