@@ -67,13 +67,18 @@ function register(app){if(registered)return;registered=true;
     const u=await userFrom(req);if(!u)return res.redirect('/');
     const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(u.role||'').toUpperCase());
     const selectedBusinessId=getCookie(req,'rp_business_id');
-  const business=await prisma.business.findFirst({
-    where:{members:{some:{userId:u.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
-    select:{id:true,adminFeatureFlags:true}
-  });
+    const business=await prisma.business.findFirst({
+      where:{members:{some:{userId:u.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
+      select:{id:true}
+    });
     if(!business)return res.status(403).send('Business access denied');
-    if(!isAdmin && business.adminFeatureFlags && typeof business.adminFeatureFlags==='object' && business.adminFeatureFlags.BILLING===false){
-      return res.status(403).send('Billing & POS has been disabled by the platform administrator.');
+    if(!isAdmin){
+      const flagRows=await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',business.id);
+      let flags=flagRows?.[0]?.flags??{};
+      if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
+      if(flags && typeof flags==='object' && !Array.isArray(flags) && flags.BILLING===false){
+        return res.status(403).send('Billing & POS has been disabled by the platform administrator.');
+      }
     }
     if(!['ADMIN','SUPER_ADMIN','OWNER'].includes(String(u.role||'').toUpperCase())){
       const rows=await prisma.$queryRawUnsafe(`SELECT permissions FROM "BusinessMember" WHERE "userId"=$1 AND "businessId"=$2 LIMIT 1`,u.id,business.id);
