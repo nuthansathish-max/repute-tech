@@ -69,6 +69,12 @@
     addNav();addSection();const list=$('ordersList');if(!list)return;list.innerHTML='<div class="sub">Loading orders…</div>';
     try{
       const context=await api('/business/status');window.reputeBusinessId=context.businessId;
+      if(context.adminFeatureFlags?.ORDERS===false){
+        updateBadge(0);
+        list.innerHTML='<div class="card"><h3>Orders is currently unavailable</h3><div class="sub">This feature has been disabled by the platform administrator for your business.</div></div>';
+        if($('orderSummary'))$('orderSummary').innerHTML='';
+        return;
+      }
       const orders=await api('/businesses/'+encodeURIComponent(context.businessId)+'/orders');
       const counts={PENDING:0,ACCEPTED:0,DELIVERED:0,CANCELLED:0};orders.forEach(o=>counts[o.status]=(counts[o.status]||0)+1);updateBadge(counts.PENDING);
       $('orderSummary').innerHTML='<div class="card"><div class="label">Pending</div><div class="value">'+counts.PENDING+'</div></div><div class="card"><div class="label">Accepted</div><div class="value">'+counts.ACCEPTED+'</div></div><div class="card"><div class="label">Delivered</div><div class="value">'+counts.DELIVERED+'</div></div><div class="card"><div class="label">Cancelled</div><div class="value">'+counts.CANCELLED+'</div></div>';
