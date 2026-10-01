@@ -65,14 +65,6 @@ async function load(){
       if(feature&&window.adminFeatureFlags?.[feature]===false)return false;
       return owner||window.businessPermissions[k]===true;
     };
-    const featureForPage={reviews:'REVIEWS',ai:'AI',qr:'QR',menu:'MENU',campaigns:'WHATSAPP',orders:'ORDERS',billing:'BILLING'};
-    const activePage=document.querySelector('.page.active')?.id||'dashboard';
-    const activeFeature=featureForPage[activePage];
-    if(activeFeature&&window.adminFeatureFlags?.[activeFeature]===false){
-      showPage('dashboard');
-      toast('This feature has been disabled by the platform administrator.');
-    }
-
     if(can('DASHBOARD')){
       try{
         const d=await get(`/businesses/${businessId}/dashboard`);
@@ -118,7 +110,6 @@ function showPage(page){
   const blocked=featureForPage[page];
   if(blocked&&window.adminFeatureFlags?.[blocked]===false){
     toast('This feature has been disabled by the platform administrator.');
-    if(page!=='dashboard')showPage('dashboard');
     return
   }
   const target=$(page);if(!target)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));target.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const active=document.querySelector(`[data-page="${page}"]`);if(active)$('heading').textContent=active.textContent.trim();window.scrollTo({top:0,behavior:'smooth'})}
