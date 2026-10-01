@@ -99,7 +99,7 @@ function adminFeaturesForPath(path) {
   if (path === '/auth/google' || path === '/auth/google/callback' || path === '/api/google/status') return ['GOOGLE'];
   if (path.includes('/businesses/') && path.includes('/google/')) return ['GOOGLE','REVIEWS'];
   if (path.includes('/reviews/') && (path.endsWith('/publish') || path.endsWith('/sync'))) return ['REVIEWS','GOOGLE'];
-  if (path.includes('/reviews/') && (path.includes('/ai-') || path.endsWith('/analyze'))) return ['REVIEWS','AI'];
+  if (path.includes('/reviews/') && (path.includes('/ai-') || path.endsWith('/analyze') || path.endsWith('/approve'))) return ['REVIEWS','AI'];
   if (path.includes('/whatsapp')) return ['WHATSAPP'];
   if (path.includes('/ai-settings') || path.includes('/ai')) return ['AI'];
   if (path.includes('/review')) return ['REVIEWS'];
