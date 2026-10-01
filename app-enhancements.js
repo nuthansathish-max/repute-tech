@@ -212,8 +212,11 @@
   }
 
   async function enhancePermissions(){
-    if(!window.businessId)return;
     try{
+      if(!window.businessId){
+        const b=await getBusiness();
+        window.businessId=b.id;
+      }
       const d=await req('/businesses/'+encodeURIComponent(window.businessId)+'/permissions/me');
       window.businessPermissions=d.permissions||{};
       window.businessRole=d.role||window.currentUser?.role||'STAFF';
