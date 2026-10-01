@@ -108,11 +108,33 @@ $('syncGoogle').onclick=async()=>{try{await post(`/businesses/${businessId}/revi
 function showPage(page){
   const featureForPage={reviews:'REVIEWS',ai:'AI',qr:'QR',menu:'MENU',campaigns:'WHATSAPP',orders:'ORDERS',billing:'BILLING'};
   const blocked=featureForPage[page];
+  const target=$(page);if(!target)return;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  target.classList.add('active');
+  document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+  const active=document.querySelector('[data-page="'+page+'"]');
+  if(active)$('heading').textContent=active.textContent.trim();
   if(blocked&&window.adminFeatureFlags?.[blocked]===false){
+    target.querySelectorAll('[data-feature-content]').forEach(el=>el.style.display='none');
+    let notice=target.querySelector('[data-feature-blocked]');
+    if(!notice){
+      notice=document.createElement('div');
+      notice.dataset.featureBlocked='1';
+      notice.className='card';
+      notice.style.marginTop='14px';
+      notice.innerHTML='<div class="section-title">Dashboard blocked</div><p class="sub">This dashboard has been disabled by the platform administrator.</p><p class="sub">For more details, please contact customer care.</p>';
+      target.prepend(notice);
+    }
+    notice.style.display='';
     toast('This feature has been disabled by the platform administrator.');
-    return
+    window.scrollTo({top:0,behavior:'smooth'});
+    return;
   }
-  const target=$(page);if(!target)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));target.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const active=document.querySelector(`[data-page="${page}"]`);if(active)$('heading').textContent=active.textContent.trim();window.scrollTo({top:0,behavior:'smooth'})}
+  const notice=target.querySelector('[data-feature-blocked]');
+  if(notice)notice.style.display='none';
+  target.querySelectorAll('[data-feature-content]').forEach(el=>el.style.display='');
+  window.scrollTo({top:0,behavior:'smooth'})
+}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
 initAuth();
 </script>
