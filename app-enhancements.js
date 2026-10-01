@@ -230,6 +230,8 @@
         adminFeatureFlags=status?.adminFeatureFlags&&typeof status.adminFeatureFlags==='object'?status.adminFeatureFlags:{};
       }catch{}
       window.adminFeatureFlags=adminFeatureFlags;
+      const googleAllowed=adminFeatureFlags.GOOGLE!==false;
+      ['connectGoogle','syncGoogle','settingsGoogle'].forEach(id=>{const el=$(id);if(el)el.style.display=googleAllowed?'':'none'});
       const can=k=>{
         const feature=adminFeatureByPermission[k];
         if(feature&&adminFeatureFlags[feature]===false)return false;
