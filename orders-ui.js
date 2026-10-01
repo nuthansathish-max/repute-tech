@@ -109,21 +109,28 @@
   }
   function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('orders').classList.add('active');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
   window.showOrders=showOrders;window.updateOrderStatus=updateOrderStatus;window.reputeOrdersBoot=boot;
-  function allowed(){
+  async function allowed(){
     const p=window.businessPermissions||{};
-    const role=String(window.businessRole||window.currentUser?.role||'').toUpperCase();
-    return role==='OWNER'||p.ORDERS===true||window.canBusinessPermission?.('ORDERS')===true;
+    let role=String(window.businessRole||window.currentUser?.role||'').toUpperCase();
+    if(!role){
+      try{
+        const me=await api('/auth/me');
+        role=String(me?.user?.role||'').toUpperCase();
+      }catch{}
+    }
+    if(role==='OWNER'||p.ORDERS===true||window.canBusinessPermission?.('ORDERS')===true)return true;
+    return false;
   }
   async function adminOrdersEnabled(){
     try{const d=await api('/business/status');return d.adminFeatureFlags?.ORDERS!==false}catch{return true}
   }
-  function boot(){
+  async function boot(){
     addAvailability();
     setInterval(loadAvailability,30000);
-    if(!allowed())return;
+    if(!(await allowed()))return;
     addNav();addSection();setTimeout(()=>loadOrders(),700);
-    setInterval(()=>{if(allowed())addNav()},3000);
-    setInterval(()=>{if(allowed()&&$('orders')?.classList.contains('active'))loadOrders()},15000);
+    setInterval(async()=>{if(await allowed())addNav()},3000);
+    setInterval(async()=>{if(await allowed()&&$('orders')?.classList.contains('active'))loadOrders()},15000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
