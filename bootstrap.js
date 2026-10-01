@@ -96,7 +96,10 @@ express.application.get=function(path,...handlers){
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
   });
-  if(path==='/auth/google') return originalGet.call(this,path,async(_req,res,next)=>{try{
+  if(path==='/auth/google') return originalGet.call(this,path,async(req,res,next)=>{try{
+    const user=await sessionUser(req);
+    const business=await prisma.business.findFirst({where:{members:{some:{userId:user?.id||''}}},orderBy:{createdAt:'asc'},select:{id:true}});
+    if(!(await adminFeatureAllowed(req,res,'GOOGLE',business?.id)))return;
     const state=oauthState();
     res.setHeader('Set-Cookie',`rp_oauth_state=${encodeURIComponent(state)}; Max-Age=600; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV==='production'?'; Secure':''}`);
     res.redirect(googleAuthUrl(state));
@@ -126,6 +129,7 @@ express.application.get=function(path,...handlers){
   }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/campaigns') return originalGet.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
+    if(!(await adminFeatureAllowed(req,res,'WHATSAPP',String(req.params.businessId))))return;
     const business=await prisma.business.findFirst({where:{id:req.params.businessId,...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})}});
     if(!business)return res.status(403).json({error:'Business access denied'});
     res.json(await prisma.campaign.findMany({where:{businessId:business.id},orderBy:{scheduledAt:'desc'}}));
@@ -185,6 +189,7 @@ express.application.post=function(path,...handlers){
   if(path==='/api/businesses/:businessId/campaigns') return originalPost.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
     const businessId=String(req.params.businessId);
+    if(!(await adminFeatureAllowed(req,res,'WHATSAPP',businessId)))return;
     const business=await prisma.business.findFirst({where:{id:businessId,...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})}});
     if(!business)return res.status(403).json({error:'Business access denied'});
     const p=z.object({name:z.string().trim().min(1).max(120),message:z.string().trim().min(1).max(4000),scheduledAt:z.string().datetime().optional()}).safeParse(req.body);
