@@ -127,10 +127,9 @@
   async function boot(){
     addAvailability();
     setInterval(loadAvailability,30000);
-    if(!(await allowed()))return;
     addNav();addSection();setTimeout(()=>loadOrders(),700);
-    setInterval(async()=>{if(await allowed())addNav()},3000);
-    setInterval(async()=>{if(await allowed()&&$('orders')?.classList.contains('active'))loadOrders()},15000);
+    setInterval(()=>addNav(),3000);
+    setInterval(()=>{if($('orders')?.classList.contains('active'))loadOrders()},15000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
