@@ -55,15 +55,15 @@
   }
 
   async function getBusinessId(){
+    if(window.businessId){window.__reputeBusinessId=window.businessId;return window.businessId;}
     if(window.__reputeBusinessId)return window.__reputeBusinessId;
-    const r=await fetch('/api/business/status',{credentials:'include'});
-    const j=await r.json().catch(()=>({}));
-    if(j.businessId){window.__reputeBusinessId=j.businessId;return j.businessId;}
-    const r2=await fetch('/api/businesses',{credentials:'include'});
-    const rows=await r2.json();
-    if(!Array.isArray(rows)||!rows[0]?.id)throw new Error('No business found');
-    window.__reputeBusinessId=rows[0].id;
-    return rows[0].id;
+    const r=await fetch('/api/businesses',{credentials:'include'});
+    const rows=await r.json().catch(()=>[]);
+    if(Array.isArray(rows)&&rows[0]?.id){window.__reputeBusinessId=rows[0].id;window.businessId=rows[0].id;window.adminFeatureFlags=rows[0].adminFeatureFlags||window.adminFeatureFlags||{};return rows[0].id;}
+    const r2=await fetch('/api/business/status',{credentials:'include'});
+    const j=await r2.json().catch(()=>({}));
+    if(j.businessId){window.__reputeBusinessId=j.businessId;window.businessId=j.businessId;return j.businessId;}
+    throw new Error('No business found');
   }
 
   async function upload(itemId,file){
