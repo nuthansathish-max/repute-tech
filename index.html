@@ -50,6 +50,7 @@ async function load(){
     if(!bs.length)throw new Error('No business found. Complete onboarding first.');
     businessId=bs[0].id;
     window.businessId=businessId;
+    window.adminFeatureFlags=bs[0].adminFeatureFlags||{};
     $('businessName').textContent=`${bs[0].name} · ${bs[0].type||'Business'}`;
 
     let access={role:window.currentUser?.role||'STAFF',permissions:{}};
@@ -58,7 +59,12 @@ async function load(){
     window.businessRole=access.role||window.currentUser?.role||'STAFF';
     if(window.reputeApplyPermissions) await window.reputeApplyPermissions();
     const owner=String(window.businessRole).toUpperCase()==='OWNER';
-    const can=k=>owner||window.businessPermissions[k]===true;
+    const featureForPermission={REVIEWS:'REVIEWS',AI:'AI',QR:'QR',MENU:'MENU',WHATSAPP:'WHATSAPP',ORDERS:'ORDERS',BILLING:'BILLING'};
+    const can=k=>{
+      const feature=featureForPermission[k];
+      if(feature&&window.adminFeatureFlags?.[feature]===false)return false;
+      return owner||window.businessPermissions[k]===true;
+    };
 
     if(can('DASHBOARD')){
       try{
@@ -100,7 +106,11 @@ $('addItem').onclick=async()=>{try{await post(`/menus/${$('menuSelect').value}/i
 $('createCampaign').onclick=async()=>{try{await post(`/businesses/${businessId}/campaigns`,{name:$('campName').value,message:$('campMessage').value});toast('Campaign created');await loadCampaigns()}catch(e){toast(e.message)}};
 $('aiGenerate').onclick=async()=>{try{const d=await post('/reviews/ai-reply',{text:$('aiText').value});$('aiOutput').style.display='block';$('aiOutput').textContent=d.reply||d.text||'No suggestion';}catch(e){$('aiOutput').style.display='block';$('aiOutput').textContent=e.message}};
 $('syncGoogle').onclick=async()=>{try{await post(`/businesses/${businessId}/reviews/sync`,{});toast('Google review sync started');await load()}catch(e){toast(e.message)}};$('refresh').onclick=()=>load();$('loadReviews').onclick=()=>loadReviews();
-function showPage(page){const target=$(page);if(!target)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));target.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const active=document.querySelector(`[data-page="${page}"]`);if(active)$('heading').textContent=active.textContent.trim();window.scrollTo({top:0,behavior:'smooth'})}
+function showPage(page){
+  const featureForPage={reviews:'REVIEWS',ai:'AI',qr:'QR',menu:'MENU',campaigns:'WHATSAPP',orders:'ORDERS',billing:'BILLING'};
+  const blocked=featureForPage[page];
+  if(blocked&&window.adminFeatureFlags?.[blocked]===false){toast('This feature has been disabled by the platform administrator.');return}
+  const target=$(page);if(!target)return;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));target.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const active=document.querySelector(`[data-page="${page}"]`);if(active)$('heading').textContent=active.textContent.trim();window.scrollTo({top:0,behavior:'smooth'})}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
 initAuth();
 </script>
