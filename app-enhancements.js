@@ -28,12 +28,12 @@
 
   async function getBusiness(){
     try{
-      const status=await req('/business/status');
-      if(status?.businessId)return {id:status.businessId,name:status.businessName||'your business'};
+      const bs=await req('/businesses');
+      if(Array.isArray(bs)&&bs.length){window.businessId=bs[0].id;window.adminFeatureFlags=bs[0].adminFeatureFlags||{};return bs[0];}
     }catch{}
-    const bs=await req('/businesses');
-    if(!Array.isArray(bs)||!bs.length)throw new Error('No business found. Please complete business setup.');
-    return bs[0];
+    const status=await req('/business/status');
+    if(status?.businessId)return {id:status.businessId,name:status.businessName||'your business',adminFeatureFlags:status.adminFeatureFlags||{}};
+    throw new Error('No business found. Please complete business setup.');
   }
 
   function notify(msg){if(typeof window.toast==='function')window.toast(msg);else alert(msg)}
@@ -154,7 +154,7 @@
 
   async function enhanceMenu(){
     const create=$('createMenu'),add=$('addItem'),list=$('menuList'),select=$('menuSelect');if(!create||!add||!list||!select)return;
-    async function render(){const b=await getBusiness();const rows=await req(`/businesses/${encodeURIComponent(b.id)}/menus`);list.innerHTML=rows.map(m=>`<div class="item"><b>${esc(m.name)}</b><div class="sub">${m.isPublished?'Published':'Draft'} · ${m.items?.length||0} items</div><div style="margin-top:8px">${(m.items||[]).map(i=>`<div class="sub">• ${esc(i.name)} — ₹${esc(i.price)}${i.category?' · '+esc(i.category):''}</div>`).join('')||'<div class="sub">No items yet.</div>'}</div></div>`).join('')||'<div class="sub">No menus yet.</div>';select.innerHTML=rows.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+    async function render(){const b=await getBusiness();const rows=await req(`/businesses/${encodeURIComponent(b.id)}/menus`);list.innerHTML=rows.map(m=>`<div class="item"><b>${esc(m.name)}</b><div class="sub">${m.isPublished?'Published':'Draft'} · ${m.items?.length||0} items</div><div style="margin-top:8px">${(m.items||[]).map(i=>`<div class="sub">• ${esc(i.name)} — ₹${esc(i.price)}${i.category?' · '+esc(i.category):''}</div>`).join('')||'<div class="sub">No items yet.</div>'}</div><button class="btn secondary" type="button" data-edit-menu="${esc(m.id)}" style="margin-top:10px">Edit menu & items</button></div>`).join('')||'<div class="sub">No menus yet.</div>';select.innerHTML=rows.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}
     create.onclick=async()=>{create.disabled=true;try{const b=await getBusiness();const name=$('menuName').value.trim();if(!name)throw new Error('Enter a menu name');await post('/menus',{businessId:b.id,name,isPublished:$('menuPublished').checked});notify('Menu created');$('menuName').value='';await render()}catch(e){notify(e.message)}finally{create.disabled=false}};
     add.onclick=async()=>{add.disabled=true;try{if(!select.value)throw new Error('Create a menu first');const name=$('itemName').value.trim();const price=Number($('itemPrice').value);if(!name)throw new Error('Enter an item name');if(!Number.isFinite(price)||price<0)throw new Error('Enter a valid price');await post(`/menus/${encodeURIComponent(select.value)}/items`,{name,price,category:$('itemCategory').value.trim(),description:$('itemDescription').value.trim()});notify('Menu item added');$('itemName').value='';$('itemPrice').value='';$('itemCategory').value='';$('itemDescription').value='';await render()}catch(e){notify(e.message)}finally{add.disabled=false}};
     try{await render()}catch(e){list.innerHTML=`<div class="sub">${esc(e.message)}</div>`}
