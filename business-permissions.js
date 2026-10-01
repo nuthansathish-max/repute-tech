@@ -91,25 +91,25 @@ function permissionForPath(path, method) {
   return null;
 }
 
-function adminFeatureForPath(path) {
+function adminFeaturesForPath(path) {
   path = String(path || '').toLowerCase();
 
-  if (path.includes('google')) return 'GOOGLE';
-  if (path.includes('whatsapp')) return 'WHATSAPP';
-  if (path.includes('ai')) return 'AI';
-  if (path.includes('review')) return 'REVIEWS';
-  if (path.includes('order')) return 'ORDERS';
-  if (
-    path.includes('billing') ||
-    path.includes('pos') ||
-    path.includes('invoice')
-  ) return 'BILLING';
-  if (path.includes('menu')) return 'MENU';
-  if (path.includes('qr')) return 'QR';
+  // Google connection, review sync, and Google publishing require the
+  // platform's Google feature. Review operations also require Reviews.
+  if (path === '/auth/google' || path === '/auth/google/callback' || path === '/api/google/status') return ['GOOGLE'];
+  if (path.includes('/businesses/') && path.includes('/google/')) return ['GOOGLE','REVIEWS'];
+  if (path.includes('/reviews/') && (path.endsWith('/publish') || path.endsWith('/sync'))) return ['REVIEWS','GOOGLE'];
+  if (path.includes('/reviews/') && (path.includes('/ai-') || path.endsWith('/analyze'))) return ['REVIEWS','AI'];
+  if (path.includes('/whatsapp')) return ['WHATSAPP'];
+  if (path.includes('/ai-settings') || path.includes('/ai')) return ['AI'];
+  if (path.includes('/review')) return ['REVIEWS'];
+  if (path.includes('/order')) return ['ORDERS'];
+  if (path.includes('/billing') || path.includes('/pos') || path.includes('/invoice')) return ['BILLING'];
+  if (path.includes('/menu')) return ['MENU'];
+  if (path.includes('/qr')) return ['QR'];
 
-  return null;
+  return [];
 }
-
 async function businessIdForFeature(req, user) {
   const direct = req.businessId || await businessIdForRequest(req);
   if (direct) return String(direct);
@@ -122,8 +122,8 @@ async function businessIdForFeature(req, user) {
 }
 
 async function enforceAdminFeature(req, res, user) {
-  const feature = adminFeatureForPath(req.path);
-  if (!feature) return true;
+  const features = adminFeaturesForPath(req.path);
+  if (!features.length) return true;
   const businessId = await businessIdForFeature(req, user);
   if (!businessId) return true;
 
@@ -137,10 +137,11 @@ async function enforceAdminFeature(req, res, user) {
   }
   if (!flags || typeof flags !== 'object' || Array.isArray(flags)) flags = {};
 
-  if (flags[feature] === false) {
+  const disabled = features.find(feature => flags[feature] === false);
+  if (disabled) {
     res.status(403).json({
       error: 'This feature has been disabled by the platform administrator.',
-      feature,
+      feature: disabled,
       featureDisabled: true
     });
     return false;
@@ -151,14 +152,14 @@ async function enforceAdminFeature(req, res, user) {
 export async function businessPermissionMiddleware(req, res, next) {
   try {
     const googleAuthPath = req.path === '/auth/google' || req.path === '/auth/google/callback';
-    const adminFeature = adminFeatureForPath(req.path);
+    const adminFeatures = adminFeaturesForPath(req.path);
     const apiPath = req.path.startsWith('/api/');
-    if (!apiPath && !googleAuthPath && !adminFeature) return next();
+    if (!apiPath && !googleAuthPath && !adminFeatures.length) return next();
     if (apiPath && (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
-        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') && !adminFeature) return next();
+        req.path === '/api/whatsapp/webhook' || req.path === '/api/plans') && !adminFeatures.length) return next();
 
     const needed = permissionForPath(req.path, req.method);
-    if (!needed && !adminFeature) return next();
+    if (!needed && !adminFeatures.length) return next();
 
     const user = await currentUser(req);
     if (!user) return next();
