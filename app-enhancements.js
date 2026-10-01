@@ -71,15 +71,18 @@
         const status=String(r.replyStatus||'').toUpperCase();
         const hasReply=!!String(r.aiReply||'').trim();
         const googlePublished=status==='PUBLISHED'||String(r.replyState||'').toUpperCase()==='PUBLISHED';
+        const googleAllowed=window.adminFeatureFlags?.GOOGLE!==false;
+        const aiAllowed=window.adminFeatureFlags?.AI!==false;
         let action='';
         if(googlePublished) action='<button class="btn secondary" type="button" disabled>Published to Google</button>';
-        else if(status==='APPROVED') action=`<button class="btn" type="button" data-publish-review="${esc(r.id)}">Publish to Google</button>`;
-        else if(status==='PENDING_APPROVAL'&&hasReply) action=`<button class="btn" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`;
-        else if(hasReply) action=`<button class="btn secondary" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`;
+        else if(status==='APPROVED') action=googleAllowed?`<button class="btn" type="button" data-publish-review="${esc(r.id)}">Publish to Google</button>`:'<button class="btn secondary" type="button" disabled>Google publishing disabled</button>';
+        else if(status==='PENDING_APPROVAL'&&hasReply) action=aiAllowed?`<button class="btn" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`:'<button class="btn secondary" type="button" disabled>AI feature disabled</button>';
+        else if(hasReply) action=aiAllowed?`<button class="btn secondary" type="button" data-approve-review="${esc(r.id)}">Approve Reply</button>`:'<button class="btn secondary" type="button" disabled>AI feature disabled</button>';
         const ai=hasReply?`<div class="reply"><strong>AI reply</strong><div style="margin-top:5px">${esc(r.aiReply)}</div></div>`:'';
         const statusText=googlePublished?'Published to Google':status==='APPROVED'?'Approved — ready to publish':status==='PENDING_APPROVAL'?'Pending approval':(status||'No AI reply yet');
         const rating=Math.max(0,Math.min(5,Number(r.rating)||0));
-        return `<div class="item"><div class="reviewtop"><b>${esc(r.authorName)}</b><span class="stars">${'★'.repeat(rating)+'☆'.repeat(5-rating)}</span></div><p>${esc(r.text||'No text')}</p><span class="pill">${esc(statusText)}</span><div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn secondary" type="button" data-use-review="${esc(r.id)}">Use for AI</button>${action}</div>${ai}</div>`;
+        const useForAi=aiAllowed?`<button class="btn secondary" type="button" data-use-review="${esc(r.id)}">Use for AI</button>`:'<button class="btn secondary" type="button" disabled>AI feature disabled</button>';
+        return `<div class="item"><div class="reviewtop"><b>${esc(r.authorName)}</b><span class="stars">${'★'.repeat(rating)+'☆'.repeat(5-rating)}</span></div><p>${esc(r.text||'No text')}</p><span class="pill">${esc(statusText)}</span><div class="row" style="margin-top:10px;flex-wrap:wrap">${useForAi}${action}</div>${ai}</div>`;
       }).join('')||'<div class="sub">No reviews.</div>';
     }
     list.onclick=async e=>{
