@@ -38,6 +38,32 @@
 
   function notify(msg){if(typeof window.toast==='function')window.toast(msg);else alert(msg)}
 
+  async function enhanceBusinessAvailability(){
+    const button=$('businessAvailability');
+    if(!button)return;
+    let current=null;
+    const draw=()=>{
+      button.textContent=current===true?'Business: OPEN':current===false?'Business: CLOSED':'Business: —';
+      button.className='btn '+(current===true?'':'danger');
+      button.title=current===true?'Click to close the business':'Click to open the business';
+    };
+    try{
+      const d=await req('/business/status');
+      current=Boolean(d.isOpen);draw();
+      button.onclick=async()=>{
+        const next=!current;
+        button.disabled=true;
+        button.textContent=next?'Opening…':'Closing…';
+        try{
+          const saved=await req('/business/status',{method:'PATCH',body:JSON.stringify({isOpen:next})});
+          current=Boolean(saved.isOpen);draw();
+          notify(current?'Business is now OPEN':'Business is now CLOSED');
+        }catch(e){draw();notify(e.message||'Unable to update business status')}
+        finally{button.disabled=false}
+      };
+    }catch(e){button.textContent='Business: —';button.disabled=true}
+  }
+
   const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI Assistant'],['qr','▣ Smart QR'],['menu','☰ Digital Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['orders','▤ Orders'],['pricing','💳 Plans & Pricing'],['staff','👥 Staff Management'],['settings','⚙ Account Settings']];
 
   function navigate(page){
