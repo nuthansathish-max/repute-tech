@@ -56,9 +56,17 @@ function xlsxCell(v){
   if(typeof v==='boolean')return '<c t="b"><v>'+(v?1:0)+'</v></c>';
   return '<c t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(String(v))+'</t></is></c>';
 }
+function xlsxColumn(n){
+  let s='';
+  while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1}
+  return s;
+}
 function xlsxSheet(rows){
   const safe=rows.length?rows:[['No data']];
-  const body=safe.map((row,r)=>'<row r="'+(r+1)+'">'+row.map((v,i)=>'<c r="'+String.fromCharCode(65+(i%26))+(r+1)+'"'+xlsxCell(v).slice(1)).join('')+'</row>').join('');
+  const body=safe.map((row,r)=>{
+    const cells=row.map((v,i)=>'<c r="'+xlsxColumn(i)+(r+1)+'"'+xlsxCell(v).slice(2));
+    return '<row r="'+(r+1)+'">'+cells.join('')+'</row>';
+  }).join('');
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+body+'</sheetData></worksheet>';
 }
 function makeXlsx(sheets){
