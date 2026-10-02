@@ -443,18 +443,24 @@ function install(app){
   let featureFlags=flagRows?.[0]?.adminFeatureFlags||{};
   if(typeof featureFlags==='string'){try{featureFlags=JSON.parse(featureFlags)}catch{featureFlags={}}}
   const pendingPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id,status:'PENDING'},orderBy:{createdAt:'asc'}});
-  const [orderCount,paidOrderCount,orderValue,paidOrderValue]=await Promise.all([
-   prisma.order.count({where:{businessId:b.id}}),
-   prisma.order.count({where:{businessId:b.id,paymentStatus:'PAID'}}),
-   prisma.order.aggregate({where:{businessId:b.id},_sum:{total:true}}),
-   prisma.order.aggregate({where:{businessId:b.id,paymentStatus:'PAID'},_sum:{total:true}})
-  ]);
+  let revenue={orderCount:0,paidOrderCount:0,totalOrderValue:0,paidRevenue:0};
+  try{
+   const [orderCount,paidOrderCount,orderValue,paidOrderValue]=await Promise.all([
+    prisma.order.count({where:{businessId:b.id}}),
+    prisma.order.count({where:{businessId:b.id,paymentStatus:'PAID'}}),
+    prisma.order.aggregate({where:{businessId:b.id},_sum:{total:true}}),
+    prisma.order.aggregate({where:{businessId:b.id,paymentStatus:'PAID'},_sum:{total:true}})
+   ]);
+   revenue={orderCount,paidOrderCount,totalOrderValue:Number(orderValue._sum.total||0),paidRevenue:Number(paidOrderValue._sum.total||0)};
+  }catch(e){
+   console.error('Admin business revenue load failed:',e?.message||e);
+  }
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
    address:b.locations?.[0]?.address||null,
    subscription:b.subscription,members,
-   revenue:{orderCount,paidOrderCount,totalOrderValue:Number(orderValue._sum.total||0),paidRevenue:Number(paidOrderValue._sum.total||0)},
+   revenue,
    featureFlags,
    googleConnections:0,
    whatsappConnected:false,
