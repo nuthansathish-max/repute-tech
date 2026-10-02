@@ -147,21 +147,10 @@ function showPage(page){
       blockedNotice=document.createElement('div');
       blockedNotice.dataset.featureBlocked='1';
       blockedNotice.className='card';
-      blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid '+blockedTheme.border+';border-radius:18px;box-shadow:0 14px 36px rgba(15,23,42,.09);background:#fff;';
-      blockedNotice.innerHTML='<div style="padding:24px 22px;background:linear-gradient(135deg,'+blockedTheme.soft+',#fff);border-bottom:1px solid '+blockedTheme.border+'"><div style="display:flex;align-items:center;gap:14px"><div style="width:50px;height:50px;border-radius:15px;background:'+blockedTheme.accent+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 8px 18px rgba(15,23,42,.12)">'+blockedTheme.icon+'</div><div style="min-width:0"><div style="font-size:18px;font-weight:800;color:#111827">Dashboard unavailable</div><div data-blocked-label style="font-size:13px;color:#64748b;margin-top:4px">'+blockedTheme.label+'</div></div></div></div><div style="padding:22px"><div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:7px">This feature has been disabled by the platform administrator.</div><div data-blocked-body style="font-size:13px;line-height:1.6;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div data-blocked-tag style="margin-top:17px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:'+blockedTheme.soft+';color:'+blockedTheme.accent+';font-size:12px;font-weight:700;border:1px solid '+blockedTheme.border+'">'+blockedTheme.tag+'</div></div>';
       target.prepend(blockedNotice);
-    }else{
-      blockedNotice.style.borderColor=blockedTheme.border;
-      blockedNotice.querySelector('[data-blocked-label]')?.replaceChildren(document.createTextNode(blockedTheme.label));
-      const header=blockedNotice.querySelector('[data-blocked-label]')?.parentElement?.parentElement?.parentElement;
-      if(header)header.style.background='linear-gradient(135deg,'+blockedTheme.soft+',#fff)';
-      const icon=blockedNotice.querySelector('[data-blocked-label]')?.parentElement?.previousElementSibling;
-      if(icon){icon.style.background=blockedTheme.accent;icon.textContent=blockedTheme.icon}
-      const body=blockedNotice.querySelector('[data-blocked-body]');
-      if(body)body.textContent='Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.';
-      const tag=blockedNotice.querySelector('[data-blocked-tag]');
-      if(tag){tag.textContent=blockedTheme.tag;tag.style.background=blockedTheme.soft;tag.style.color=blockedTheme.accent;tag.style.borderColor=blockedTheme.border}
     }
+    blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid '+blockedTheme.border+';border-radius:18px;box-shadow:0 14px 36px rgba(15,23,42,.09);background:#fff;';
+    blockedNotice.innerHTML='<div style="padding:24px 22px;background:linear-gradient(135deg,'+blockedTheme.soft+',#fff);border-bottom:1px solid '+blockedTheme.border+'"><div style="display:flex;align-items:center;gap:14px"><div style="width:50px;height:50px;border-radius:15px;background:'+blockedTheme.accent+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 8px 18px rgba(15,23,42,.12)">'+blockedTheme.icon+'</div><div style="min-width:0"><div style="font-size:18px;font-weight:800;color:#111827">Dashboard unavailable</div><div data-blocked-label style="font-size:13px;color:#64748b;margin-top:4px">'+blockedTheme.label+'</div></div></div></div><div style="padding:22px"><div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:7px">This feature has been disabled by the platform administrator.</div><div data-blocked-body style="font-size:13px;line-height:1.6;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div data-blocked-tag style="margin-top:17px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:'+blockedTheme.soft+';color:'+blockedTheme.accent+';font-size:12px;font-weight:700;border:1px solid '+blockedTheme.border+'">'+blockedTheme.tag+'</div></div>';
     blockedNotice.style.display='';
     window.scrollTo({top:0,behavior:'smooth'});
     return;
