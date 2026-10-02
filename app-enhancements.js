@@ -39,29 +39,53 @@
   function notify(msg){if(typeof window.toast==='function')window.toast(msg);else alert(msg)}
 
   async function enhanceBusinessAvailability(){
-    const button=$('businessAvailability');
-    if(!button)return;
-    let current=null;
-    const draw=()=>{
-      button.textContent=current===true?'Business: OPEN':current===false?'Business: CLOSED':'Business: —';
-      button.className='btn '+(current===true?'':'danger');
-      button.title=current===true?'Click to close the business':'Click to open the business';
+    const main=document.querySelector('main.main');
+    if(!main)return;
+    let card=$('businessAvailability');
+    if(!card){
+      card=document.createElement('div');
+      card.id='businessAvailability';
+      card.className='card';
+      card.style.cssText='margin:0 0 18px;padding:18px 20px;border:2px solid var(--line);position:relative;z-index:2';
+      card.innerHTML='<div class="row" style="justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap"><div style="min-width:220px"><div class="section-title" style="margin:0 0 5px;font-size:18px">Business availability</div><div id="businessAvailabilityText" class="sub">Checking your business status…</div></div><button id="businessAvailabilityToggle" class="btn" type="button" style="min-width:150px;font-size:14px;padding:12px 18px">Checking…</button></div>';
+      main.insertBefore(card,main.firstElementChild);
+    }
+    const text=$('businessAvailabilityText'),btn=$('businessAvailabilityToggle');
+    if(!text||!btn)return;
+    const render=open=>{
+      text.textContent=open?'OPEN — customers can view your hub and place new orders.':'CLOSED — customers can still view your hub, but new orders are unavailable.';
+      text.style.fontWeight='700';
+      text.style.color=open?'var(--good)':'var(--bad)';
+      btn.textContent=open?'Turn OFF':'Turn ON';
+      btn.className='btn '+(open?'danger':'');
+      btn.setAttribute('aria-label',open?'Turn business off':'Turn business on');
+      card.style.borderColor=open?'#bbf7d0':'#fecaca';
+      btn.disabled=false;
     };
     try{
       const d=await req('/business/status');
-      current=Boolean(d.isOpen);draw();
-      button.onclick=async()=>{
+      let current=Boolean(d.isOpen);
+      render(current);
+      if(btn.dataset.availabilityReady==='1')return;
+      btn.dataset.availabilityReady='1';
+      btn.addEventListener('click',async()=>{
         const next=!current;
-        button.disabled=true;
-        button.textContent=next?'Opening…':'Closing…';
+        btn.disabled=true;
+        btn.textContent=next?'Opening…':'Closing…';
         try{
           const saved=await req('/business/status',{method:'PATCH',body:JSON.stringify({isOpen:next})});
-          current=Boolean(saved.isOpen);draw();
-          notify(current?'Business is now OPEN':'Business is now CLOSED');
-        }catch(e){draw();notify(e.message||'Unable to update business status')}
-        finally{button.disabled=false}
-      };
-    }catch(e){button.textContent='Business: —';button.disabled=true}
+          current=Boolean(saved.isOpen);
+          render(current);
+          notify(current?'Business is now ON.':'Business is now OFF.');
+        }catch(e){
+          render(current);
+          notify(e.message||'Unable to update business status');
+        }
+      });
+    }catch(e){
+      text.textContent=e.message||'Unable to load business status';
+      btn.disabled=true;
+    }
   }
 
   const pages=[['dashboard','⌂ Dashboard'],['reviews','★ Reviews'],['ai','✦ AI Assistant'],['qr','▣ Smart QR'],['menu','☰ Digital Menu'],['customers','♙ Customers'],['campaigns','◉ WhatsApp'],['analytics','◒ Analytics'],['orders','▤ Orders'],['pricing','💳 Plans & Pricing'],['staff','👥 Staff Management'],['settings','⚙ Account Settings']];
