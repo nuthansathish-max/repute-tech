@@ -49,6 +49,30 @@ function makeZip(files){
   return Buffer.concat([...chunks,centralData,end]);
 }
 function exportJson(value){return JSON.stringify(value,(_,v)=>typeof v==='bigint'?String(v):v,null,2);}
+function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
+function xlsxCell(v){
+  if(v===null||v===undefined)return '<c t="inlineStr"><is><t></t></is></c>';
+  if(typeof v==='number'&&Number.isFinite(v))return '<c><v>'+v+'</v></c>';
+  if(typeof v==='boolean')return '<c t="b"><v>'+(v?1:0)+'</v></c>';
+  return '<c t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(String(v))+'</t></is></c>';
+}
+function xlsxSheet(rows){
+  const safe=rows.length?rows:[['No data']];
+  const body=safe.map((row,r)=>'<row r="'+(r+1)+'">'+row.map((v,i)=>'<c r="'+String.fromCharCode(65+(i%26))+(r+1)+'"'+xlsxCell(v).slice(1)).join('')+'</row>').join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+body+'</sheetData></worksheet>';
+}
+function makeXlsx(sheets){
+  const files=[];
+  const sheetEntries=sheets.map((s,i)=>({name:s.name,rows:s.rows,index:i+1}));
+  const workbook='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+sheetEntries.map(s=>'<sheet name="'+xmlEsc(s.name.slice(0,31))+'" sheetId="'+s.index+'" r:id="rId'+s.index+'"/>').join('')+'</sheets></workbook>';
+  const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheetEntries.map(s=>'<Relationship Id="rId'+s.index+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+s.index+'.xml"/>').join('')+'</Relationships>';
+  const types='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+sheetEntries.map(s=>'<Override PartName="/xl/worksheets/sheet'+s.index+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>';
+  files.push({name:'[Content_Types].xml',content:types},{name:'_rels/.rels',content:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},{name:'xl/workbook.xml',content:workbook},{name:'xl/_rels/workbook.xml.rels',content:rels});
+  for(const s of sheetEntries)files.push({name:'xl/worksheets/sheet'+s.index+'.xml',content:xlsxSheet(s.rows)});
+  return makeZip(files);
+}
+function tableRows(headers,items,fields){return [headers,...items.map(item=>fields.map(field=>{const v=typeof field==='function'?field(item):item?.[field];if(v instanceof Date)return v.toISOString();return v}))]}
+
 
 async function readAdminJsonBody(req){
   if(req.body && typeof req.body==='object')return req.body;
@@ -275,7 +299,7 @@ function adminPage(){
    if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||'Download failed')}
    const blob=await r.blob();
    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
-   const disposition=r.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="([^"]+)"/);a.download=match?.[1]||'business-data.zip';
+   const disposition=r.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="([^"]+)"/);a.download=match?.[1]||'business-data.xlsx';
    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }catch(e){alert('Unable to download business data: '+e.message)}
   finally{if(button){button.disabled=false;button.textContent='⇩ Download Data'}}
@@ -567,55 +591,36 @@ function install(app){
   if(!b)return res.status(404).json({error:'Business not found'});
   const [members,locations,reviews,menus,menuItems,qrCodes,qrScans,customers,customerInteractions,consents,campaigns,whatsappConnection,campaignMessages,planRequests,subscription,notifications,reviewSyncLogs,orders,orderItems,googleConnections]=await Promise.all([
    prisma.businessMember.findMany({where:{businessId},include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}),
-   prisma.location.findMany({where:{businessId}}),
-   prisma.review.findMany({where:{businessId}}),
-   prisma.menu.findMany({where:{businessId}}),
-   prisma.menuItem.findMany({where:{menu:{businessId}}}),
-   prisma.smartQr.findMany({where:{businessId}}),
-   prisma.qrScan.findMany({where:{qr:{businessId}}}),
-   prisma.customer.findMany({where:{businessId}}),
-   prisma.customerInteraction.findMany({where:{customer:{businessId}}}),
-   prisma.consent.findMany({where:{customer:{businessId}}}),
-   prisma.campaign.findMany({where:{businessId}}),
-   prisma.whatsAppConnection.findUnique({where:{businessId},select:{id:true,businessId:true,phoneNumberId:true,wabaId:true,displayPhone:true,tokenExpiresAt:true,connectedAt:true,status:true}}),
-   prisma.campaignMessage.findMany({where:{campaign:{businessId}}}),
-   prisma.planRequest.findMany({where:{businessId}}),
-   prisma.subscription.findUnique({where:{businessId}}),
-   prisma.notification.findMany({where:{businessId}}),
-   prisma.reviewSyncLog.findMany({where:{businessId}}),
-   prisma.order.findMany({where:{businessId}}),
-   prisma.orderItem.findMany({where:{order:{businessId}}}),
-   prisma.googleConnection.findMany({where:{businessId},select:{id:true,userId:true,businessId:true,googleAccountId:true,expiresAt:true,scope:true,createdAt:true,updatedAt:true}})
+   prisma.location.findMany({where:{businessId}}),prisma.review.findMany({where:{businessId}}),prisma.menu.findMany({where:{businessId}}),prisma.menuItem.findMany({where:{menu:{businessId}}}),prisma.smartQr.findMany({where:{businessId}}),prisma.qrScan.findMany({where:{qr:{businessId}}}),prisma.customer.findMany({where:{businessId}}),prisma.customerInteraction.findMany({where:{customer:{businessId}}}),prisma.consent.findMany({where:{customer:{businessId}}}),prisma.campaign.findMany({where:{businessId}}),
+   prisma.whatsAppConnection.findUnique({where:{businessId},select:{id:true,businessId:true,phoneNumberId:true,wabaId:true,displayPhone:true,tokenExpiresAt:true,connectedAt:true,status:true}}),prisma.campaignMessage.findMany({where:{campaign:{businessId}}}),prisma.planRequest.findMany({where:{businessId}}),prisma.subscription.findUnique({where:{businessId}}),prisma.notification.findMany({where:{businessId}}),prisma.reviewSyncLog.findMany({where:{businessId}}),prisma.order.findMany({where:{businessId}}),prisma.orderItem.findMany({where:{order:{businessId}}}),prisma.googleConnection.findMany({where:{businessId},select:{id:true,userId:true,businessId:true,googleAccountId:true,expiresAt:true,scope:true,createdAt:true,updatedAt:true}})
   ]);
-  const safeBusiness={...b};
-  const files=[
-   {name:'business.json',content:exportJson(safeBusiness)},
-   {name:'members.json',content:exportJson(members)},
-   {name:'locations.json',content:exportJson(locations)},
-   {name:'reviews.json',content:exportJson(reviews)},
-   {name:'menus.json',content:exportJson(menus)},
-   {name:'menu-items.json',content:exportJson(menuItems)},
-   {name:'qr-codes.json',content:exportJson(qrCodes)},
-   {name:'qr-scans.json',content:exportJson(qrScans)},
-   {name:'customers.json',content:exportJson(customers)},
-   {name:'customer-interactions.json',content:exportJson(customerInteractions)},
-   {name:'customer-consents.json',content:exportJson(consents)},
-   {name:'campaigns.json',content:exportJson(campaigns)},
-   {name:'campaign-messages.json',content:exportJson(campaignMessages)},
-   {name:'whatsapp-connection.json',content:exportJson(whatsappConnection)},
-   {name:'google-connections.json',content:exportJson(googleConnections)},
-   {name:'plan-requests.json',content:exportJson(planRequests)},
-   {name:'subscription.json',content:exportJson(subscription)},
-   {name:'notifications.json',content:exportJson(notifications)},
-   {name:'review-sync-logs.json',content:exportJson(reviewSyncLogs)},
-   {name:'orders.json',content:exportJson(orders)},
-   {name:'order-items.json',content:exportJson(orderItems)},
-   {name:'README.txt',content:'reputetechs.in Business Data Export\\n\\nBusiness: '+b.name+'\\nBusiness ID: '+b.id+'\\nExported: '+new Date().toISOString()+'\\n\\nThis archive contains business-specific operational data from the selected business only. Authentication credentials, password hashes, Google access/refresh tokens, and WhatsApp access-token material are intentionally excluded for security.\\n'}
+  const sheets=[
+   {name:'Business Info',rows:[['Field','Value'],['Business ID',b.id],['Business Name',b.name],['Business Type',b.type],['Slug',b.slug],['Phone',b.phone],['Website',b.website],['Status',b.isOpen?'OPEN':'CLOSED'],['Created',b.createdAt],['AI Tone',b.aiTone],['AI Language',b.aiLanguage],['AI Auto Draft',b.aiAutoDraft],['AI Require Approval',b.aiRequireApproval]]},
+   {name:'Owners Members',rows:tableRows(['Member ID','User ID','Name','Email','Role','User Created'],members,[x=>x.id,x=>x.userId,x=>x.user?.name,x=>x.user?.email,x=>x.role,x=>x.user?.createdAt])},
+   {name:'Locations',rows:tableRows(['ID','Name','Address','Google Location ID','Google Account ID','Last Review Sync'],locations,['id','name','address','googleLocationId','googleAccountId','lastReviewSyncAt'])},
+   {name:'Customers',rows:tableRows(['ID','Name','Phone','Email','Notes','Last Interaction','Created'],customers,['id','name','phone','email','notes','lastInteractionAt','createdAt'])},
+   {name:'Customer Activity',rows:tableRows(['ID','Customer ID','Type','Channel','Created'],customerInteractions,['id','customerId','type','channel','createdAt'])},
+   {name:'Customer Consents',rows:tableRows(['ID','Customer ID','Type','Granted','Granted At','Revoked At'],consents,['id','customerId','type','granted','grantedAt','revokedAt'])},
+   {name:'Orders',rows:tableRows(['ID','Order Number','Customer ID','Customer Name','Phone','Fulfilment','Status','Payment Status','Payment Method','Total','Created','Updated'],orders,['id','orderNumber','customerId','customerName','customerPhone','fulfilmentType','status','paymentStatus','paymentMethod',x=>Number(x.total||0),'createdAt','updatedAt'])},
+   {name:'Order Items',rows:tableRows(['ID','Order ID','Menu Item ID','Item Name','Quantity','Unit Price','Line Total'],orderItems,['id','orderId','menuItemId','itemName','quantity',x=>Number(x.unitPrice||0),x=>Number(x.lineTotal||0)])},
+   {name:'Reviews',rows:tableRows(['ID','Location ID','Author','Rating','Text','Sentiment','Reply Status','Source','Created','Published'],reviews,['id','locationId','authorName','rating','text','sentiment','replyStatus','source','createdAt','publishedAt'])},
+   {name:'Menus',rows:tableRows(['ID','Name','Published','Created','Updated'],menus,['id','name','isPublished','createdAt','updatedAt'])},
+   {name:'Menu Items',rows:tableRows(['ID','Menu ID','Name','Description','Price','Available','Category'],menuItems,['id','menuId','name','description',x=>Number(x.price||0),'available','category'])},
+   {name:'QR Codes',rows:tableRows(['ID','Name','Slug','Destination','Scan Count','Active'],qrCodes,['id','name','slug',x=>exportJson(x.destination), 'scanCount','isActive'])},
+   {name:'QR Scans',rows:tableRows(['ID','QR ID','Scanned At','Source','User Agent','Referrer'],qrScans,['id','qrId','scannedAt','source','userAgent','referrer'])},
+   {name:'Campaigns',rows:tableRows(['ID','Name','Message','Status','Scheduled','Sent','Delivered','Failed'],campaigns,['id','name','message','status','scheduledAt','sentCount','deliveredCount','failedCount'])},
+   {name:'Campaign Messages',rows:tableRows(['ID','Campaign ID','Customer ID','To Phone','Status','Sent','Delivered','Read','Created'],campaignMessages,['id','campaignId','customerId','toPhone','status','sentAt','deliveredAt','readAt','createdAt'])},
+   {name:'Subscription',rows:tableRows(['ID','Plan','Status','Monthly Price','Interval','Provider','Current Period End','Trial Started','Trial Ends'],subscription?[subscription]:[],['id','plan','status',x=>Number(x.monthlyPrice||0),'billingInterval','provider','currentPeriodEnd','trialStartedAt','trialEndsAt'])},
+   {name:'Plan Requests',rows:tableRows(['ID','Plan Code','Plan Name','Price','Interval','Status','Payment Status','Requested','Approved','Rejected'],planRequests,['id','planCode','planName',x=>Number(x.price||0),'billingInterval','status','paymentStatus','createdAt','approvedAt','rejectedAt'])},
+   {name:'Google Connections',rows:tableRows(['ID','User ID','Business ID','Google Account ID','Expires','Scope','Created','Updated'],googleConnections,['id','userId','businessId','googleAccountId','expiresAt','scope','createdAt','updatedAt'])},
+   {name:'WhatsApp Connection',rows:tableRows(['ID','Business ID','Phone Number ID','WABA ID','Display Phone','Token Expires','Connected','Status'],whatsappConnection?[whatsappConnection]:[],['id','businessId','phoneNumberId','wabaId','displayPhone','tokenExpiresAt','connectedAt','status'])},
+   {name:'Notifications',rows:tableRows(['ID','User ID','Type','Title','Message','Read At','Created'],notifications,['id','userId','type','title','message','readAt','createdAt'])},
+   {name:'Review Sync Logs',rows:tableRows(['ID','Location ID','Status','Provider','Imported','Updated','Error','Created'],reviewSyncLogs,['id','locationId','status','provider','imported','updated','error','createdAt'])}
   ];
-  const zip=makeZip(files);
-  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_BUSINESS_DATA_EXPORTED',entity:'Business',entityId:b.id,metadata:{businessName:b.name,fileCount:files.length}}});
+  const xlsx=makeXlsx(sheets);
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_BUSINESS_DATA_EXPORTED',entity:'Business',entityId:b.id,metadata:{businessName:b.name,format:'xlsx',sheetCount:sheets.length}}});
   const safeName=String(b.name||'business').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,60)||'business';
-  res.status(200).set({'Content-Type':'application/zip','Content-Disposition':'attachment; filename="'+safeName+'-data.zip"','Content-Length':String(zip.length),'Cache-Control':'no-store'}).send(zip);
+  res.status(200).set({'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="'+safeName+'-data.xlsx"','Content-Length':String(xlsx.length),'Cache-Control':'no-store'}).send(xlsx);
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/businesses/:businessId/status',async(req,res,next)=>{try{
