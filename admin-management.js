@@ -241,6 +241,11 @@ function adminPage(){
    const address=b.address||'';
    const members=(b.members||[]).map(m=>'<div class="kv"><b>Member · '+esc(m.role)+'</b>'+esc(m.user?.name||'')+'<div class="sub">'+esc(m.user?.email||'')+'</div></div>').join('');
    const subscriptionDays=sub.currentPeriodEnd?Math.max(0,Math.ceil((new Date(sub.currentPeriodEnd).getTime()-Date.now())/(24*60*60*1000))):null;
+   const trialStartedAt=sub.trialStartedAt||null;
+   const trialEndsAt=sub.trialEndsAt||null;
+   const trialDaysRemaining=trialEndsAt?Math.max(0,Math.ceil((new Date(trialEndsAt).getTime()-Date.now())/(24*60*60*1000))):null;
+   const trialStatus=trialStartedAt&&trialEndsAt?(new Date(trialEndsAt).getTime()>=Date.now()?'ACTIVE TRIAL':'TRIAL EXPIRED'):'NOT ON TRIAL';
+   const latestPlan=b.latestPlanRequest||null;
    const flags=b.featureFlags||{};
    const flagOn=k=>flags[k]!==false;
    const featureRow=(key,label,subtext)=>{
@@ -300,7 +305,18 @@ function adminPage(){
       ((b.recentActivity||[]).map(a=>'<div class="recent-item"><div class="recent-time">'+date(a.createdAt)+'</div><div><b>'+esc(a.type==='ORDER'?'Order '+(a.orderNumber||''):'Customer activity')+'</b><div class="sub">'+esc(a.customerName||'Unnamed customer')+(a.type==='ORDER'?' · '+money(a.total||0)+' · '+esc(a.status||''):' · '+esc(a.activity||'')+(a.channel?' · '+esc(a.channel):''))+'</div></div></div>').join('')||'<div class="empty">No recent activity recorded for this business.</div>')+
       '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
-      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><label class="sub" style="display:block;margin-bottom:5px">Payment Status</label><select class="select" data-action="payment-status" data-request-id="'+esc(pending.id)+'"><option value="MANUAL" '+(pending.paymentStatus==='MANUAL'?'selected':'')+'>MANUAL</option><option value="PENDING" '+(pending.paymentStatus==='PENDING'?'selected':'')+'>PENDING</option><option value="PAID" '+(pending.paymentStatus==='PAID'?'selected':'')+'>PAID</option><option value="FAILED" '+(pending.paymentStatus==='FAILED'?'selected':'')+'>FAILED</option><option value="EXPIRED" '+(pending.paymentStatus==='EXPIRED'?'selected':'')+'>EXPIRED</option></select></div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
+      '<div class="detail">'+
+      '<div class="kv"><b>Current Plan</b>'+esc(sub.plan||'—')+'</div>'+
+      '<div class="kv"><b>Subscription Status</b>'+statusPill(sub.status||'—')+'</div>'+
+      '<div class="kv"><b>Billing Interval</b>'+esc(sub.billingInterval||'—')+'</div>'+
+      '<div class="kv"><b>Subscription Price</b>'+money(sub.monthlyPrice||0)+'</div>'+
+      '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'+
+      '<div class="kv"><b>Trial Started</b>'+date(trialStartedAt)+'</div>'+
+      '<div class="kv"><b>Trial Ends</b>'+date(trialEndsAt)+'</div>'+
+      '<div class="kv"><b>Trial Status</b>'+esc(trialStatus)+(trialStatus==='ACTIVE TRIAL'&&trialDaysRemaining!==null?' · '+trialDaysRemaining+' day'+(trialDaysRemaining===1?'':'s')+' remaining':'')+'</div>'+
+      '<div class="kv"><b>Latest Payment Status</b>'+esc(latestPlan?.paymentStatus||'—')+'</div>'+
+      '</div>'+
+      (pending?'<div class="kv warn" style="margin-top:12px"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><label class="sub" style="display:block;margin-bottom:5px">Payment Status</label><select class="select" data-action="payment-status" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'"><option value="MANUAL" '+(pending.paymentStatus==='MANUAL'?'selected':'')+'>MANUAL</option><option value="PENDING" '+(pending.paymentStatus==='PENDING'?'selected':'')+'>PENDING</option><option value="PAID" '+(pending.paymentStatus==='PAID'?'selected':'')+'>PAID</option><option value="FAILED" '+(pending.paymentStatus==='FAILED'?'selected':'')+'>FAILED</option><option value="EXPIRED" '+(pending.paymentStatus==='EXPIRED'?'selected':'')+'>EXPIRED</option></select></div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice" style="margin-top:12px">No pending subscription request for this business.</div>')+
     '</div>'+
     '<div class="wide"><div class="section-title"><h2>Business Feature Controls</h2><span>Admin control state</span></div><div class="detail">'+
       featureRow('GOOGLE','Google Business API','Allow this business to use Google integration')+
