@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
+import { deflateRawSync } from 'node:zlib';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
@@ -12,6 +13,42 @@ try{
 }catch(e){
   console.error('Admin feature-control column check failed:',e?.message||e);
 }
+
+
+function crc32(buf){
+  let crc=0xffffffff;
+  for(const byte of buf){
+    crc^=byte;
+    for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+  }
+  return (crc^0xffffffff)>>>0;
+}
+function dosDateTime(d=new Date()){
+  const year=Math.max(1980,d.getFullYear());
+  return {time:(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2),date:((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()};
+}
+function makeZip(files){
+  const chunks=[],central=[];let offset=0;const now=dosDateTime();
+  for(const file of files){
+    const name=Buffer.from(file.name,'utf8');
+    const raw=Buffer.from(file.content,'utf8');
+    const deflated=deflateRawSync(raw);
+    const useDeflated=deflated.length<raw.length;
+    const data=useDeflated?deflated:raw,method=useDeflated?8:0,crc=crc32(raw);
+    const local=Buffer.alloc(30+name.length);
+    local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(method,8);
+    local.writeUInt16LE(now.time,10);local.writeUInt16LE(now.date,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(data.length,18);local.writeUInt32LE(raw.length,22);
+    local.writeUInt16LE(name.length,26);local.writeUInt16LE(0,28);name.copy(local,30);chunks.push(local,data);
+    const cen=Buffer.alloc(46+name.length);
+    cen.writeUInt32LE(0x02014b50,0);cen.writeUInt16LE(20,4);cen.writeUInt16LE(20,6);cen.writeUInt16LE(0,8);cen.writeUInt16LE(method,10);
+    cen.writeUInt16LE(now.time,12);cen.writeUInt16LE(now.date,14);cen.writeUInt32LE(crc,16);cen.writeUInt32LE(data.length,20);cen.writeUInt32LE(raw.length,24);
+    cen.writeUInt16LE(name.length,28);cen.writeUInt16LE(0,30);cen.writeUInt16LE(0,32);cen.writeUInt16LE(0,34);cen.writeUInt16LE(0,36);cen.writeUInt32LE(0,38);cen.writeUInt32LE(offset,42);name.copy(cen,46);
+    central.push(cen);offset+=local.length+data.length;
+  }
+  const centralData=Buffer.concat(central);const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(0,4);end.writeUInt16LE(0,6);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(centralData.length,12);end.writeUInt32LE(offset,16);end.writeUInt16LE(0,20);
+  return Buffer.concat([...chunks,centralData,end]);
+}
+function exportJson(value){return JSON.stringify(value,(_,v)=>typeof v==='bigint'?String(v):v,null,2);}
 
 async function readAdminJsonBody(req){
   if(req.body && typeof req.body==='object')return req.body;
@@ -171,7 +208,7 @@ function adminPage(){
    };
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
-   $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><div><h2>'+esc(b.name)+'</h2><div class="sub">Business Management Center · '+esc(b.id)+'</div></div><button class="smallbtn" onclick="closeBusiness()">Close</button></div>'+
+   $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><div><h2>'+esc(b.name)+'</h2><div class="sub">Business Management Center · '+esc(b.id)+'</div></div><div style="display:flex;gap:7px;align-items:center"><button class="smallbtn" data-action="download-business-data" data-business-id="'+esc(b.id)+'">⇩ Download Data</button><button class="smallbtn" onclick="closeBusiness()">Close</button></div></div>'+
     '<div class="wide"><div class="section-title"><h2>Business Account Overview</h2><span>Account information</span></div><div class="detail">'+
     '<div class="kv"><b>Account Created</b>'+date(b.createdAt)+'</div>'+ 
     '<div class="kv"><b>Business Status</b>'+statusPill(b.isOpen?\'OPEN\':\'CLOSED\')+'</div>'+ 
@@ -222,11 +259,28 @@ function adminPage(){
     '</div></div>';
    $('businessDetail').classList.remove('hidden');
    $('businessDetail').querySelectorAll('[data-admin-feature]').forEach(button=>button.addEventListener('click',e=>{e.preventDefault();toggleAdminFeature(button.dataset.adminFeature,button.dataset.businessId,button)}));
+    const exportButton=$('businessDetail').querySelector('[data-action="download-business-data"]');
+    if(exportButton)exportButton.addEventListener('click',()=>downloadBusinessData(exportButton.dataset.businessId,exportButton));
   }catch(e){
    $('businessDetail').innerHTML='<div class="card danger"><b>Unable to load business</b><div class="sub">'+esc(e.message)+'</div></div>';
    $('businessDetail').classList.remove('hidden');
   }
  }
+
+ async function downloadBusinessData(id,button){
+  if(!id)return;
+  if(button){button.disabled=true;button.textContent='Preparing…'}
+  try{
+   const r=await fetch('/api/admin/businesses/'+encodeURIComponent(id)+'/export',{credentials:'include'});
+   if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||'Download failed')}
+   const blob=await r.blob();
+   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
+   const disposition=r.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="([^"]+)"/);a.download=match?.[1]||'business-data.zip';
+   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){alert('Unable to download business data: '+e.message)}
+  finally{if(button){button.disabled=false;button.textContent='⇩ Download Data'}}
+ }
+
  async function toggleBusinessAvailability(id,isOpen,button){
   if(!id)return;
   if(!confirm((isOpen?'Turn ON ':'Turn OFF ')+'this business?'))return;
@@ -505,6 +559,65 @@ function install(app){
   });
  } catch(e) { next(e); }
  });
+
+ originalGet.call(app,'/api/admin/businesses/:businessId/export',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const businessId=String(req.params.businessId||'');
+  const b=await prisma.business.findUnique({where:{id:businessId}});
+  if(!b)return res.status(404).json({error:'Business not found'});
+  const [members,locations,reviews,menus,menuItems,qrCodes,qrScans,customers,customerInteractions,consents,campaigns,whatsappConnection,campaignMessages,planRequests,subscription,notifications,reviewSyncLogs,orders,orderItems,googleConnections]=await Promise.all([
+   prisma.businessMember.findMany({where:{businessId},include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}),
+   prisma.location.findMany({where:{businessId}}),
+   prisma.review.findMany({where:{businessId}}),
+   prisma.menu.findMany({where:{businessId}}),
+   prisma.menuItem.findMany({where:{menu:{businessId}}}),
+   prisma.smartQr.findMany({where:{businessId}}),
+   prisma.qrScan.findMany({where:{qr:{businessId}}}),
+   prisma.customer.findMany({where:{businessId}}),
+   prisma.customerInteraction.findMany({where:{customer:{businessId}}}),
+   prisma.consent.findMany({where:{customer:{businessId}}}),
+   prisma.campaign.findMany({where:{businessId}}),
+   prisma.whatsAppConnection.findUnique({where:{businessId},select:{id:true,businessId:true,phoneNumberId:true,wabaId:true,displayPhone:true,tokenExpiresAt:true,connectedAt:true,status:true}}),
+   prisma.campaignMessage.findMany({where:{campaign:{businessId}}}),
+   prisma.planRequest.findMany({where:{businessId}}),
+   prisma.subscription.findUnique({where:{businessId}}),
+   prisma.notification.findMany({where:{businessId}}),
+   prisma.reviewSyncLog.findMany({where:{businessId}}),
+   prisma.order.findMany({where:{businessId}}),
+   prisma.orderItem.findMany({where:{order:{businessId}}}),
+   prisma.googleConnection.findMany({where:{businessId},select:{id:true,userId:true,businessId:true,googleAccountId:true,expiresAt:true,scope:true,createdAt:true,updatedAt:true}})
+  ]);
+  const safeBusiness={...b};
+  const files=[
+   {name:'business.json',content:exportJson(safeBusiness)},
+   {name:'members.json',content:exportJson(members)},
+   {name:'locations.json',content:exportJson(locations)},
+   {name:'reviews.json',content:exportJson(reviews)},
+   {name:'menus.json',content:exportJson(menus)},
+   {name:'menu-items.json',content:exportJson(menuItems)},
+   {name:'qr-codes.json',content:exportJson(qrCodes)},
+   {name:'qr-scans.json',content:exportJson(qrScans)},
+   {name:'customers.json',content:exportJson(customers)},
+   {name:'customer-interactions.json',content:exportJson(customerInteractions)},
+   {name:'customer-consents.json',content:exportJson(consents)},
+   {name:'campaigns.json',content:exportJson(campaigns)},
+   {name:'campaign-messages.json',content:exportJson(campaignMessages)},
+   {name:'whatsapp-connection.json',content:exportJson(whatsappConnection)},
+   {name:'google-connections.json',content:exportJson(googleConnections)},
+   {name:'plan-requests.json',content:exportJson(planRequests)},
+   {name:'subscription.json',content:exportJson(subscription)},
+   {name:'notifications.json',content:exportJson(notifications)},
+   {name:'review-sync-logs.json',content:exportJson(reviewSyncLogs)},
+   {name:'orders.json',content:exportJson(orders)},
+   {name:'order-items.json',content:exportJson(orderItems)},
+   {name:'README.txt',content:'reputetechs.in Business Data Export\\n\\nBusiness: '+b.name+'\\nBusiness ID: '+b.id+'\\nExported: '+new Date().toISOString()+'\\n\\nThis archive contains business-specific operational data from the selected business only. Authentication credentials, password hashes, Google access/refresh tokens, and WhatsApp access-token material are intentionally excluded for security.\\n'}
+  ];
+  const zip=makeZip(files);
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_BUSINESS_DATA_EXPORTED',entity:'Business',entityId:b.id,metadata:{businessName:b.name,fileCount:files.length}}});
+  const safeName=String(b.name||'business').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,60)||'business';
+  res.status(200).set({'Content-Type':'application/zip','Content-Disposition':'attachment; filename="'+safeName+'-data.zip"','Content-Length':String(zip.length),'Cache-Control':'no-store'}).send(zip);
+ }catch(e){next(e)}});
+
  originalPost.call(app,'/api/admin/businesses/:businessId/status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const body=await readAdminJsonBody(req);
