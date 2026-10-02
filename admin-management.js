@@ -584,7 +584,9 @@ function install(app){
   const flagRows=await prisma.$queryRawUnsafe('SELECT "adminFeatureFlags" FROM "Business" WHERE "id" = $1',b.id);
   let featureFlags=flagRows?.[0]?.adminFeatureFlags||{};
   if(typeof featureFlags==='string'){try{featureFlags=JSON.parse(featureFlags)}catch{featureFlags={}}}
-  const pendingPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id,status:'PENDING'},orderBy:{createdAt:'asc'}});
+  const pendingPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id,status:'PENDING'},orderBy:{createdAt:'asc'}}); 
+  const latestPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id},orderBy:{createdAt:'desc'}});
+
   let revenue={orderCount:0,paidOrderCount:0,totalOrderValue:0,paidRevenue:0};
   try{
    const [orderCount,paidOrderCount,orderValue,paidOrderValue]=await Promise.all([
@@ -635,7 +637,8 @@ function install(app){
    googleConnections:0,
    whatsappConnected:false,
    whatsappStatus:'NOT CONNECTED',
-   pendingPlanRequest:pendingPlanRequest?{id:pendingPlanRequest.id,planCode:pendingPlanRequest.planCode,planName:pendingPlanRequest.planName,price:pendingPlanRequest.price,billingInterval:pendingPlanRequest.billingInterval,createdAt:pendingPlanRequest.createdAt}:null
+   pendingPlanRequest:pendingPlanRequest?{id:pendingPlanRequest.id,planCode:pendingPlanRequest.planCode,planName:pendingPlanRequest.planName,price:pendingPlanRequest.price,billingInterval:pendingPlanRequest.billingInterval,paymentStatus:pendingPlanRequest.paymentStatus,createdAt:pendingPlanRequest.createdAt}:null,
+   latestPlanRequest:latestPlanRequest?{id:latestPlanRequest.id,planCode:latestPlanRequest.planCode,planName:latestPlanRequest.planName,price:latestPlanRequest.price,billingInterval:latestPlanRequest.billingInterval,status:latestPlanRequest.status,paymentStatus:latestPlanRequest.paymentStatus,createdAt:latestPlanRequest.createdAt,approvedAt:latestPlanRequest.approvedAt,rejectedAt:latestPlanRequest.rejectedAt}:null
   });
  } catch(e) { next(e); }
  });
@@ -771,6 +774,18 @@ function install(app){
     await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_OWNER_PASSWORD_CHANGED',entity:'Business',entityId:business.id,metadata:{ownerCount:ownerIds.length}}});
   });
   res.json({ok:true});
+}catch(e){next(e)}});
+
+ originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const paymentStatus=String(req.body?.paymentStatus||'').trim().toUpperCase();
+  const allowed=['MANUAL','PENDING','PAID','FAILED','EXPIRED'];
+  if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
+  const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
+  if(!request)return res.status(404).json({error:'Plan request not found'});
+  const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus}});
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus}}});
+  res.json({ok:true,request:updated});
 }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/reject',async(req,res,next)=>{try{
