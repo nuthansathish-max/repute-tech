@@ -8,11 +8,13 @@ const originalGet=express.application.get;
 const originalPost=express.application.post;
 let installed=false;
 const ADMIN_FEATURE_KEYS=['GOOGLE','WHATSAPP','AI','REVIEWS','ORDERS','MENU','QR','BILLING'];
-try{
-  await prisma.$executeRawUnsafe('ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS "adminFeatureFlags" JSONB');
-}catch(e){
-  console.error('Admin feature-control column check failed:',e?.message||e);
+// Do not block module loading on a database schema check. The admin routes must
+// register even if the database is temporarily slow/unavailable during startup.
+function ensureAdminFeatureColumn(){
+  return prisma.$executeRawUnsafe('ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS "adminFeatureFlags" JSONB')
+    .catch(e=>console.error('Admin feature-control column check failed:',e?.message||e));
 }
+setTimeout(()=>{ ensureAdminFeatureColumn().catch(()=>{}); },1000);
 
 
 function crc32(buf){
