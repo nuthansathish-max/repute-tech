@@ -172,6 +172,14 @@ function adminPage(){
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
    $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><div><h2>'+esc(b.name)+'</h2><div class="sub">Business Management Center · '+esc(b.id)+'</div></div><button class="smallbtn" onclick="closeBusiness()">Close</button></div>'+
+    '<div class="wide"><div class="section-title"><h2>Business Account Overview</h2><span>Account information</span></div><div class="detail">'+
+    '<div class="kv"><b>Account Created</b>'+date(b.createdAt)+'</div>'+ 
+    '<div class="kv"><b>Business Status</b>'+statusPill(b.isOpen?\'OPEN\':\'CLOSED\')+'</div>'+ 
+    '<div class="kv"><b>Subscription Status</b>'+statusPill(sub.status||\'—\')+'</div>'+ 
+    '<div class="kv"><b>Plan</b>'+esc(sub.plan||\'—\')+'</div>'+ 
+    '<div class="kv"><b>Billing Interval</b>'+esc(sub.billingInterval||\'—\')+'</div>'+ 
+    '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'+ 
+    '</div></div>'+ 
     '<div class="detail">'+
     '<div class="kv"><b>Business Type</b>'+esc(b.type||'—')+'</div>'+
     '<div class="kv"><b>Owner</b>'+esc(owner?.name||'—')+'<div class="sub">'+esc(owner?.email||'')+'</div></div>'+
