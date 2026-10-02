@@ -134,8 +134,6 @@
     try{const d=await api('/business/status');return d.adminFeatureFlags?.ORDERS!==false}catch{return true}
   }
   async function boot(){
-    addAvailability();
-    setInterval(loadAvailability,30000);
     addNav();addSection();setTimeout(()=>loadOrders(),700);
     setInterval(()=>addNav(),3000);
     setInterval(()=>{if($('orders')?.classList.contains('active'))loadOrders()},15000);
