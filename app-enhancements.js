@@ -50,12 +50,12 @@
   }
 
   function enhanceNavigation(){
-    document.querySelectorAll('.side [data-page]').forEach(btn=>{btn.onclick=e=>{e.preventDefault();navigate(btn.dataset.page)}});
+    document.querySelectorAll('.side [data-page]').forEach(btn=>{btn.onclick=e=>{e.preventDefault();if(btn.dataset.page==='orders'&&typeof window.showOrders==='function'){window.showOrders();return}navigate(btn.dataset.page)}});
     const bar=document.querySelector('.mobilebar');
     if(bar){
       bar.innerHTML=pages.map(([id,label])=>`<button type="button" data-page="${id}">${label}</button>`).join('');
       bar.style.overflowX='auto';bar.style.justifyContent='flex-start';bar.style.scrollbarWidth='none';bar.style.whiteSpace='nowrap';
-      bar.querySelectorAll('button').forEach(b=>{b.style.minWidth='94px';b.addEventListener('click',()=>navigate(b.dataset.page))});
+      bar.querySelectorAll('button').forEach(b=>{b.style.minWidth='94px';b.addEventListener('click',e=>{if(b.dataset.page==='orders'&&typeof window.showOrders==='function'){e.preventDefault();window.showOrders();return}navigate(b.dataset.page)})});
     }
     if(!$('dashboard')?.classList.contains('active'))navigate('dashboard');
   }
