@@ -120,10 +120,6 @@ function showPage(page){
   target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='');
 
   if(blocked&&window.adminFeatureFlags?.[blocked]===false){
-    if(page==='orders'&&typeof window.showOrders==='function'){
-      window.showOrders();
-      return;
-    }
     target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='none');
 
     const featureName=({
