@@ -260,6 +260,9 @@ function adminPage(){
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||\'—\')+'</div>'+ 
     '<div class="kv"><b>Billing Interval</b>'+esc(sub.billingInterval||\'—\')+'</div>'+ 
     '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'+ 
+    '<div class="kv"><b>Trial Started</b>'+date(sub.trialStartedAt)+'</div>'+
+    '<div class="kv"><b>Trial Ends</b>'+date(sub.trialEndsAt)+'</div>'+
+    '<div class="kv"><b>Trial Status</b><div style="margin-top:5px">'+(sub.status==='TRIAL'?(sub.trialEndsAt&&new Date(sub.trialEndsAt)>=new Date()?'<span class="pill warn">ACTIVE TRIAL</span>':'<span class="pill bad">TRIAL EXPIRED</span>'):'<span class="pill">'+esc(sub.status||'NO SUBSCRIPTION')+'</span>')+'</div><div class="sub">'+(sub.status==='TRIAL'&&sub.trialEndsAt?Math.max(0,Math.ceil((new Date(sub.trialEndsAt).getTime()-Date.now())/86400000))+' day(s) remaining':'Not currently in trial')+'</div></div>'+
     '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Business Health Overview</h2><span>Selected business snapshot</span></div><div class="detail">'+
     '<div class="kv"><b>Business Status</b><div style="margin-top:5px">'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div></div>'+
