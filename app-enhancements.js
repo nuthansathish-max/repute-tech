@@ -256,7 +256,6 @@
         el.style.display=can(key)?'':'none';
       });
 
-      if(window.reputeOrdersBoot) window.reputeOrdersBoot();
       const billingAllowed=can('BILLING');
       document.querySelectorAll('[data-repute-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
       document.querySelectorAll('[data-repute-mobile-billing]').forEach(el=>el.style.display=billingAllowed?'':'none');
@@ -277,6 +276,7 @@
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
+    if(window.reputeOrdersBoot) window.reputeOrdersBoot();
     await enhancePermissions();
     await Promise.allSettled([enhanceReviews(),enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
   }
