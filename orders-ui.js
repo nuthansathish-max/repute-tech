@@ -116,7 +116,7 @@
       await loadOrders();
     }
   }
-  function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('orders').classList.add('active');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
+  function showOrders(){addNav();addSection();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const section=$('orders');if(section){section.style.display='';section.classList.add('active');section.querySelectorAll(':scope > *').forEach(el=>el.style.display='')}document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));if($('heading'))$('heading').textContent='Orders';loadOrders()}
   window.showOrders=showOrders;window.updateOrderStatus=updateOrderStatus;window.reputeOrdersBoot=boot;
   async function allowed(){
     const p=window.businessPermissions||{};
