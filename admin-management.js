@@ -182,6 +182,11 @@ function adminPage(){
     '<div class="kv"><b>Subscription</b>'+statusPill(sub.status)+(subscriptionDays!==null?'<div class="sub">'+subscriptionDays+' day'+(subscriptionDays===1?'':'s')+' left · ends '+date(sub.currentPeriodEnd)+'</div>':'')+'</div>'+
     '<div class="kv"><b>WhatsApp Connection</b>'+statusPill(waStatus)+(b.whatsappConnected?'<div class="sub">Connected and configured</div>':'<div class="sub">No active connection</div>')+'</div>'+
     '<div class="kv"><b>Google Business</b><div style="margin-top:5px">'+(b.googleConnections>0?'<span class="pill good">CONNECTED</span>':'<span class="pill">NOT CONNECTED</span>')+'</div><div class="sub">'+b.googleConnections+' connection'+(b.googleConnections===1?'':'s')+'</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Business Revenue</h2><span>Recorded customer orders</span></div><div class="detail">'+
+      '<div class="kv"><b>Total Order Value</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+money(b.revenue?.totalOrderValue||0)+'</div><div class="sub">'+Number(b.revenue?.orderCount||0)+' order'+(Number(b.revenue?.orderCount||0)===1?'':'s')+' recorded</div></div>'+
+      '<div class="kv"><b>Paid Revenue</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+money(b.revenue?.paidRevenue||0)+'</div><div class="sub">'+Number(b.revenue?.paidOrderCount||0)+' paid order'+(Number(b.revenue?.paidOrderCount||0)===1?'':'s')+'</div></div>'+
+      '<div class="kv"><b>Revenue Status</b><div style="margin-top:5px">'+statusPill(Number(b.revenue?.paidRevenue||0)>0?'REVENUE RECORDED':'NO PAID REVENUE')+'</div><div class="sub">Based on recorded order payment status</div></div>'+
+    '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
       (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
     '</div>'+
@@ -430,11 +435,18 @@ function install(app){
   let featureFlags=flagRows?.[0]?.adminFeatureFlags||{};
   if(typeof featureFlags==='string'){try{featureFlags=JSON.parse(featureFlags)}catch{featureFlags={}}}
   const pendingPlanRequest=await prisma.planRequest.findFirst({where:{businessId:b.id,status:'PENDING'},orderBy:{createdAt:'asc'}});
+  const [orderCount,paidOrderCount,orderValue,paidOrderValue]=await Promise.all([
+   prisma.order.count({where:{businessId:b.id}}),
+   prisma.order.count({where:{businessId:b.id,paymentStatus:'PAID'}}),
+   prisma.order.aggregate({where:{businessId:b.id},_sum:{total:true}}),
+   prisma.order.aggregate({where:{businessId:b.id,paymentStatus:'PAID'},_sum:{total:true}})
+  ]);
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
    address:b.locations?.[0]?.address||null,
    subscription:b.subscription,members,
+   revenue:{orderCount,paidOrderCount,totalOrderValue:Number(orderValue._sum.total||0),paidRevenue:Number(paidOrderValue._sum.total||0)},
    featureFlags,
    googleConnections:0,
    whatsappConnected:false,
