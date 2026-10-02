@@ -109,31 +109,49 @@ function showPage(page){
   const featureForPage={reviews:'REVIEWS',ai:'AI',qr:'QR',menu:'MENU',campaigns:'WHATSAPP',orders:'ORDERS',billing:'BILLING'};
   const blocked=featureForPage[page];
   const target=$(page);if(!target)return;
+
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   target.classList.add('active');
   document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
   const active=document.querySelector('[data-page="'+page+'"]');
   if(active)$('heading').textContent=active.textContent.trim();
+
+  const notice=target.querySelector('[data-feature-blocked]');
+  target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='');
+
   if(blocked&&window.adminFeatureFlags?.[blocked]===false){
     target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='none');
-    let notice=target.querySelector('[data-feature-blocked]');
-    if(!notice){
-      notice=document.createElement('div');
-      notice.dataset.featureBlocked='1';
-      notice.className='card';
-      notice.style.marginTop='14px';
-      notice.innerHTML='<div class="section-title">Dashboard blocked</div><p class="sub">This dashboard has been disabled by the platform administrator.</p><p class="sub">For more details, please contact customer care.</p>';
-      target.prepend(notice);
+
+    const featureName=({
+      REVIEWS:'Reviews',
+      AI:'AI Assistant',
+      QR:'Smart QR',
+      MENU:'Digital Menu',
+      WHATSAPP:'WhatsApp',
+      ORDERS:'Orders',
+      BILLING:'Billing & POS'
+    })[blocked]||'This feature';
+
+    let blockedNotice=notice;
+    if(!blockedNotice){
+      blockedNotice=document.createElement('div');
+      blockedNotice.dataset.featureBlocked='1';
+      blockedNotice.className='card';
+      blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid #dbe3f0;box-shadow:0 10px 28px rgba(15,23,42,.08);background:#fff;';
+      blockedNotice.innerHTML='<div style="padding:22px 20px;background:linear-gradient(135deg,#f8fafc,#eef2ff);border-bottom:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:12px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">🔒</div><div><div style="font-size:17px;font-weight:700;color:#111827">Dashboard unavailable</div><div style="font-size:13px;color:#64748b;margin-top:3px">'+featureName+' is currently disabled</div></div></div></div><div style="padding:20px"><div style="font-size:14px;font-weight:600;color:#334155;margin-bottom:6px">This feature has been disabled by the platform administrator.</div><div style="font-size:13px;line-height:1.55;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div style="margin-top:16px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:600">Platform controlled feature</div></div>';
+      target.prepend(blockedNotice);
+    }else{
+      blockedNotice.querySelector('div[style*="font-size:13px;color:#64748b"]')?.replaceChildren(document.createTextNode(featureName+' is currently disabled'));
+      const body=blockedNotice.querySelector('div[style*="line-height:1.55"]');
+      if(body)body.innerHTML='Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.';
     }
-    notice.style.display='';
-    toast('This feature has been disabled by the platform administrator.');
+    blockedNotice.style.display='';
     window.scrollTo({top:0,behavior:'smooth'});
     return;
   }
-  const notice=target.querySelector('[data-feature-blocked]');
+
   if(notice)notice.style.display='none';
-  target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='');
-  window.scrollTo({top:0,behavior:'smooth'})
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
 initAuth();
