@@ -302,6 +302,7 @@
   async function enhance(){
     if(!$('authOverlay')||$('authOverlay').style.display!=='none')return;
     enhanceNavigation();
+    enhanceBusinessAvailability();
     if(window.reputeOrdersBoot) window.reputeOrdersBoot();
     await enhancePermissions();
     await Promise.allSettled([enhanceReviews(),enhanceAI(),enhanceQR(),enhanceMenu(),enhanceCampaigns(),enhanceWhatsApp(),enhanceAnalytics(),enhancePlans()]);
