@@ -259,7 +259,7 @@ function adminPage(){
     '<div class="kv"><b>Subscription Status</b>'+statusPill(sub.status||\'—\')+'</div>'+ 
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||\'—\')+'</div>'+ 
     '<div class="kv"><b>Billing Interval</b>'+esc(sub.billingInterval||\'—\')+'</div>'+ 
-    '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'+ 
+    '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'<div class="kv"><b>Payment Status</b><div style="margin-top:5px">'+statusPill(b.latestPlanRequest?.paymentStatus||'MANUAL')+'</div><div class="sub">Latest plan request</div></div>''+ 
     '<div class="kv"><b>Trial Started</b>'+date(sub.trialStartedAt)+'</div>'+
     '<div class="kv"><b>Trial Ends</b>'+date(sub.trialEndsAt)+'</div>'+
     '<div class="kv"><b>Trial Status</b><div style="margin-top:5px">'+(sub.status==='TRIAL'?(sub.trialEndsAt&&new Date(sub.trialEndsAt)>=new Date()?'<span class="pill warn">ACTIVE TRIAL</span>':'<span class="pill bad">TRIAL EXPIRED</span>'):'<span class="pill">'+esc(sub.status||'NO SUBSCRIPTION')+'</span>')+'</div><div class="sub">'+(sub.status==='TRIAL'&&sub.trialEndsAt?Math.max(0,Math.ceil((new Date(sub.trialEndsAt).getTime()-Date.now())/86400000))+' day(s) remaining':'Not currently in trial')+'</div></div>'+
@@ -300,7 +300,7 @@ function adminPage(){
       ((b.recentActivity||[]).map(a=>'<div class="recent-item"><div class="recent-time">'+date(a.createdAt)+'</div><div><b>'+esc(a.type==='ORDER'?'Order '+(a.orderNumber||''):'Customer activity')+'</b><div class="sub">'+esc(a.customerName||'Unnamed customer')+(a.type==='ORDER'?' · '+money(a.total||0)+' · '+esc(a.status||''):' · '+esc(a.activity||'')+(a.channel?' · '+esc(a.channel):''))+'</div></div></div>').join('')||'<div class="empty">No recent activity recorded for this business.</div>')+
       '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
-      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
+      (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><label class="sub" style="display:block;margin-bottom:5px">Payment Status</label><select class="select" data-action="payment-status" data-request-id="'+esc(pending.id)+'"><option value="MANUAL" '+(pending.paymentStatus==='MANUAL'?'selected':'')+'>MANUAL</option><option value="PENDING" '+(pending.paymentStatus==='PENDING'?'selected':'')+'>PENDING</option><option value="PAID" '+(pending.paymentStatus==='PAID'?'selected':'')+'>PAID</option><option value="FAILED" '+(pending.paymentStatus==='FAILED'?'selected':'')+'>FAILED</option><option value="EXPIRED" '+(pending.paymentStatus==='EXPIRED'?'selected':'')+'>EXPIRED</option></select></div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
     '</div>'+
     '<div class="wide"><div class="section-title"><h2>Business Feature Controls</h2><span>Admin control state</span></div><div class="detail">'+
       featureRow('GOOGLE','Google Business API','Allow this business to use Google integration')+
@@ -413,7 +413,13 @@ function adminPage(){
    await openBusiness(id);
   }catch(e){alert('Unable to change owner password: '+e.message)}
  }
- async function rejectPlanRequest(id,button,businessId){
+ async function changePlanPaymentStatus(id,select){
+ if(!id||!select)return;
+ const old=select.value;select.disabled=true;
+ try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:select.value})});alert('Payment status updated successfully.');await openBusiness(select.dataset.businessId||'');}
+ catch(e){select.value=old;alert('Unable to update payment status: '+e.message)}finally{select.disabled=false}
+}
+async function rejectPlanRequest(id,button,businessId){
   const reason=prompt('Reason for rejecting this subscription request:');
   if(reason===null)return;
   if(!reason.trim()){alert('Please enter a rejection reason.');return}
@@ -543,6 +549,8 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
+  const paymentSelect=e.target.closest('[data-action="payment-status"]');
+  if(paymentSelect){e.preventDefault();changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
   if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn,rejectBtn.dataset.businessId);return}
  });
