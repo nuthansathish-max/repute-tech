@@ -195,6 +195,14 @@ function adminPage(){
       '<div class="kv"><b>Paid Revenue</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+money(b.revenue?.paidRevenue||0)+'</div><div class="sub">'+Number(b.revenue?.paidOrderCount||0)+' paid order'+(Number(b.revenue?.paidOrderCount||0)===1?'':'s')+'</div></div>'+
       '<div class="kv"><b>Revenue Status</b><div style="margin-top:5px">'+statusPill(Number(b.revenue?.paidRevenue||0)>0?'REVENUE RECORDED':'NO PAID REVENUE')+'</div><div class="sub">Based on recorded order payment status</div></div>'+
     '</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Customer Data</h2><span>'+Number(b.customerCount||0)+' customer'+(Number(b.customerCount||0)===1?'':'s')+' · selected business only</span></div>'+
+      '<div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.5fr 1fr 90px"><div>Customer</div><div>Phone</div><div>Email</div><div>Orders</div><div>Created</div></div>'+
+      ((b.customers||[]).map(c=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.5fr 1fr 90px"><div><div class="name">'+esc(c.name||'Unnamed customer')+'</div><div class="sub">'+esc(c.id||'')+'</div></div><div>'+esc(c.phone||'—')+'</div><div>'+esc(c.email||'—')+'</div><div>'+Number(c._count?.orders||0)+'</div><div>'+date(c.createdAt)+'</div></div>').join('')||'<div class="empty">No customers recorded for this business.</div>')+
+      '</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Recent Activity</h2><span>Latest activity · selected business only</span></div>'+
+      '<div class="recent-list">'+
+      ((b.recentActivity||[]).map(a=>'<div class="recent-item"><div class="recent-time">'+date(a.createdAt)+'</div><div><b>'+esc(a.type==='ORDER'?'Order '+(a.orderNumber||''):'Customer activity')+'</b><div class="sub">'+esc(a.customerName||'Unnamed customer')+(a.type==='ORDER'?' · '+money(a.total||0)+' · '+esc(a.status||''):' · '+esc(a.activity||'')+(a.channel?' · '+esc(a.channel):''))+'</div></div></div>').join('')||'<div class="empty">No recent activity recorded for this business.</div>')+
+      '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Subscription Management</h2><span>Admin actions</span></div>'+
       (pending?'<div class="kv warn"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice">No pending subscription request for this business.</div>')+
     '</div>'+
@@ -455,12 +463,40 @@ function install(app){
   }catch(e){
    console.error('Admin business revenue load failed:',e?.message||e);
   }
+  const customerCount=await prisma.customer.count({where:{businessId:b.id}});
+  const customers=await prisma.customer.findMany({
+   where:{businessId:b.id},
+   orderBy:[{lastInteractionAt:'desc'},{createdAt:'desc'}],
+   take:100,
+   select:{id:true,name:true,phone:true,email:true,lastInteractionAt:true,createdAt:true,_count:{select:{orders:true}}}
+  });
+  const [recentOrders,recentInteractions]=await Promise.all([
+   prisma.order.findMany({
+    where:{businessId:b.id},
+    orderBy:{createdAt:'desc'},
+    take:10,
+    select:{id:true,orderNumber:true,customerId:true,customerName:true,customerPhone:true,total:true,status:true,paymentStatus:true,createdAt:true}
+   }),
+   prisma.customerInteraction.findMany({
+    where:{customer:{businessId:b.id}},
+    orderBy:{createdAt:'desc'},
+    take:10,
+    select:{id:true,type:true,channel:true,createdAt:true,customer:{select:{id:true,name:true,phone:true,email:true}}}
+   })
+  ]);
+  const recentActivity=[
+   ...recentOrders.map(x=>({type:'ORDER',createdAt:x.createdAt,customerId:x.customerId,customerName:x.customerName,customerPhone:x.customerPhone,orderNumber:x.orderNumber,total:Number(x.total||0),status:x.status,paymentStatus:x.paymentStatus})),
+   ...recentInteractions.map(x=>({type:'CUSTOMER_ACTIVITY',createdAt:x.createdAt,customerId:x.customerId,customerName:x.customer?.name||null,customerPhone:x.customer?.phone||null,channel:x.channel,activity:x.type}))
+  ].sort((a,z)=>new Date(z.createdAt)-new Date(a.createdAt)).slice(0,20);
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
    address:b.locations?.[0]?.address||null,
    subscription:b.subscription,members,
    revenue,
+   customerCount,
+   customers,
+   recentActivity,
    featureFlags,
    googleConnections:0,
    whatsappConnected:false,
