@@ -1,1 +1,166 @@
 <!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#171a2b;--muted:#667085;--line:#e6e8ef;--p:#5146e5;--p2:#7c3aed;--good:#16a34a;--warn:#d97706;--bad:#dc2626}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif}.shell{display:flex;min-height:100vh}.side{width:250px;position:fixed;inset:0 auto 0 0;background:#10152b;color:#fff;padding:22px 14px}.logo{font-size:21px;font-weight:800;padding:8px 12px 25px}.logo span{color:#8b82ff}.nav{display:grid;gap:5px}.nav button{border:0;background:transparent;color:#aeb5c8;padding:11px 12px;border-radius:10px;text-align:left;font:inherit;cursor:pointer}.nav button:hover,.nav button.active{background:#222844;color:#fff}.main{margin-left:250px;width:calc(100% - 250px);padding:26px;max-width:1500px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.top h1{margin:0;font-size:25px}.sub{color:var(--muted);font-size:13px}.row{display:flex;gap:9px;align-items:center}.btn{border:0;background:var(--p);color:#fff;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer}.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.danger{background:var(--bad)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:18px}.label{font-size:12px;color:var(--muted)}.value{font-size:28px;font-weight:800;margin:7px 0}.up{font-size:12px;color:var(--good);font-weight:700}.layout{display:grid;grid-template-columns:1.45fr .8fr;gap:14px;margin-top:14px}.section-title{font-size:16px;font-weight:700;margin-bottom:12px}.page{display:none}.page.active{display:block}.list{display:grid;gap:10px}.item{background:#fff;border:1px solid var(--line);border-radius:11px;padding:14px}.review{padding:14px 0;border-bottom:1px solid var(--line)}.review:last-child{border:0}.reviewtop{display:flex;justify-content:space-between;gap:12px}.stars{color:#f59e0b}.pill{font-size:11px;border-radius:999px;padding:4px 8px;background:#eef2ff;color:#4f46e5;display:inline-block}.reply{margin-top:9px;padding:10px;border-radius:9px;background:#f6f7fb;font-size:13px;color:#414759}.form{display:grid;gap:8px}.form input,.form textarea,.form select{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit}.form textarea{min-height:110px;resize:vertical}.metricgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.bar{height:9px;background:#eceef5;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--p),var(--p2))}.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;font-size:13px}.price{font-size:28px;font-weight:800;margin:9px 0}.price small{font-size:12px;color:var(--muted);font-weight:500}.features{display:grid;gap:7px;min-height:90px;margin:12px 0}.features div{font-size:12px;color:#475467}.featured{border:2px solid var(--p);box-shadow:0 8px 24px rgba(81,70,229,.12)}.mobilebar{display:none}.toast{position:fixed;right:20px;bottom:20px;background:#111827;color:#fff;padding:12px 15px;border-radius:10px;display:none;z-index:20}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.side{width:215px}.main{margin-left:215px;width:calc(100% - 215px)}}@media(max-width:700px){.side{display:none}.main{margin:0;width:100%;padding:15px 15px 78px}.grid{grid-template-columns:1fr 1fr}.mobilebar{display:flex;position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:100;justify-content:space-around;padding:7px 3px;gap:2px}.mobilebar button{flex:1;border:0;background:none;font-size:10px;color:var(--muted);padding:5px 2px;border-radius:8px;cursor:pointer}.mobilebar button.active{background:#eef2ff;color:#4f46e5;font-weight:700}.top .btn{display:none}}
+</style></head>
+<body>
+<div id="authOverlay" style="position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:9999"><div class="card" style="width:min(420px,92vw);padding:28px"><div class="section-title" style="font-size:20px">Welcome to reputetechs.in</div><p class="sub">Sign in to your workspace.</p><div class="form"><input id="authName" placeholder="Name" style="display:none"><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Password"><button class="btn" id="authSubmit">Sign in</button><button class="btn secondary" id="googleBtn">Continue with Google</button><button class="btn secondary" id="toggleAuth">Create account</button><div id="authMsg" class="sub"></div></div></div></div>
+<div class="shell"><aside class="side"><div class="logo">reputetechs.in</div><div class="nav">
+<button class="active" data-page="dashboard">▦ Dashboard</button><button data-page="reviews">★ Reviews</button><button data-page="ai">✦ AI Assistant</button><button data-page="qr">▣ Smart QR</button><button data-page="menu">☰ Digital Menu</button><button data-page="customers">♙ Customers</button><button data-page="campaigns">◉ WhatsApp</button><button type="button" onclick="location.href='/analytics'">◒ Analytics</button><button data-page="orders">▤ Orders</button><button data-page="pricing">💳 Plans & Pricing</button><button data-page="settings">⚙ Account Settings</button>
+</div><div style="position:absolute;left:14px;right:14px;bottom:20px"><button class="btn secondary" style="width:100%" id="logout">Sign out</button></div></aside>
+<main class="main"><header class="top"><div><h1 id="heading">Good morning 👋</h1><div class="sub" id="businessName">Loading business…</div></div><div class="row"><button class="btn secondary" id="businessAvailability" type="button">Business: Loading…</button><button class="btn secondary" id="connectGoogle">Connect Google</button><button class="btn secondary" id="syncGoogle">Sync Reviews</button><button class="btn" id="refresh">Refresh</button></div></header>
+<section id="dashboard" class="page active"><div class="grid"><div class="card"><div class="label">Google rating</div><div class="value" id="rating">—</div><div class="up">From connected reviews</div></div><div class="card"><div class="label">Total reviews</div><div class="value" id="reviewCount">—</div><div class="up">Review inbox</div></div><div class="card"><div class="label">QR scans</div><div class="value" id="qrScans">—</div><div class="up">Smart QR traffic</div></div><div class="card"><div class="label">Customers</div><div class="value" id="customers">—</div><div class="up">CRM</div></div></div><div class="layout"><div class="card"><div class="section-title">Recent reviews</div><div id="recentReviews"></div></div><div class="card"><div class="section-title">Reputation health</div><div class="metricgrid"><div><div class="label">Positive</div><div class="value" id="positiveRate">—</div></div><div><div class="label">Delivered</div><div class="value" id="messages">—</div></div><div><div class="label">Plan</div><div class="value" id="plan">—</div></div></div><div class="notice">AI replies remain pending until a business user approves them.</div></div></div></section>
+<section id="reviews" class="page"><div class="card"><div class="row" style="justify-content:space-between"><div class="section-title">Review inbox</div><button class="btn secondary" id="loadReviews">Reload</button></div><div id="reviewsList" class="list"></div></div></section>
+<section id="ai" class="page"><div class="layout"><div class="card"><div class="section-title">AI Review Assistant</div><div class="form"><textarea id="aiText" placeholder="Paste a review or select one from Reviews"></textarea><button class="btn" id="aiGenerate">Generate reply</button></div><div id="aiOutput" class="reply" style="display:none"></div></div><div class="card"><div class="section-title">AI safeguards</div><p class="sub">AI creates suggestions; business users approve before Google publishing.</p><p class="sub">Private service-recovery feedback should complement—not suppress—genuine public reviews.</p></div></div></section>
+<section id="qr" class="page"><div class="layout"><div class="card"><div class="section-title">Smart QR</div><div class="form"><input id="qrName" placeholder="QR name e.g. Table QR"><input id="qrSlug" placeholder="slug e.g. table-qr"><button class="btn" id="createQr">Create QR</button></div><div id="qrList" class="list" style="margin-top:14px"></div></div><div class="card" style="text-align:center"><div class="section-title">Customer hub</div><div style="font-size:80px">▦</div><p class="sub">Menu · Feedback · Offers · Google Review</p></div></div></section>
+<section id="menu" class="page"><div class="layout"><div class="card"><div class="section-title">Digital Menu</div><div class="form"><input id="menuName" placeholder="Menu name"><label class="sub"><input id="menuPublished" type="checkbox" checked style="width:auto"> Publish immediately</label><button class="btn" id="createMenu">Create menu</button></div><div id="menuList" class="list" style="margin-top:14px"></div></div><div class="card"><div class="section-title">Add menu item</div><div class="form"><select id="menuSelect"></select><input id="itemName" placeholder="Item name"><input id="itemPrice" type="number" min="0" placeholder="Price ₹"><input id="itemCategory" placeholder="Category"><textarea id="itemDescription" placeholder="Description"></textarea><button class="btn" id="addItem">Add item</button></div></div></div></section>
+<section id="customers" class="page"><div class="card"><div class="row" style="justify-content:space-between"><div class="section-title">Customer CRM</div><input id="customerSearch" placeholder="Search name, phone or email" style="max-width:300px;padding:10px;border:1px solid var(--line);border-radius:9px"></div><div id="customerList" class="list"></div></div></section>
+<section id="campaigns" class="page"><div class="layout"><div class="card"><div class="section-title">WhatsApp campaign</div><p class="sub">Only customers with explicit WhatsApp marketing consent are eligible.</p><div class="form"><input id="campName" placeholder="Campaign name"><textarea id="campMessage" placeholder="Message"></textarea><button class="btn" id="createCampaign">Create campaign</button></div></div><div class="card"><div class="section-title">Campaigns</div><div id="campaignList" class="list"></div></div></div></section>
+<section id="analytics" class="page"><div class="card"><div class="section-title">Business analytics</div><div class="metricgrid"><div><div class="label">Reviews</div><div class="value" id="aReviews">—</div></div><div><div class="label">QR scans</div><div class="value" id="aQr">—</div></div><div><div class="label">Delivered</div><div class="value" id="aDelivered">—</div></div></div><div style="margin-top:18px"><div class="label">Positive review share</div><div class="bar"><span id="positiveBar" style="width:0%"></span></div></div></div></section>
+<section id="pricing" class="page"><div class="card"><div class="section-title" style="font-size:22px">Plans & pricing</div><p class="sub">Choose the plan that fits your business. Submit your request and our platform owner will confirm the plan directly.</p><div id="pricingGrid" class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:16px"></div><div id="checkoutNotice" class="notice" style="display:none;margin-top:16px"></div></div><div class="card" style="margin-top:14px"><div class="section-title">My plan requests</div><div id="myPlanRequests" class="list"></div></div></section>
+<section id="settings" class="page"><div class="layout"><div class="card"><div class="section-title">Account Settings</div><div class="form"><label class="label">Name</label><input id="settingsName" readonly><label class="label">Email</label><input id="settingsEmail" readonly><label class="label">Role</label><input id="settingsRole" readonly></div></div><div class="card"><div class="section-title">Google Business connection</div><p class="sub">Connect your Google Business Profile to import reviews and manage approved AI replies.</p><button class="btn" id="settingsGoogle">Continue with Google</button><p class="sub" style="margin-top:10px">If Google is already connected, you can reconnect it here.</p></div></div></section>
+<section id="admin" class="page"><div class="layout"><div class="card"><div class="section-title">Admin overview</div><div class="metricgrid"><div><div class="label">Businesses</div><div class="value" id="adminBusinesses">—</div></div><div><div class="label">Current plan</div><div class="value" id="adminPlan">—</div></div><div><div class="label">System</div><div class="value">Online</div></div></div><p class="sub">Admin and Super Admin roles can approve, reject and publish plan requests.</p></div><div class="card"><div class="section-title">Plan catalog</div><div id="planCatalog" class="list"></div></div></div><div class="card" style="margin-top:14px"><div class="section-title">Pending plan requests</div><div id="adminPlanRequests" class="list"></div></div></section>
+</main></div><div class="mobilebar"><button data-page="dashboard">⌂ Dashboard</button><button data-page="reviews">★ Reviews</button><button data-page="ai">✦ AI</button><button data-page="qr">▣ QR</button><button data-page="orders">▤ Orders</button><button data-page="pricing">💳 Plans</button><button data-page="settings">⚙ Account</button></div><div id="toast" class="toast"></div>
+<script>
+const API='/api';let authMode='login',businessId=null,cache={reviews:[],menus:[]};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2600)}
+async function req(path,opts={}){const r=await fetch(API+path,{credentials:'include',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d}
+async function get(path){return req(path)}async function post(path,body){return req(path,{method:'POST',body:JSON.stringify(body)})}
+async function initAuth(){try{const d=await req('/auth/me');$('authOverlay').style.display='none';window.currentUser=d.user;setAccountFields();await load()}catch{}}
+$('authSubmit').onclick=async()=>{try{const isSignup=authMode==='signup';const endpoint=isSignup?'/auth/signup':'/auth/login';const body=isSignup?{name:$('authName').value,email:$('authEmail').value,password:$('authPassword').value}:{email:$('authEmail').value,password:$('authPassword').value};const d=await req(endpoint,{method:'POST',body:JSON.stringify(body)});if(isSignup&&d.onboardingRequired){location.href=d.onboardingUrl||'/business-setup';return}$('authOverlay').style.display='none';window.currentUser=d.user;setAccountFields();await load()}catch(e){$('authMsg').textContent=e.message}};
+$('toggleAuth').onclick=()=>{authMode=authMode==='login'?'signup':'login';$('authName').style.display=authMode==='login'?'none':'block';$('authSubmit').textContent=authMode==='login'?'Sign in':'Create account';$('toggleAuth').textContent=authMode==='login'?'Create account':'Back to sign in'};$('googleBtn').onclick=()=>location.href='/auth/google';$('settingsGoogle').onclick=()=>location.href='/auth/google';$('logout').onclick=async()=>{await req('/auth/logout',{method:'POST'});location.reload()};$('connectGoogle').onclick=()=>location.href='/auth/google';
+function setAccountFields(){if(!window.currentUser)return;$('settingsName').value=window.currentUser.name||'';$('settingsEmail').value=window.currentUser.email||'';$('settingsRole').value=window.currentUser.role||'OWNER';const adminBtn=$('adminNavBtn');if(adminBtn)adminBtn.style.display=['ADMIN','SUPER_ADMIN'].includes(window.currentUser.role)?'block':'none'}
+function stars(n){n=Math.max(0,Math.min(5,Number(n)||0));return '★'.repeat(n)+'☆'.repeat(5-n)}
+function renderRecent(items){$('recentReviews').innerHTML=items.map(r=>`<div class="review"><div class="reviewtop"><b>${esc(r.authorName)}</b><span class="stars">${stars(r.rating)}</span></div><div class="sub">${esc(r.text||'No text')}</div><span class="pill">${esc(r.sentiment||'UNANALYZED')}</span>${r.aiReply?`<div class="reply">${esc(r.aiReply)}</div>`:''}</div>`).join('')||'<div class="sub">No reviews yet.</div>'}
+function renderReviews(items){if($('reviews')?.dataset.reviewActionsReady==='1')return;$('reviewsList').innerHTML=items.map(r=>`<div class="item"><div class="reviewtop"><b>${esc(r.authorName)}</b><span class="stars">${stars(r.rating)}</span></div><p>${esc(r.text||'')}</p><span class="pill">${esc(r.replyStatus||'PENDING')}</span><div class="row" style="margin-top:10px"><button class="btn secondary" onclick="useReview('${r.id}')">Use for AI</button>${r.aiReply?`<button class="btn" onclick="approve('${r.id}')">Approve</button>`:''}</div>${r.aiReply?`<div class="reply">${esc(r.aiReply)}</div>`:''}</div>`).join('')||'<div class="sub">No reviews.</div>'}
+async function loadReviews(){if(!businessId)return;try{const d=await get(`/businesses/${businessId}/reviews`);cache.reviews=d;renderReviews(d)}catch(e){$('reviewsList').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadQr(){if(!businessId)return;try{const d=await get(`/businesses/${businessId}/qr`);$('qrList').innerHTML=d.map(q=>`<div class="item"><b>${esc(q.name)}</b><div class="sub">${esc(q.slug)} · ${q.scanCount||0} scans</div>${q.qrImageUrl?`<div style="margin-top:10px"><img src="${esc(q.qrImageUrl)}" alt="QR code" style="width:180px;height:180px;border:1px solid var(--line);border-radius:8px"></div><div class="sub" style="margin-top:6px">Scan URL: ${esc(q.qrUrl||'')}</div>`:''}</div>`).join('')||'<div class="sub">No QR codes.</div>'}catch(e){$('qrList').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadMenus(){if(!businessId)return;try{const d=await get(`/businesses/${businessId}/menus`);cache.menus=d;$('menuList').innerHTML=d.map(m=>`<div class="item"><b>${esc(m.name)}</b><div class="sub">${m.published?'Published':'Draft'} · ${m.items?.length||0} items</div><button class="btn secondary" type="button" data-edit-menu="${m.id}" style="margin-top:10px">Edit menu & items</button></div>`).join('')||'<div class="sub">No menus.</div>';$('menuSelect').innerHTML=d.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}catch(e){$('menuList').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadCustomers(){if(!businessId)return;try{const d=await get(`/businesses/${businessId}/customers`);$('customerList').innerHTML=d.map(c=>`<div class="item"><b>${esc(c.name||'Unnamed')}</b><div class="sub">${esc(c.email||c.phone||'No contact')} · WhatsApp ${c.whatsappOptIn?'opted in':'not opted in'}</div></div>`).join('')||'<div class="sub">No customers.</div>'}catch(e){$('customerList').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadCampaigns(){if(!businessId)return;try{const d=await get(`/businesses/${businessId}/campaigns`);$('campaignList').innerHTML=d.map(c=>`<div class="item"><b>${esc(c.name)}</b><div class="sub">${esc(c.status||'DRAFT')} · ${c.recipientCount||0} eligible</div></div>`).join('')||'<div class="sub">No campaigns.</div>'}catch(e){$('campaignList').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadPricing(){try{const d=await get('/plans');$('pricingGrid').innerHTML=d.map(p=>`<div class="card ${p.featured?'featured':''}"><div class="section-title">${esc(p.name)}</div><div class="price">₹${p.price}<small>/${p.billingInterval==='YEAR'?'year':'month'}</small></div><div class="features">${(p.features||[]).map(f=>`<div>✓ ${esc(f)}</div>`).join('')}</div><button class="btn" onclick="requestPlan('${p.code}')">Request plan</button></div>`).join('')}catch(e){$('pricingGrid').innerHTML=`<div class="notice">Unable to load plans: ${esc(e.message)}</div>`}}
+async function loadPlanRequests(){try{const d=await get('/plan-requests');$('myPlanRequests').innerHTML=d.map(r=>`<div class="item"><b>${esc(r.planName||r.planCode)}</b><div class="sub">₹${r.price} · ${esc(r.status)} · ${esc(r.paymentStatus||'MANUAL')}</div></div>`).join('')||'<div class="sub">No plan requests yet.</div>'}catch(e){$('myPlanRequests').innerHTML=`<div class="notice">${esc(e.message)}</div>`}}
+async function loadAdminPlans(){try{const d=await get('/admin/plans');$('planCatalog').innerHTML=d.map(p=>`<div class="item"><b>${esc(p.name)}</b><div class="sub">₹${p.price}/${p.billingInterval==='YEAR'?'year':'month'}</div></div>`).join('')}catch{$('planCatalog').innerHTML='<div class="notice">Admin controls require an Admin or Super Admin account.</div>'}}
+async function loadAdminPlanRequests(){try{const d=await get('/admin/plan-requests');$('adminPlanRequests').innerHTML=d.map(r=>`<div class="item"><b>${esc(r.business?.name||'Business')}</b><div class="sub">${esc(r.plan?.name||r.planCode)} · ${esc(r.status)}</div></div>`).join('')||'<div class="sub">No pending requests.</div>'}catch{$('adminPlanRequests').innerHTML='<div class="notice">Admin controls require an Admin or Super Admin account.</div>'}}
+async function load(){
+  try{
+    const bs=await get('/businesses');
+    if(!bs.length)throw new Error('No business found. Complete onboarding first.');
+    businessId=bs[0].id;
+    window.businessId=businessId;
+    window.adminFeatureFlags=bs[0].adminFeatureFlags||{};
+    $('businessName').textContent=`${bs[0].name} · ${bs[0].type||'Business'}`;
+
+    let access={role:window.currentUser?.role||'STAFF',permissions:{}};
+    try{access=await get(`/businesses/${businessId}/permissions/me`)}catch{}
+    window.businessPermissions=access.permissions||{};
+    window.businessRole=access.role||window.currentUser?.role||'STAFF';
+    if(window.reputeApplyPermissions) await window.reputeApplyPermissions();
+    const owner=String(window.businessRole).toUpperCase()==='OWNER';
+    const featureForPermission={REVIEWS:'REVIEWS',AI:'AI',QR:'QR',MENU:'MENU',WHATSAPP:'WHATSAPP',ORDERS:'ORDERS',BILLING:'BILLING'};
+    const can=k=>{
+      const feature=featureForPermission[k];
+      if(feature&&window.adminFeatureFlags?.[feature]===false)return false;
+      return owner||window.businessPermissions[k]===true;
+    };
+    if(can('DASHBOARD')){
+      try{
+        const d=await get(`/businesses/${businessId}/dashboard`);
+        $('rating').textContent=`${d.metrics.averageRating} ★`;
+        $('reviewCount').textContent=d.metrics.reviewCount;
+        $('qrScans').textContent=d.metrics.qrScans;
+        $('customers').textContent=d.metrics.customers;
+        $('positiveRate').textContent=`${d.metrics.positiveRate}%`;
+        $('messages').textContent=d.metrics.messagesDelivered||0;
+        $('plan').textContent=d.business.subscription?.plan||'—';
+        $('aReviews').textContent=d.metrics.reviewCount;
+        $('aQr').textContent=d.metrics.qrScans;
+        $('aDelivered').textContent=d.metrics.messagesDelivered||0;
+        $('positiveBar').style.width=`${d.metrics.positiveRate}%`;
+        $('adminBusinesses').textContent=bs.length;
+        $('adminPlan').textContent=d.business.subscription?.plan||'—';
+        renderRecent(d.recentReviews);
+      }catch{}
+    }
+
+    const jobs=[];
+    if(can('REVIEWS'))jobs.push(loadReviews());
+    if(can('QR'))jobs.push(loadQr());
+    if(can('MENU'))jobs.push(loadMenus());
+    if(can('CUSTOMERS'))jobs.push(loadCustomers());
+    if(can('WHATSAPP'))jobs.push(loadCampaigns());
+    if(can('PRICING'))jobs.push(loadPricing(),loadPlanRequests());
+    if(['ADMIN','SUPER_ADMIN'].includes(String(window.currentUser?.role||'').toUpperCase()))jobs.push(loadAdminPlans(),loadAdminPlanRequests());
+    await Promise.allSettled(jobs);
+  }catch(e){$('businessName').textContent='Setup needed: '+e.message}
+}
+function useReview(id){const r=cache.reviews.find(x=>x.id===id);if(!r)return;$('aiText').value=r.text||'';showPage('ai')}
+async function approve(id){try{await post(`/reviews/${id}/approve`,{});toast('AI reply approved');await loadReviews()}catch(e){toast(e.message)}}
+async function requestPlan(code){if(!businessId){toast('Please sign in first');return}try{const name=window.currentUser?.name||'Business owner';const contact=window.currentUser?.email||'';await post('/plan-requests',{businessId,planCode:code,ownerName:name,contact});toast('Plan request submitted. The platform owner will confirm it directly.');await loadPlanRequests()}catch(e){toast(e.message)}}
+$('createQr').onclick=async()=>{try{await post(`/businesses/${businessId}/qr`,{name:$('qrName').value,slug:$('qrSlug').value});toast('QR created');await loadQr()}catch(e){toast(e.message)}};
+$('createMenu').onclick=async()=>{try{await post(`/businesses/${businessId}/menus`,{name:$('menuName').value,published:$('menuPublished').checked});toast('Menu created');await loadMenus()}catch(e){toast(e.message)}};
+$('addItem').onclick=async()=>{try{await post(`/menus/${$('menuSelect').value}/items`,{name:$('itemName').value,price:Number($('itemPrice').value||0),category:$('itemCategory').value,description:$('itemDescription').value});toast('Menu item added');await loadMenus()}catch(e){toast(e.message)}};
+$('createCampaign').onclick=async()=>{try{await post(`/businesses/${businessId}/campaigns`,{name:$('campName').value,message:$('campMessage').value});toast('Campaign created');await loadCampaigns()}catch(e){toast(e.message)}};
+$('aiGenerate').onclick=async()=>{try{const d=await post('/reviews/ai-reply',{text:$('aiText').value});$('aiOutput').style.display='block';$('aiOutput').textContent=d.reply||d.text||'No suggestion';}catch(e){$('aiOutput').style.display='block';$('aiOutput').textContent=e.message}};
+$('syncGoogle').onclick=async()=>{try{await post(`/businesses/${businessId}/reviews/sync`,{});toast('Google review sync started');await load()}catch(e){toast(e.message)}};$('refresh').onclick=()=>load();$('loadReviews').onclick=()=>loadReviews();
+function showPage(page){
+  const featureForPage={reviews:'REVIEWS',ai:'AI',qr:'QR',menu:'MENU',campaigns:'WHATSAPP',orders:'ORDERS',billing:'BILLING'};
+  const blocked=featureForPage[page];
+  const target=$(page);if(!target)return;
+
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  target.classList.add('active');
+  document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+  const active=document.querySelector('[data-page="'+page+'"]');
+  if(active)$('heading').textContent=active.textContent.trim();
+
+  const notice=target.querySelector('[data-feature-blocked]');
+  target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='');
+
+  if(blocked&&window.adminFeatureFlags?.[blocked]===false){
+    target.querySelectorAll(':scope > *:not([data-feature-blocked])').forEach(el=>el.style.display='none');
+
+    const featureName=({
+      REVIEWS:'Reviews',
+      AI:'AI Assistant',
+      QR:'Smart QR',
+      MENU:'Digital Menu',
+      WHATSAPP:'WhatsApp',
+      ORDERS:'Orders',
+      BILLING:'Billing & POS'
+    })[blocked]||'This feature';
+
+    const blockedTheme={
+      REVIEWS:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Review management is currently paused',tag:'Reputation feature'},
+      AI:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'AI assistance is currently paused',tag:'AI-powered feature'},
+      QR:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'QR tools are currently paused',tag:'Smart engagement feature'},
+      MENU:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Digital menu is currently paused',tag:'Menu management feature'},
+      WHATSAPP:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'WhatsApp tools are currently paused',tag:'Messaging feature'},
+      ORDERS:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Order management is currently paused',tag:'Order management feature'},
+      BILLING:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Billing & POS is currently paused',tag:'Business operations feature'}
+    }[blocked]||{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:featureName+' is currently paused',tag:'Platform controlled feature'};
+
+    let blockedNotice=notice;
+    if(!blockedNotice){
+      blockedNotice=document.createElement('div');
+      blockedNotice.dataset.featureBlocked='1';
+      blockedNotice.className='card';
+      target.prepend(blockedNotice);
+    }
+    blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid '+blockedTheme.border+';border-radius:18px;box-shadow:0 14px 36px rgba(15,23,42,.09);background:#fff;';
+    blockedNotice.innerHTML='<div style="padding:24px 22px;background:linear-gradient(135deg,'+blockedTheme.soft+',#fff);border-bottom:1px solid '+blockedTheme.border+'"><div style="display:flex;align-items:center;gap:14px"><div style="width:50px;height:50px;border-radius:15px;background:'+blockedTheme.accent+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 8px 18px rgba(15,23,42,.12)">'+blockedTheme.icon+'</div><div style="min-width:0"><div style="font-size:18px;font-weight:800;color:#111827">Dashboard unavailable</div><div data-blocked-label style="font-size:13px;color:#64748b;margin-top:4px">'+blockedTheme.label+'</div></div></div></div><div style="padding:22px"><div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:7px">This feature has been disabled by the platform administrator.</div><div data-blocked-body style="font-size:13px;line-height:1.6;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div data-blocked-tag style="margin-top:17px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:'+blockedTheme.soft+';color:'+blockedTheme.accent+';font-size:12px;font-weight:700;border:1px solid '+blockedTheme.border+'">'+blockedTheme.tag+'</div></div>';
+    blockedNotice.style.display='';
+    window.scrollTo({top:0,behavior:'smooth'});
+    return;
+  }
+
+  if(notice)notice.style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showPage(b.dataset.page)}));
+initAuth();
+</script>
+<script src="/app-enhancements.js?v=20260923-8"></script><script src="/orders-ui.js?v=20260923-3"></script><script src="/auth-enhancements.js"></script><script src="/reliability-enhancements.js"></script>
+</body></html>
