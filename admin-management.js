@@ -249,6 +249,9 @@ function adminPage(){
    };
    const pending=d.pendingPlanRequest;
    const waStatus=b.whatsappStatus||'NOT CONNECTED';
+   const healthFeatureKeys=['GOOGLE','WHATSAPP','AI','REVIEWS','ORDERS','MENU','QR','BILLING'];
+   const healthEnabledFeatures=healthFeatureKeys.filter(k=>flags[k]!==false).length;
+   const healthLastActivity=b.recentActivity?.[0]?.createdAt||null;
    $('businessDetail').innerHTML='<div class="section card"><div class="section-title"><div><h2>'+esc(b.name)+'</h2><div class="sub">Business Management Center · '+esc(b.id)+'</div></div><div style="display:flex;gap:7px;align-items:center"><button class="admin-download-data" data-action="download-business-data" data-business-id="'+esc(b.id)+'"><span class="btn-icon">⇩</span><span>Download Data</span></button><button class="admin-close-business" onclick="closeBusiness()"><span class="btn-icon">×</span><span>Close</span></button></div></div>'+
     '<div class="wide"><div class="section-title"><h2>Business Account Overview</h2><span>Account information</span></div><div class="detail">'+
     '<div class="kv"><b>Account Created</b>'+date(b.createdAt)+'</div>'+ 
@@ -257,7 +260,17 @@ function adminPage(){
     '<div class="kv"><b>Plan</b>'+esc(sub.plan||\'—\')+'</div>'+ 
     '<div class="kv"><b>Billing Interval</b>'+esc(sub.billingInterval||\'—\')+'</div>'+ 
     '<div class="kv"><b>Subscription End</b>'+date(sub.currentPeriodEnd)+'</div>'+ 
-    '</div></div>'+ 
+    '</div></div>'+
+    '<div class="wide"><div class="section-title"><h2>Business Health Overview</h2><span>Selected business snapshot</span></div><div class="detail">'+
+    '<div class="kv"><b>Business Status</b><div style="margin-top:5px">'+statusPill(b.isOpen?'OPEN':'CLOSED')+'</div></div>'+
+    '<div class="kv"><b>Subscription</b><div style="margin-top:5px">'+statusPill(sub.status||'—')+'</div><div class="sub">'+esc(sub.plan||'—')+'</div></div>'+
+    '<div class="kv"><b>Customers</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+Number(b.customerCount||0)+'</div><div class="sub">Customers recorded</div></div>'+
+    '<div class="kv"><b>Orders</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+Number(b.revenue?.orderCount||0)+'</div><div class="sub">Orders recorded</div></div>'+
+    '<div class="kv"><b>Paid Revenue</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+money(b.revenue?.paidRevenue||0)+'</div><div class="sub">Recorded paid orders</div></div>'+
+    '<div class="kv"><b>Feature Availability</b><div style="font-size:20px;font-weight:800;margin-top:5px">'+healthEnabledFeatures+'/'+healthFeatureKeys.length+'</div><div class="sub">Platform features enabled</div></div>'+
+    '<div class="kv"><b>Last Activity</b><div style="font-weight:800;margin-top:5px">'+(healthLastActivity?date(healthLastActivity):'—')+'</div><div class="sub">Latest recorded business activity</div></div>'+
+    '<div class="kv"><b>Account Created</b><div style="font-weight:800;margin-top:5px">'+date(b.createdAt)+'</div><div class="sub">Business account age</div></div>'+
+    '</div></div>'+
     '<div class="detail">'+
     '<div class="kv"><b>Business Type</b>'+esc(b.type||'—')+'</div>'+
     '<div class="kv"><b>Owner</b>'+esc(owner?.name||'—')+'<div class="sub">'+esc(owner?.email||'')+'</div></div>'+
