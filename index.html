@@ -133,14 +133,14 @@ function showPage(page){
     })[blocked]||'This feature';
 
     const blockedTheme={
-      REVIEWS:{icon:'★',accent:'#2563eb',soft:'#eff6ff',border:'#bfdbfe',label:'Review management is currently paused',tag:'Reputation feature'},
-      AI:{icon:'✦',accent:'#7c3aed',soft:'#f5f3ff',border:'#ddd6fe',label:'AI assistance is currently paused',tag:'AI-powered feature'},
-      QR:{icon:'▦',accent:'#0f766e',soft:'#f0fdfa',border:'#99f6e4',label:'QR tools are currently paused',tag:'Smart engagement feature'},
-      MENU:{icon:'☰',accent:'#b45309',soft:'#fffbeb',border:'#fde68a',label:'Digital menu is currently paused',tag:'Menu management feature'},
-      WHATSAPP:{icon:'◉',accent:'#15803d',soft:'#f0fdf4',border:'#bbf7d0',label:'WhatsApp tools are currently paused',tag:'Messaging feature'},
-      ORDERS:{icon:'▤',accent:'#4338ca',soft:'#eef2ff',border:'#c7d2fe',label:'Order management is currently paused',tag:'Order management feature'},
-      BILLING:{icon:'▤',accent:'#1e293b',soft:'#f8fafc',border:'#cbd5e1',label:'Billing & POS is currently paused',tag:'Business operations feature'}
-    }[blocked]||{icon:'🔒',accent:'#334155',soft:'#f8fafc',border:'#cbd5e1',label:featureName+' is currently paused',tag:'Platform controlled feature'};
+      REVIEWS:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Review management is currently paused',tag:'Reputation feature'},
+      AI:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'AI assistance is currently paused',tag:'AI-powered feature'},
+      QR:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'QR tools are currently paused',tag:'Smart engagement feature'},
+      MENU:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Digital menu is currently paused',tag:'Menu management feature'},
+      WHATSAPP:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'WhatsApp tools are currently paused',tag:'Messaging feature'},
+      ORDERS:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Order management is currently paused',tag:'Order management feature'},
+      BILLING:{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:'Billing & POS is currently paused',tag:'Business operations feature'}
+    }[blocked]||{icon:'🔐',accent:'#b91c1c',soft:'#fef2f2',border:'#fecaca',label:featureName+' is currently paused',tag:'Platform controlled feature'};
 
     let blockedNotice=notice;
     if(!blockedNotice){
