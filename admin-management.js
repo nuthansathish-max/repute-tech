@@ -287,9 +287,11 @@ function adminPage(){
       '<div class="kv"><b>Revenue Status</b><div style="margin-top:5px">'+statusPill(Number(b.revenue?.paidRevenue||0)>0?'REVENUE RECORDED':'NO PAID REVENUE')+'</div><div class="sub">Based on recorded order payment status</div></div>'+
     '</div></div>'+
     '<div class="wide"><div class="section-title"><h2>Customer Data</h2><span>'+Number(b.customerCount||0)+' customer'+(Number(b.customerCount||0)===1?'':'s')+' · selected business only</span></div>'+
+      '<div class="toolbar" style="margin:0 0 10px"><input id="adminCustomerSearch" class="input" type="search" placeholder="Search customer name, phone or email…" aria-label="Search customers"><select id="adminCustomerOrderFilter" class="select" aria-label="Filter customers by orders"><option value="">All customers</option><option value="HAS_ORDERS">With orders</option><option value="NO_ORDERS">No orders</option></select></div>'+
       '<div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.5fr 1fr 90px"><div>Customer</div><div>Phone</div><div>Email</div><div>Orders</div><div>Created</div></div>'+
-      ((b.customers||[]).map(c=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.5fr 1fr 90px"><div><div class="name">'+esc(c.name||'Unnamed customer')+'</div><div class="sub">'+esc(c.id||'')+'</div></div><div>'+esc(c.phone||'—')+'</div><div>'+esc(c.email||'—')+'</div><div>'+Number(c._count?.orders||0)+'</div><div>'+date(c.createdAt)+'</div></div>').join('')||'<div class="empty">No customers recorded for this business.</div>')+
-      '</div></div>'+
+      '<div id="adminCustomerRows">'+
+      ((b.customers||[]).map(c=>'<div class="row admin-customer-row" data-customer-search="'+esc([c.name,c.phone,c.email].filter(Boolean).join(' ').toLowerCase())+'" data-customer-orders="'+Number(c._count?.orders||0)+'" style="grid-template-columns:1.4fr 1.1fr 1.5fr 1fr 90px"><div><div class="name">'+esc(c.name||'Unnamed customer')+'</div><div class="sub">'+esc(c.id||'')+'</div></div><div>'+esc(c.phone||'—')+'</div><div>'+esc(c.email||'—')+'</div><div>'+Number(c._count?.orders||0)+'</div><div>'+date(c.createdAt)+'</div></div>').join('')||'<div class="empty">No customers recorded for this business.</div>')+
+      '</div><div id="adminCustomerEmpty" class="empty hidden">No customers match the selected filters.</div></div></div>'+
     '<div class="wide"><div class="section-title"><h2>Recent Activity</h2><span>Latest activity · selected business only</span></div>'+
       '<div class="recent-list">'+
       ((b.recentActivity||[]).map(a=>'<div class="recent-item"><div class="recent-time">'+date(a.createdAt)+'</div><div><b>'+esc(a.type==='ORDER'?'Order '+(a.orderNumber||''):'Customer activity')+'</b><div class="sub">'+esc(a.customerName||'Unnamed customer')+(a.type==='ORDER'?' · '+money(a.total||0)+' · '+esc(a.status||''):' · '+esc(a.activity||'')+(a.channel?' · '+esc(a.channel):''))+'</div></div></div>').join('')||'<div class="empty">No recent activity recorded for this business.</div>')+
@@ -313,6 +315,27 @@ function adminPage(){
     '</div></div>';
    $('businessDetail').classList.remove('hidden');
    $('businessDetail').querySelectorAll('[data-admin-feature]').forEach(button=>button.addEventListener('click',e=>{e.preventDefault();toggleAdminFeature(button.dataset.adminFeature,button.dataset.businessId,button)}));
+   const customerSearch=$('businessDetail').querySelector('#adminCustomerSearch');
+   const customerOrderFilter=$('businessDetail').querySelector('#adminCustomerOrderFilter');
+   const customerRows=$('businessDetail').querySelectorAll('.admin-customer-row');
+   const customerEmpty=$('businessDetail').querySelector('#adminCustomerEmpty');
+   const filterCustomers=()=>{
+     const q=(customerSearch?.value||'').trim().toLowerCase();
+     const mode=customerOrderFilter?.value||'';
+     let visible=0;
+     customerRows.forEach(row=>{
+       const hay=row.dataset.customerSearch||'';
+       const orders=Number(row.dataset.customerOrders||0);
+       const matchesText=!q||hay.includes(q);
+       const matchesOrders=!mode||(mode==='HAS_ORDERS'&&orders>0)||(mode==='NO_ORDERS'&&orders===0);
+       const show=matchesText&&matchesOrders;
+       row.style.display=show?'':'none';
+       if(show)visible++;
+     });
+     if(customerEmpty)customerEmpty.classList.toggle('hidden',visible!==0||customerRows.length===0);
+   };
+   if(customerSearch)customerSearch.addEventListener('input',filterCustomers);
+   if(customerOrderFilter)customerOrderFilter.addEventListener('change',filterCustomers);
     const exportButton=$('businessDetail').querySelector('[data-action="download-business-data"]');
     if(exportButton)exportButton.addEventListener('click',()=>downloadBusinessData(exportButton.dataset.businessId,exportButton));
   }catch(e){
