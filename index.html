@@ -132,18 +132,35 @@ function showPage(page){
       BILLING:'Billing & POS'
     })[blocked]||'This feature';
 
+    const blockedTheme={
+      REVIEWS:{icon:'★',accent:'#2563eb',soft:'#eff6ff',border:'#bfdbfe',label:'Review management is currently paused',tag:'Reputation feature'},
+      AI:{icon:'✦',accent:'#7c3aed',soft:'#f5f3ff',border:'#ddd6fe',label:'AI assistance is currently paused',tag:'AI-powered feature'},
+      QR:{icon:'▦',accent:'#0f766e',soft:'#f0fdfa',border:'#99f6e4',label:'QR tools are currently paused',tag:'Smart engagement feature'},
+      MENU:{icon:'☰',accent:'#b45309',soft:'#fffbeb',border:'#fde68a',label:'Digital menu is currently paused',tag:'Menu management feature'},
+      WHATSAPP:{icon:'◉',accent:'#15803d',soft:'#f0fdf4',border:'#bbf7d0',label:'WhatsApp tools are currently paused',tag:'Messaging feature'},
+      ORDERS:{icon:'▤',accent:'#4338ca',soft:'#eef2ff',border:'#c7d2fe',label:'Order management is currently paused',tag:'Order management feature'},
+      BILLING:{icon:'▤',accent:'#1e293b',soft:'#f8fafc',border:'#cbd5e1',label:'Billing & POS is currently paused',tag:'Business operations feature'}
+    }[blocked]||{icon:'🔒',accent:'#334155',soft:'#f8fafc',border:'#cbd5e1',label:featureName+' is currently paused',tag:'Platform controlled feature'};
+
     let blockedNotice=notice;
     if(!blockedNotice){
       blockedNotice=document.createElement('div');
       blockedNotice.dataset.featureBlocked='1';
       blockedNotice.className='card';
-      blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid #dbe3f0;box-shadow:0 10px 28px rgba(15,23,42,.08);background:#fff;';
-      blockedNotice.innerHTML='<div style="padding:22px 20px;background:linear-gradient(135deg,#f8fafc,#eef2ff);border-bottom:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:12px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">🔒</div><div><div style="font-size:17px;font-weight:700;color:#111827">Dashboard unavailable</div><div style="font-size:13px;color:#64748b;margin-top:3px">'+featureName+' is currently disabled</div></div></div></div><div style="padding:20px"><div style="font-size:14px;font-weight:600;color:#334155;margin-bottom:6px">This feature has been disabled by the platform administrator.</div><div style="font-size:13px;line-height:1.55;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div style="margin-top:16px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:600">Platform controlled feature</div></div>';
+      blockedNotice.style.cssText='margin-top:16px;padding:0;overflow:hidden;border:1px solid '+blockedTheme.border+';border-radius:18px;box-shadow:0 14px 36px rgba(15,23,42,.09);background:#fff;';
+      blockedNotice.innerHTML='<div style="padding:24px 22px;background:linear-gradient(135deg,'+blockedTheme.soft+',#fff);border-bottom:1px solid '+blockedTheme.border+'"><div style="display:flex;align-items:center;gap:14px"><div style="width:50px;height:50px;border-radius:15px;background:'+blockedTheme.accent+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 8px 18px rgba(15,23,42,.12)">'+blockedTheme.icon+'</div><div style="min-width:0"><div style="font-size:18px;font-weight:800;color:#111827">Dashboard unavailable</div><div data-blocked-label style="font-size:13px;color:#64748b;margin-top:4px">'+blockedTheme.label+'</div></div></div></div><div style="padding:22px"><div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:7px">This feature has been disabled by the platform administrator.</div><div data-blocked-body style="font-size:13px;line-height:1.6;color:#64748b">Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.</div><div data-blocked-tag style="margin-top:17px;display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:'+blockedTheme.soft+';color:'+blockedTheme.accent+';font-size:12px;font-weight:700;border:1px solid '+blockedTheme.border+'">'+blockedTheme.tag+'</div></div>';
       target.prepend(blockedNotice);
     }else{
-      blockedNotice.querySelector('div[style*="font-size:13px;color:#64748b"]')?.replaceChildren(document.createTextNode(featureName+' is currently disabled'));
-      const body=blockedNotice.querySelector('div[style*="line-height:1.55"]');
-      if(body)body.innerHTML='Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.';
+      blockedNotice.style.borderColor=blockedTheme.border;
+      blockedNotice.querySelector('[data-blocked-label]')?.replaceChildren(document.createTextNode(blockedTheme.label));
+      const header=blockedNotice.querySelector('[data-blocked-label]')?.parentElement?.parentElement?.parentElement;
+      if(header)header.style.background='linear-gradient(135deg,'+blockedTheme.soft+',#fff)';
+      const icon=blockedNotice.querySelector('[data-blocked-label]')?.parentElement?.previousElementSibling;
+      if(icon){icon.style.background=blockedTheme.accent;icon.textContent=blockedTheme.icon}
+      const body=blockedNotice.querySelector('[data-blocked-body]');
+      if(body)body.textContent='Access to '+featureName+' is temporarily unavailable for your business. For more details or to request access, please contact customer care.';
+      const tag=blockedNotice.querySelector('[data-blocked-tag]');
+      if(tag){tag.textContent=blockedTheme.tag;tag.style.background=blockedTheme.soft;tag.style.color=blockedTheme.accent;tag.style.borderColor=blockedTheme.border}
     }
     blockedNotice.style.display='';
     window.scrollTo({top:0,behavior:'smooth'});
