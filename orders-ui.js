@@ -73,15 +73,13 @@
       if(!context?.id)throw new Error('No business selected');
       window.reputeBusinessId=context.id;
       if(context.adminFeatureFlags?.ORDERS===false){
-        const section=$('orders');
-        if(section){
-          section.style.display='';
-          section.classList.add('active');
-          section.querySelectorAll(':scope > *').forEach(el=>el.style.display='');
-        }
         updateBadge(0);
-        list.innerHTML='<div class="card"><h3>Orders is currently unavailable</h3><div class="sub">This feature has been disabled by the platform administrator for your business.</div></div>';
-        if($('orderSummary'))$('orderSummary').innerHTML='';
+        if(typeof window.showPage==='function'){
+          window.showPage('orders');
+        }else{
+          list.innerHTML='<div class="card"><h3>Orders is currently unavailable</h3><div class="sub">This feature has been disabled by the platform administrator for your business.</div></div>';
+          if($('orderSummary'))$('orderSummary').innerHTML='';
+        }
         return;
       }
       const orders=await api('/businesses/'+encodeURIComponent(context.id)+'/orders');
