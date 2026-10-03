@@ -74,11 +74,14 @@
       window.reputeBusinessId=context.id;
       if(context.adminFeatureFlags?.ORDERS===false){
         updateBadge(0);
-        if(typeof window.showPage==='function'){
-          window.showPage('orders');
-        }else{
-          list.innerHTML='<div class="card"><h3>Orders is currently unavailable</h3><div class="sub">This feature has been disabled by the platform administrator for your business.</div></div>';
-          if($('orderSummary'))$('orderSummary').innerHTML='';
+        const section=$('orders');
+        if(section){
+          document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+          section.style.display='';
+          section.classList.add('active');
+          section.innerHTML='<section style="width:min(680px,100%);margin:18px auto;background:#fff;border:1px solid #dbe3f0;border-radius:22px;box-shadow:0 18px 45px rgba(15,23,42,.10);overflow:hidden"><div style="padding:24px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff"><div style="display:flex;align-items:center;gap:14px"><div style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:23px">🔐</div><div><div style="font-size:20px;font-weight:800">Orders unavailable</div><div style="font-size:13px;color:#d9deea;margin-top:4px">This dashboard is currently disabled for your business</div></div></div></div><div style="padding:24px"><div style="font-size:14px;font-weight:700;color:#334155">This feature has been disabled by the platform administrator.</div><p style="font-size:13px;line-height:1.6;color:#64748b;margin:8px 0 0">Access to Orders is temporarily unavailable for your business. For more details or to request access, please contact customer care.</p><div style="display:inline-flex;margin-top:17px;padding:8px 11px;border-radius:9px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:700">Platform controlled feature</div></div></section>';
+          document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='orders'));
+          if($('heading'))$('heading').textContent='Orders';
         }
         return;
       }
