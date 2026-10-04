@@ -860,7 +860,7 @@ function install(app){
  originalGet.call(app,'/api/admin/unpaid-bills',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const requests=await prisma.planRequest.findMany({
-   where:{paymentStatus:{not:'PAID'},status:{not:'REJECTED'}},
+   where:{paymentStatus:{not:'PAID'},status:'APPROVED'},
    include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},
    orderBy:{createdAt:'asc'}
   });
