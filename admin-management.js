@@ -740,7 +740,7 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
  }
  document.addEventListener('input',e=>{if(e.target?.id==='healthSearch')renderHealth(window.__healthBusinesses||[])});
  document.addEventListener('change',e=>{if(e.target?.id==='healthFilter')renderHealth(window.__healthBusinesses||[])});
- document.addEventListener('click',e=>{if(e.target?.id==='healthRefresh')loadHealth().catch(err=>{if($('healthRows'))$('healthRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'})});
+ document.addEventListener('click',e=>{const refresh=e.target.closest?.('#healthRefresh');if(refresh){e.preventDefault();loadHealth().catch(err=>{if($('healthRows'))$('healthRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});return;}const view=e.target.closest?.('[data-action="view-business"]');if(view&&view.closest('#healthRows')){e.preventDefault();openBusiness(view.dataset.businessId);return;}});
  async function show(view){
    const section=$(view);
    if(!section)return;
