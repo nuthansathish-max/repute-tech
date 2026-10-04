@@ -125,6 +125,7 @@ function adminPage(){
   <div class="group">Platform Governance</div>
   <button class="nav active" data-view="overview"><span class="ico">◉</span><span class="txt">Master Overview</span></button>
   <button class="nav" data-view="tenants"><span class="ico">▦</span><span class="txt">Tenant Workspaces</span><span class="badge" id="tenantBadge">—</span></button>
+  <button class="nav" data-view="users"><span class="ico">◉</span><span class="txt">Users & IAM</span><span class="badge" id="userBadge">—</span></button>
   <button class="nav" data-view="analytics"><span class="ico">⌁</span><span class="txt">Platform Analytics</span></button>
   <button class="nav" data-view="subscriptions"><span class="ico">◈</span><span class="txt">Subscriptions & Plans</span></button>
   <button class="nav" data-view="revenue"><span class="ico">₹</span><span class="txt">Platform Revenue & Billing</span></button>
@@ -173,6 +174,24 @@ function adminPage(){
     <div class="section"><div class="section-title"><h2>Tenant Fleet Registry</h2><span>Live businesses</span></div><div class="card table"><div class="row head"><div>Tenant Business & Location</div><div>Owner</div><div>Subscription</div><div>Operating State</div><div></div></div><div id="overviewRows"></div></div></div>
    </section>
 
+   <section id="users" class="hidden">
+    <div class="toolbar">
+     <input id="userSearch" class="input" placeholder="Search name, email or user ID">
+     <select id="userRole" class="select"><option value="">All roles</option><option value="OWNER">Owner</option><option value="ADMIN">Admin</option><option value="SUPER_ADMIN">Super Admin</option></select>
+     <select id="userBusiness" class="select"><option value="">All users</option><option value="business">Business users</option><option value="platform">Platform admins</option></select>
+    </div>
+    <div class="section grid4">
+     <div class="card metric-card"><div class="label">Total Users</div><div class="metric" id="userTotal">—</div><div class="sub">Registered platform accounts</div></div>
+     <div class="card metric-card"><div class="label">Business Owners</div><div class="metric" id="userOwners">—</div><div class="sub">Owner accounts</div></div>
+     <div class="card metric-card"><div class="label">Platform Admins</div><div class="metric" id="userAdmins">—</div><div class="sub">Admin and Super Admin</div></div>
+     <div class="card metric-card"><div class="label">Business Associations</div><div class="metric" id="userMemberships">—</div><div class="sub">Total business memberships</div></div>
+    </div>
+    <div class="section card table">
+     <div class="row head" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px"><div>User</div><div>Email</div><div>Role</div><div>Business Access</div><div>Created</div></div>
+     <div id="userRows"></div>
+    </div>
+    <div id="userDetail" class="section hidden"></div>
+   </section>
    <section id="tenants" class="hidden">
     <div class="toolbar"><input id="businessSearch" class="input" placeholder="Search business, owner, email, phone or type"><select id="businessStatus" class="select"><option value="">All subscription states</option><option>TRIAL</option><option>ACTIVE</option><option>INACTIVE</option></select><select id="businessOpenStatus" class="select"><option value="">All business states</option><option value="OPEN">Open businesses</option><option value="CLOSED">Closed businesses</option></select><select id="businessPlan" class="select"><option value="">All plans</option><option value="STARTER">Starter</option><option value="GROWTH_PRO">Growth Pro</option><option value="PRO_PLUS">Pro Plus</option></select><select id="businessSort" class="select"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name_asc">Business name A–Z</option><option value="name_desc">Business name Z–A</option></select></div>
     <div id="businessList" class="card table"><div class="row head"><div>Tenant Business</div><div>Owner</div><div>Plan</div><div>Connection</div><div>Action</div></div><div id="allRows"></div></div>
@@ -276,6 +295,31 @@ function adminPage(){
   if($('tenantBadge'))$('tenantBadge').textContent=rows.length;
   if($('overviewRows'))$('overviewRows').innerHTML=filtered.slice(0,8).map(row).join('')||'<div class="empty">No businesses found.</div>';
   if($('allRows'))$('allRows').innerHTML=filtered.map(row).join('')||'<div class="empty">No businesses found.</div>';
+ }
+ function renderUsers(){
+  const q=($('userSearch')?.value||'').trim().toLowerCase();
+  const role=$('userRole')?.value||'';
+  const scope=$('userBusiness')?.value||'';
+  const filtered=users.filter(u=>{
+   const hay=[u.id,u.name,u.email,u.role].join(' ').toLowerCase();
+   const isPlatform=u.role==='ADMIN'||u.role==='SUPER_ADMIN';
+   return (!q||hay.includes(q))&&(!role||u.role===role)&&(!scope||(scope==='platform'?isPlatform:u.businessCount>0));
+  });
+  if($('userBadge'))$('userBadge').textContent=users.length;
+  if($('userTotal'))$('userTotal').textContent=users.length;
+  if($('userOwners'))$('userOwners').textContent=users.filter(u=>u.role==='OWNER').length;
+  if($('userAdmins'))$('userAdmins').textContent=users.filter(u=>u.role==='ADMIN'||u.role==='SUPER_ADMIN').length;
+  if($('userMemberships'))$('userMemberships').textContent=users.reduce((sum,u)=>sum+Number(u.businessCount||0),0);
+  if($('userRows'))$('userRows').innerHTML=filtered.map(u=>'<div class="row" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px"><div><div class="name">'+esc(u.name||'Unnamed user')+'</div><div class="sub">'+esc(u.id)+'</div></div><div>'+esc(u.email||'')+'</div><div>'+statusPill(u.role)+'</div><div>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div>'+date(u.createdAt)+'</div></div>').join('')||'<div class="empty">No users found.</div>';
+ }
+ async function loadUsers(){
+  try{
+   const d=await api('/admin/users');
+   users=d.users||[];
+   renderUsers();
+  }catch(e){
+   $('userRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  }
  }
  async function openBusiness(id){
   try{
@@ -635,7 +679,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    $('ovPlanMix').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('ovRecentActivity').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('overviewActivity').innerHTML='<div class="empty">Verified activity unavailable.</div>';
   }
  }
- const titles={overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],kill:['Emergency Kill Switch','Emergency operational controls']};
+ const titles={users:['Users & IAM','Platform users, roles and business access overview'],overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],kill:['Emergency Kill Switch','Emergency operational controls']};
  async function show(view){
    const section=$(view);
    if(!section)return;
@@ -647,6 +691,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    $('desc').textContent=titles[view]?.[1]||'';
    try{
     if(view==='overview'||view==='tenants'||view==='analytics')await loadBusinesses();
+    if(view==='users')await loadUsers();
     if(view==='analytics'){
      await loadAnalytics();
     }
@@ -709,7 +754,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    if(hit)show(hit[1]);else alert('No matching Admin section found for: '+e.target.value);
   }
  });
- $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
+ $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);$('userSearch').addEventListener('input',renderUsers);$('userRole').addEventListener('change',renderUsers);$('userBusiness').addEventListener('change',renderUsers);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
  </script></body></html>`;
 }
 function install(app){
