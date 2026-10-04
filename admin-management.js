@@ -174,7 +174,7 @@ function adminPage(){
    </section>
 
    <section id="tenants" class="hidden">
-    <div class="toolbar"><input id="businessSearch" class="input" placeholder="Filter business, owner, email or type"><select id="businessStatus" class="select"><option value="">All subscription states</option><option>TRIAL</option><option>ACTIVE</option><option>INACTIVE</option></select></div>
+    <div class="toolbar"><input id="businessSearch" class="input" placeholder="Search business, owner, email, phone or type"><select id="businessStatus" class="select"><option value="">All subscription states</option><option>TRIAL</option><option>ACTIVE</option><option>INACTIVE</option></select><select id="businessOpenStatus" class="select"><option value="">All business states</option><option value="OPEN">Open businesses</option><option value="CLOSED">Closed businesses</option></select><select id="businessPlan" class="select"><option value="">All plans</option><option value="STARTER">Starter</option><option value="GROWTH_PRO">Growth Pro</option><option value="PRO_PLUS">Pro Plus</option></select><select id="businessSort" class="select"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name_asc">Business name A–Z</option><option value="name_desc">Business name Z–A</option></select></div>
     <div id="businessList" class="card table"><div class="row head"><div>Tenant Business</div><div>Owner</div><div>Plan</div><div>Connection</div><div>Action</div></div><div id="allRows"></div></div>
     <div id="businessDetail" class="hidden"></div>
    </section>
@@ -261,9 +261,17 @@ function adminPage(){
  function renderRows(){
   const q=($('businessSearch')?.value||'').trim().toLowerCase();
   const st=$('businessStatus')?.value||'';
+  const openSt=$('businessOpenStatus')?.value||'';
+  const plan=$('businessPlan')?.value||'';
+  const sort=$('businessSort')?.value||'newest';
   const filtered=rows.filter(b=>{
-   const hay=[b.name,b.ownerName,b.ownerEmail,b.type,b.slug,b.subscription?.plan,b.subscription?.status].join(' ').toLowerCase();
-   return (!q||hay.includes(q))&&(!st||b.subscription?.status===st);
+   const hay=[b.name,b.ownerName,b.ownerEmail,b.phone,b.type,b.slug,b.subscription?.plan,b.subscription?.status].join(' ').toLowerCase();
+   return (!q||hay.includes(q))&&(!st||b.subscription?.status===st)&&(!openSt||(openSt==='OPEN'?b.isOpen===true:b.isOpen===false))&&(!plan||b.subscription?.plan===plan);
+  }).slice().sort((a,b)=>{
+   if(sort==='oldest')return new Date(a.createdAt||0)-new Date(b.createdAt||0);
+   if(sort==='name_asc')return String(a.name||'').localeCompare(String(b.name||''),undefined,{sensitivity:'base'});
+   if(sort==='name_desc')return String(b.name||'').localeCompare(String(a.name||''),undefined,{sensitivity:'base'});
+   return new Date(b.createdAt||0)-new Date(a.createdAt||0);
   });
   if($('tenantBadge'))$('tenantBadge').textContent=rows.length;
   if($('overviewRows'))$('overviewRows').innerHTML=filtered.slice(0,8).map(row).join('')||'<div class="empty">No businesses found.</div>';
@@ -701,7 +709,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    if(hit)show(hit[1]);else alert('No matching Admin section found for: '+e.target.value);
   }
  });
- $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
+ $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
  </script></body></html>`;
 }
 function install(app){
