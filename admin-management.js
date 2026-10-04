@@ -174,7 +174,8 @@ function adminPage(){
    </section>
 
    <section id="tenants" class="hidden">
-    <div class="toolbar"><input id="businessSearch" class="input" placeholder="Filter business, owner, email or type"><select id="businessStatus" class="select"><option value="">All subscription states</option><option>TRIAL</option><option>ACTIVE</option><option>INACTIVE</option></select></div>
+    <div class="toolbar"><input id="businessSearch" class="input" placeholder="Search business, owner, email, phone or type"><select id="businessStatus" class="select"><option value="">All subscription states</option><option>TRIAL</option><option>ACTIVE</option><option>INACTIVE</option></select><select id="businessOpenStatus" class="select"><option value="">All business status</option><option value="OPEN">Open businesses</option><option value="CLOSED">Closed businesses</option></select><select id="businessPlan" class="select"><option value="">All plans</option></select><select id="businessSort" class="select"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="revenue-high">Revenue: High to Low</option><option value="revenue-low">Revenue: Low to High</option><option value="name">Business Name A–Z</option></select></div>
+    </div>
     <div id="businessList" class="card table"><div class="row head"><div>Tenant Business</div><div>Owner</div><div>Plan</div><div>Connection</div><div>Action</div></div><div id="allRows"></div></div>
     <div id="businessDetail" class="hidden"></div>
    </section>
@@ -261,11 +262,20 @@ function adminPage(){
  function renderRows(){
   const q=($('businessSearch')?.value||'').trim().toLowerCase();
   const st=$('businessStatus')?.value||'';
+  const openSt=$('businessOpenStatus')?.value||'';
+  const plan=$('businessPlan')?.value||'';
+  const sort=$('businessSort')?.value||'newest';
   const filtered=rows.filter(b=>{
-   const hay=[b.name,b.ownerName,b.ownerEmail,b.type,b.slug,b.subscription?.plan,b.subscription?.status].join(' ').toLowerCase();
-   return (!q||hay.includes(q))&&(!st||b.subscription?.status===st);
+   const hay=[b.name,b.ownerName,b.ownerEmail,b.phone,b.type,b.slug,b.subscription?.plan,b.subscription?.status].join(' ').toLowerCase();
+   return (!q||hay.includes(q))&&(!st||b.subscription?.status===st)&&(!openSt||(openSt==='OPEN'?b.isOpen:!b.isOpen))&&(!plan||b.subscription?.plan===plan);
+  }).sort((a,b)=>{
+   if(sort==='oldest')return new Date(a.createdAt)-new Date(b.createdAt);
+   if(sort==='revenue-high')return Number(b.paidRevenue||0)-Number(a.paidRevenue||0);
+   if(sort==='revenue-low')return Number(a.paidRevenue||0)-Number(b.paidRevenue||0);
+   if(sort==='name')return String(a.name||'').localeCompare(String(b.name||''));
+   return new Date(b.createdAt)-new Date(a.createdAt);
   });
-  if($('tenantBadge'))$('tenantBadge').textContent=rows.length;
+  if($('tenantBadge'))$('tenantBadge').textContent=filtered.length;
   if($('overviewRows'))$('overviewRows').innerHTML=filtered.slice(0,8).map(row).join('')||'<div class="empty">No businesses found.</div>';
   if($('allRows'))$('allRows').innerHTML=filtered.map(row).join('')||'<div class="empty">No businesses found.</div>';
  }
@@ -528,7 +538,7 @@ async function rejectPlanRequest(id,button,businessId){
   }catch(e){alert('Unable to reject subscription: '+e.message);if(button){button.disabled=false;button.textContent='Reject'}}
  }
  function closeBusiness(){if($('businessDetail')){$('businessDetail').classList.add('hidden');$('businessDetail').innerHTML='';}}
- async function loadBusinesses(){try{const d=await api('/admin/businesses');rows=d.businesses||[];$('ovBusinesses').textContent=rows.length;$('ovActive').textContent=rows.filter(x=>x.subscription?.status==='ACTIVE').length;$('ovTrials').textContent=rows.filter(x=>x.subscription?.status==='TRIAL').length;$('ovPending').textContent=d.pendingPlanRequests||0;renderRows()}catch(e){$('overviewRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
+ async function loadBusinesses(){try{const d=await api('/admin/businesses');rows=d.businesses||[];$('ovBusinesses').textContent=rows.length;$('ovActive').textContent=rows.filter(x=>x.subscription?.status==='ACTIVE').length;$('ovTrials').textContent=rows.filter(x=>x.subscription?.status==='TRIAL').length;$('ovPending').textContent=d.pendingPlanRequests||0;const ps=$('businessPlan');if(ps){const current=ps.value;const plans=[...new Set(rows.map(x=>x.subscription?.plan).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));ps.innerHTML='<option value="">All plans</option>'+plans.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');if(plans.includes(current))ps.value=current;}renderRows()}catch(e){$('overviewRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>}}
  function closeMetricPanel(){const m=$('metricModal');if(m)m.classList.add('hidden')}
 async function openMetricPanel(kind){
  const m=$('metricModal'),title=$('metricModalTitle'),body=$('metricModalBody');
@@ -701,7 +711,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    if(hit)show(hit[1]);else alert('No matching Admin section found for: '+e.target.value);
   }
  });
- $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
+ $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
  </script></body></html>`;
 }
 function install(app){
@@ -709,8 +719,8 @@ function install(app){
  originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage())}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const businesses=await prisma.business.findMany({include:{subscription:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true}}}}},orderBy:{createdAt:'desc'}});
-  const mapped=businesses.map(b=>{const owner=b.members.find(m=>m.role==='OWNER');return {id:b.id,name:b.name,type:b.type,slug:b.slug,isOpen:b.isOpen,createdAt:b.createdAt,memberCount:b.members.length,ownerName:owner?.user?.name||null,ownerEmail:owner?.user?.email||null,subscription:b.subscription?{plan:b.subscription.plan,status:b.subscription.status,billingInterval:b.subscription.billingInterval,monthlyPrice:b.subscription.monthlyPrice,currentPeriodEnd:b.subscription.currentPeriodEnd}:null}});
+  const businesses=await prisma.business.findMany({include:{subscription:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true}}}},orders:{select:{total:true,paymentStatus:true}}},orderBy:{createdAt:'desc'}});
+  const mapped=businesses.map(b=>{const owner=b.members.find(m=>m.role==='OWNER');const orders=b.orders||[];const paidRevenue=orders.filter(o=>o.paymentStatus==='PAID').reduce((sum,o)=>sum+Number(o.total||0),0);return {id:b.id,name:b.name,type:b.type,slug:b.slug,isOpen:b.isOpen,phone:b.phone||null,createdAt:b.createdAt,memberCount:b.members.length,ownerName:owner?.user?.name||null,ownerEmail:owner?.user?.email||null,subscription:b.subscription?{plan:b.subscription.plan,status:b.subscription.status,billingInterval:b.subscription.billingInterval,monthlyPrice:b.subscription.monthlyPrice,currentPeriodEnd:b.subscription.currentPeriodEnd}:null,paidRevenue}});
   const pendingPlanRequests=await prisma.planRequest.count({where:{status:'PENDING'}});
   res.json({businesses:mapped,pendingPlanRequests,adminRole:user.role});
  }catch(e){next(e)}});
