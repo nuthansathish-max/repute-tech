@@ -799,7 +799,8 @@ function install(app){
 
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const paymentStatus=String(req.body?.paymentStatus||'').trim().toUpperCase();
+  const body=await readAdminJsonBody(req);
+  const paymentStatus=String(body?.paymentStatus||'').trim().toUpperCase();
   const allowed=['MANUAL','PENDING','PAID','FAILED','EXPIRED'];
   if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
