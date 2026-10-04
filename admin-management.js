@@ -868,8 +868,8 @@ function install(app){
    const owner=x.business.members[0]?.user;
    return {
     id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,
-    ownerName:owner?.user?.name||x.ownerName||x.user?.name||null,
-    ownerEmail:owner?.user?.email||x.user?.email||null,
+    ownerName:owner?.name||x.ownerName||x.user?.name||null,
+    ownerEmail:owner?.email||x.user?.email||null,
     planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,
     status:x.status,paymentStatus:x.paymentStatus,contact:x.contact,createdAt:x.createdAt,updatedAt:x.updatedAt
    };
