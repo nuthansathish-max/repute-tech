@@ -188,7 +188,7 @@ function adminPage(){
    </section>
 
    <section id="subscriptions" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Catalog Plans</div><div class="metric" id="planCount">—</div></div><div class="card metric-card"><div class="label">Active Plans</div><div class="metric" id="planActive">—</div></div><div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="planPending">—</div></div><div class="card metric-card"><div class="label">Trial Policy</div><div class="metric">7 days</div></div></div><div class="section card table"><div class="row head"><div>Plan</div><div>Price</div><div>Interval</div><div>State</div><div></div></div><div id="planRows"></div></div><div class="section card"><div class="section-title"><div><h2>All Unpaid Subscription Bills</h2><span>Payment status is not PAID · rejected requests are excluded</span></div><span id="unpaidBillSummary">Loading…</span></div><div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div>Business</div><div>Owner</div><div>Plan</div><div>Amount</div><div>Payment</div><div>Request</div><div>Requested</div><div>Action</div></div><div id="unpaidBillRows"></div></div></div></section>
-   <section id="revenue" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Order Value</div><div class="metric" id="revValue">—</div><div class="sub">Recorded platform orders</div></div><div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="revPaid">—</div></div><div class="card metric-card"><div class="label">Pending Orders</div><div class="metric" id="revPending">—</div></div><div class="card metric-card"><div class="label">Billing Model</div><div class="metric">SaaS</div><div class="sub">Subscription + platform orders</div></div></div><div class="section notice">Revenue and tax automation controls are not connected to this admin UI yet; this page currently exposes the verified order totals only.</div></section>
+   <section id="revenue" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Platform Revenue</div><div class="metric" id="revValue">—</div><div class="sub">Paid customer orders + paid subscriptions</div></div><div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="revPaid">—</div></div><div class="card metric-card"><div class="label">Pending Orders</div><div class="metric" id="revPending">—</div></div><div class="card metric-card"><div class="label">Billing Model</div><div class="metric">SaaS</div><div class="sub">Subscription + platform orders</div></div></div><div class="section notice">Revenue and tax automation controls are not connected to this admin UI yet; this page currently exposes the verified order totals only.</div></section>
 
    <section id="reviews" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Reviews</div><div class="metric" id="reviewCount">—</div></div><div class="card metric-card"><div class="label">Approved</div><div class="metric" id="reviewApproved">—</div></div><div class="card metric-card"><div class="label">Published</div><div class="metric" id="reviewPublished">—</div></div><div class="card metric-card"><div class="label">Failed</div><div class="metric" id="reviewFailed">—</div></div></div><div class="section card"><div class="section-title"><h2>Reviews & AI Pipeline</h2><span>Existing production workflow</span></div><div class="mini-grid"><div class="card ok"><div class="label">AI pipeline</div><div class="metric">94%</div><div class="sub">UI reference indicator</div></div><div class="card"><div class="label">Google publish</div><div class="metric">LIVE</div><div class="sub">Existing business workflow</div></div><div class="card"><div class="label">Failures</div><div class="metric" id="reviewFailed2">—</div><div class="sub">Recorded failed replies</div></div></div></div></section>
    <section id="ai" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">AI Usage</div><div class="metric">MONITOR</div><div class="sub">Telemetry shell</div></div><div class="card metric-card"><div class="label">Token Usage</div><div class="metric">—</div><div class="sub">No verified token ledger endpoint</div></div><div class="card metric-card"><div class="label">AI Errors</div><div class="metric">—</div><div class="sub">No dedicated metric endpoint</div></div><div class="card metric-card"><div class="label">Policy</div><div class="metric">ACTIVE</div></div></div><div class="section notice">This section is intentionally UI-only until the production AI/token telemetry source is connected.</div></section>
@@ -426,7 +426,21 @@ function adminPage(){
    await openBusiness(id);
   }catch(e){alert('Unable to change owner password: '+e.message)}
  }
- async function changePlanPaymentStatus(id,select){
+ async function markSubscriptionPaid(id,button){
+ if(!id)return;
+ if(!confirm('Confirm that the subscription payment has been received?'))return;
+ if(button){button.disabled=true;button.textContent='Updating…';}
+ try{
+  await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:'PAID'})});
+  alert('Payment marked as PAID and added to platform revenue.');
+  await loadUnpaidBills();
+  await loadOrders();
+ }catch(e){
+  alert('Unable to mark payment as PAID: '+e.message);
+  if(button){button.disabled=false;button.textContent='✓ Paid';}
+ }
+}
+async function changePlanPaymentStatus(id,select){
  if(!id||!select)return;
  const old=select.value;select.disabled=true;
  try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:select.value})});alert('Payment status updated successfully.');await openBusiness(select.dataset.businessId||'');}
@@ -486,9 +500,9 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   const d=await api('/admin/unpaid-bills');
   const bills=d.bills||[];
   $('unpaidBillSummary').textContent=bills.length+' bill'+(bills.length===1?'':'s')+' · '+money(d.totalAmount||0)+' outstanding';
-  $('unpaidBillRows').innerHTML=bills.length?bills.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+statusPill(x.status)+'</div><div>'+date(x.createdAt)+'</div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View</button></div></div>').join(''):'<div class="empty">No unpaid subscription bills.</div>';
+  $('unpaidBillRows').innerHTML=bills.length?bills.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+statusPill(x.status)+'</div><div>'+date(x.createdAt)+'</div><div><button class="smallbtn" data-action="mark-subscription-paid" data-request-id="'+esc(x.id)+'">✓ Paid</button><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'" style="margin-left:4px">View</button></div></div>').join(''):'<div class="empty">No unpaid subscription bills.</div>';
  }
- async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
+ async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.totalRevenue??d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
  async function loadReviews(){const d=await api('/admin/reviews');$('reviewCount').textContent=d.count;$('reviewApproved').textContent=d.approved;$('reviewPublished').textContent=d.published;$('reviewFailed').textContent=d.failed;$('reviewFailed2').textContent=d.failed;$('anReviews').textContent=d.count}
  async function loadIntegrations(){const d=await api('/admin/integrations');$('googleCount').textContent=d.google;$('googleAccounts').textContent=d.googleAccounts;$('waCount').textContent=d.whatsapp;$('waConnected').textContent=d.whatsappConnected;$('ovGoogle').textContent=d.google;$('ovWhatsApp').textContent=d.whatsappConnected}
  async function loadAudit(){const d=await api('/admin/audit');$('auditRows').innerHTML=d.logs.map(x=>'<div class="row"><div class="name">'+esc(x.action)+'</div><div>'+esc(x.entity)+'</div><div>'+esc(x.actor||'System')+'</div><div>'+date(x.createdAt)+'</div><div></div></div>').join('')||'<div class="empty">No audit events.</div>'}
@@ -567,6 +581,8 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(deleteBtn){e.preventDefault();deleteBusiness(deleteBtn.dataset.adminDeleteBusiness,deleteBtn);return}
   const viewBtn=e.target.closest('[data-action="view-business"]');
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
+  const paidBtn=e.target.closest('[data-action="mark-subscription-paid"]');
+  if(paidBtn){e.preventDefault();markSubscriptionPaid(paidBtn.dataset.requestId,paidBtn);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
@@ -893,7 +909,7 @@ function install(app){
       create:{businessId:request.businessId,plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd},
       update:{plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd,trialStartedAt:null,trialEndsAt:null}
     });
-    const approved=await tx.planRequest.update({where:{id:request.id},data:{status:'APPROVED',approvedAt:now,approvedByUserId:user.id,paymentStatus:'MANUAL'}});
+    const approved=await tx.planRequest.update({where:{id:request.id},data:{status:'APPROVED',approvedAt:now,approvedByUserId:user.id,paymentStatus:'PENDING'}});
     await tx.auditLog.create({data:{actorUserId:user.id,action:'APPROVE_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planCode:request.planCode}}});
     return {subscription,approved};
   });
@@ -917,13 +933,16 @@ function install(app){
  });
  originalGet.call(app,'/api/admin/orders',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const [count,pending,paid,sum]=await Promise.all([
+  const [count,pending,paid,sum,subscriptionRevenue]=await Promise.all([
    prisma.order.count(),
    prisma.order.count({where:{status:'PENDING'}}),
    prisma.order.count({where:{paymentStatus:'PAID'}}),
-   prisma.order.aggregate({_sum:{total:true}})
+   prisma.order.aggregate({_sum:{total:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}})
   ]);
-  res.json({count,pending,paid,value:Number(sum._sum.total||0)});
+  const orderValue=Number(sum._sum.total||0);
+  const paidSubscriptionRevenue=Number(subscriptionRevenue._sum.price||0);
+  res.json({count,pending,paid,value:orderValue,subscriptionRevenue:paidSubscriptionRevenue,totalRevenue:orderValue+paidSubscriptionRevenue});
  }catch(e){ next(e); }
  });
  originalGet.call(app,'/api/admin/reviews',async(req,res,next)=>{try{
