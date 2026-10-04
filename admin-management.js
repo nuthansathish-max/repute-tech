@@ -615,7 +615,7 @@ async function approvePlanRequest(id,button){
   if(button){button.disabled=false;button.textContent=old||'Approve';}
  }
 }
-async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
+async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();if($('anUsers'))$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
  async function loadPlans(){const d=await api('/admin/plans');$('planCount').textContent=d.plans.length;$('planActive').textContent=d.plans.filter(x=>x.active).length;$('planPending').textContent=d.pending;$('planRows').innerHTML=d.plans.map(p=>'<div class="row"><div><div class="name">'+esc(p.name)+'</div><div class="sub">'+esc(p.code)+'</div></div><div>'+money(p.price)+'</div><div>'+esc(p.billingInterval)+'</div><div>'+statusPill(p.active?'ACTIVE':'INACTIVE')+'</div><div></div></div>').join('')||'<div class="empty">No plans.</div>'}
  async function loadUnpaidBills(){
   const d=await api('/admin/unpaid-bills');
