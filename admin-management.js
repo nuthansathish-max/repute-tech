@@ -127,6 +127,7 @@ function adminPage(){
   <button class="nav" data-view="tenants"><span class="ico">▦</span><span class="txt">Tenant Workspaces</span><span class="badge" id="tenantBadge">—</span></button>
   <button class="nav" data-view="users"><span class="ico">◉</span><span class="txt">Users & IAM</span><span class="badge" id="userBadge">—</span></button>
   <button class="nav" data-view="analytics"><span class="ico">⌁</span><span class="txt">Platform Analytics</span></button>
+  <button class="nav" data-view="health"><span class="ico">!</span><span class="txt">Business Health</span><span class="badge" id="healthBadge">—</span></button>
   <button class="nav" data-view="subscriptions"><span class="ico">◈</span><span class="txt">Subscriptions & Plans</span></button>
   <button class="nav" data-view="revenue"><span class="ico">₹</span><span class="txt">Platform Revenue & Billing</span></button>
   <div class="group">Infrastructure & Gateways</div>
@@ -256,6 +257,28 @@ function adminPage(){
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
    <section id="payouts" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Payouts</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Gateway</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Settled</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exceptions</div><div class="metric">—</div></div></div><div class="section notice">Payout gateway data is not currently exposed by a verified admin endpoint.</div></section>
 
+   <section id="health" class="hidden">
+    <div class="grid4">
+     <div class="card metric-card"><div class="label">Needs Attention</div><div class="metric" id="healthAttention">—</div><div class="sub">Businesses with one or more risk signals</div></div>
+     <div class="card metric-card"><div class="label">Payment Issues</div><div class="metric" id="healthPayments">—</div><div class="sub">Approved subscriptions not paid</div></div>
+     <div class="card metric-card"><div class="label">Trials Ending Soon</div><div class="metric" id="healthTrials">—</div><div class="sub">7 days or less remaining</div></div>
+     <div class="card metric-card"><div class="label">Blocked Features</div><div class="metric" id="healthBlocked">—</div><div class="sub">Businesses with admin-disabled features</div></div>
+    </div>
+    <div class="section-title" style="margin-top:14px"><h2>Business Health & Risk Center</h2><span>Verified signals from current platform data</span></div>
+    <div class="card">
+      <div class="toolbar">
+       <input id="healthSearch" class="input" placeholder="Search business, owner or risk">
+       <select id="healthFilter" class="select"><option value="">All risk levels</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="HEALTHY">Healthy</option></select>
+       <button class="smallbtn" id="healthRefresh">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="card table section">
+      <div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.15fr 1.25fr 1.3fr 120px;min-width:980px">
+       <div>Business</div><div>Owner</div><div>Subscription</div><div>Activity</div><div>Risk</div><div>Action</div>
+      </div>
+      <div id="healthRows"></div>
+    </div>
+   </section>
    <section id="audit" class="hidden"><div class="section-title"><h2>Administrative Security Trail</h2><span>Latest 100 events · read-only</span></div><div class="card"><div class="toolbar"><input id="auditSearch" class="input" placeholder="Search action, entity, actor, business or details"><select id="auditCategory" class="select"><option value="">All categories</option><option value="FEATURE">Feature Control</option><option value="SUBSCRIPTION">Subscriptions</option><option value="BUSINESS">Business</option><option value="USER">Users & Access</option><option value="SECURITY">Security</option><option value="OTHER">Other</option></select><button class="smallbtn" id="auditRefresh">↻ Refresh</button></div><div class="notice">This is a read-only record of verified administrative actions. No existing business operation is changed from this page.</div></div><div class="card table section"><div class="row head" style="grid-template-columns:1.35fr 1fr 1.25fr 1.25fr 150px;min-width:980px"><div>Action</div><div>Category</div><div>Actor</div><div>Business / Entity</div><div>Time</div></div><div id="auditRows"></div></div></section>
    <section id="billing" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Starter</div><div class="metric">₹499</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Growth Pro</div><div class="metric">₹999</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Pro Plus</div><div class="metric">₹1499</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Yearly Plans</div><div class="metric">3</div><div class="sub">₹4999 · ₹9999 · ₹12999</div></div></div><div class="section notice">Billing tiers mirror the existing six-plan catalog. Editing controls are not enabled in this phase.</div></section>
    <section id="kill" class="hidden"><div class="card danger"><div class="section-title"><h2>Emergency Kill Switch</h2><span>Security & Config</span></div><div class="kv"><b>Global state</b><span class="pill good">OFF · NORMAL OPERATIONS</span></div><div class="notice" style="margin-top:10px">No destructive or global shutdown action is wired to this UI. This prevents accidental changes to live business operations.</div></div></section>
@@ -685,7 +708,39 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
    $('ovPlanMix').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('ovRecentActivity').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('overviewActivity').innerHTML='<div class="empty">Verified activity unavailable.</div>';
   }
  }
- const titles={users:['Users & IAM','Platform users, roles and business access overview'],overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],kill:['Emergency Kill Switch','Emergency operational controls']};
+ const titles={health:['Business Health','Business risk, subscription and activity monitoring'],users:['Users & IAM','Platform users, roles and business access overview'],overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],kill:['Emergency Kill Switch','Emergency operational controls']};
+ async function loadHealth(){
+  const d=await api('/admin/business-health');
+  $('healthAttention').textContent=d.summary?.attention??0;
+  $('healthPayments').textContent=d.summary?.paymentIssues??0;
+  $('healthTrials').textContent=d.summary?.trialsEndingSoon??0;
+  $('healthBlocked').textContent=d.summary?.blockedFeatures??0;
+  if($('healthBadge'))$('healthBadge').textContent=d.summary?.attention??0;
+  window.__healthBusinesses=d.businesses||[];renderHealth(window.__healthBusinesses);
+ }
+ function renderHealth(items){
+  const q=String($('healthSearch')?.value||'').toLowerCase().trim();
+  const filter=String($('healthFilter')?.value||'');
+  const filtered=items.filter(x=>{
+   const hay=[x.businessName,x.ownerName,x.ownerEmail,x.riskLevel,(x.risks||[]).join(' ')].join(' ').toLowerCase();
+   return (!q||hay.includes(q))&&(!filter||x.riskLevel===filter);
+  });
+  $('healthRows').innerHTML=filtered.map(x=>{
+   const riskClass=x.riskLevel==='HIGH'?'bad':x.riskLevel==='MEDIUM'?'warn':'good';
+   const risks=(x.risks||[]).map(r=>'<span class="pill '+riskClass+'" style="margin:2px">'+esc(r)+'</span>').join('');
+   return '<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.15fr 1.25fr 1.3fr 120px;min-width:980px">'+
+    '<div><b>'+esc(x.businessName)+'</b><div class="sub">'+esc(x.businessType||'')+'</div></div>'+
+    '<div>'+esc(x.ownerName||'—')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div>'+
+    '<div>'+esc(x.subscriptionLabel||'No subscription')+'<div class="sub">'+esc(x.paymentLabel||'')+'</div></div>'+
+    '<div>'+esc(x.activityLabel||'No activity')+'</div>'+
+    '<div>'+('<span class="pill '+riskClass+'">'+esc(x.riskLevel)+'</span>')+'<div style="margin-top:5px">'+risks+'</div></div>'+
+    '<div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View</button></div>'+
+   '</div>';
+  }).join('')||'<div class="empty">No businesses match this health filter.</div>';
+ }
+ document.addEventListener('input',e=>{if(e.target?.id==='healthSearch')renderHealth(window.__healthBusinesses||[])});
+ document.addEventListener('change',e=>{if(e.target?.id==='healthFilter')renderHealth(window.__healthBusinesses||[])});
+ document.addEventListener('click',e=>{if(e.target?.id==='healthRefresh')loadHealth().catch(err=>{if($('healthRows'))$('healthRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'})});
  async function show(view){
    const section=$(view);
    if(!section)return;
@@ -697,6 +752,7 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
    $('desc').textContent=titles[view]?.[1]||'';
    try{
     if(view==='overview'||view==='tenants'||view==='analytics')await loadBusinesses();
+    if(view==='health')await loadHealth();
     if(view==='users')await loadUsers();
     if(view==='analytics'){
      await loadAnalytics();
@@ -1194,6 +1250,43 @@ function install(app){
   for(const x of activity){if(!x.businessId)continue;const s=stats.get(x.businessId)||{businessId:x.businessId,reviewsProcessed:0,aiReplies:0,pending:0,published:0,businessName:'Unnamed business'};s.aiReplies++;if(x.replyStatus==='PENDING_APPROVAL')s.pending++;if(x.replyStatus==='PUBLISHED')s.published++;stats.set(x.businessId,s)}
   const rows=[...stats.values()].sort((a,b)=>b.aiReplies-a.aiReplies||a.businessName.localeCompare(b.businessName));
   res.json({reviewsProcessed:reviews,aiRepliesGenerated:generated,pendingApproval:pending,publishedAiReplies:published,failedReplies:failed,businessCount:rows.length,businesses:rows,providerMode:process.env.OPENAI_API_KEY?'OPENAI':'LOCAL FALLBACK',tokenTelemetry:'Not available from the current AI provider response; no token values are fabricated.'});
+ }catch(e){next(e)}});
+ originalGet.call(app,'/api/admin/business-health',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const now=new Date(), soon=new Date(now.getTime()+7*24*60*60*1000), stale=new Date(now.getTime()-30*24*60*60*1000);
+  const [businesses,subs,payments,orders,reviews,flagRows]=await Promise.all([
+   prisma.business.findMany({select:{id:true,name:true,type:true,isOpen:true,members:{where:{role:'OWNER'},select:{userId:true,user:{select:{name:true,email:true}}}}},orderBy:{name:'asc'}}),
+   prisma.subscription.findMany({select:{businessId:true,status:true,plan:true,billingInterval:true,trialEndsAt:true,currentPeriodEnd:true}}),
+   prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:{not:'PAID'}},select:{businessId:true,paymentStatus:true,price:true,billingInterval:true,planName:true}}),
+   prisma.order.findMany({select:{businessId:true,createdAt:true},orderBy:{createdAt:'desc'},take:10000}),
+   prisma.review.findMany({select:{businessId:true,createdAt:true},orderBy:{createdAt:'desc'},take:10000}),
+   prisma.$queryRawUnsafe('SELECT "id", COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business"')
+  ]);
+  const subMap=new Map(subs.map(x=>[x.businessId,x]));
+  const payMap=new Map(payments.map(x=>[x.businessId,x]));
+  const latest=new Map();
+  for(const x of [...orders,...reviews]){if(!x.businessId)continue;const t=new Date(x.createdAt).getTime();if(!latest.has(x.businessId)||t>new Date(latest.get(x.businessId)).getTime())latest.set(x.businessId,x.createdAt);}
+  const flagsMap=new Map((flagRows||[]).map(x=>{let f=x.flags||{};if(typeof f==='string'){try{f=JSON.parse(f)}catch{f={}}}return [x.id,f]}));
+  const rows=businesses.map(b=>{
+   const sub=subMap.get(b.id), payment=payMap.get(b.id), last=latest.get(b.id);
+   const risks=[];
+   if(payment)risks.push('PAYMENT DUE');
+   if(sub?.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<=soon)risks.push('TRIAL ENDING');
+   if(!sub||(!['ACTIVE','TRIAL'].includes(sub.status)))risks.push('NO ACTIVE SUBSCRIPTION');
+   if(last&&new Date(last)<stale)risks.push('LOW ACTIVITY');
+   if(!last)risks.push('NO ACTIVITY');
+   if(!b.isOpen)risks.push('BUSINESS CLOSED');
+   const flags=flagsMap.get(b.id)||{};
+   const blocked=Object.entries(flags).filter(([k,v])=>v===false).map(([k])=>k);
+   if(blocked.length)risks.push(blocked.length+' FEATURE'+(blocked.length>1?'S':'')+' BLOCKED');
+   let riskLevel='HEALTHY';
+   if(risks.some(x=>['PAYMENT DUE','NO ACTIVE SUBSCRIPTION','NO ACTIVITY','BUSINESS CLOSED'].includes(x)||x.includes('FEATURE')))riskLevel='HIGH';
+   else if(risks.length)riskLevel='MEDIUM';
+   const owner=b.members?.[0]?.user;
+   return {businessId:b.id,businessName:b.name||'Unnamed business',businessType:b.type||'',ownerName:owner?.name||'',ownerEmail:owner?.email||'',riskLevel,risks,blockedFeatures:blocked,subscriptionLabel:sub?(String(sub.plan||'').replace(/_/g,' ')+' · '+(sub.billingInterval||'')):'No subscription',paymentLabel:payment?('Payment '+String(payment.paymentStatus||'PENDING')):'Paid / none pending',activityLabel:last?('Last activity '+new Date(last).toLocaleDateString('en-IN')):'No recorded order/review activity'});
+  });
+  const summary={attention:rows.filter(x=>x.riskLevel!=='HEALTHY').length,paymentIssues:rows.filter(x=>x.risks.includes('PAYMENT DUE')).length,trialsEndingSoon:rows.filter(x=>x.risks.includes('TRIAL ENDING')).length,blockedFeatures:rows.filter(x=>x.blockedFeatures.length>0).length};
+  res.json({summary,businesses:rows});
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/integrations',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
