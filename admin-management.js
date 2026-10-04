@@ -187,7 +187,7 @@ function adminPage(){
     <div class="section grid2"><div class="card"><div class="section-title"><h2>Platform Trend</h2><span>Illustrative telemetry shell</span></div><div class="chart"><svg viewBox="0 0 800 245" preserveAspectRatio="none"><path d="M0 220 C100 214 120 190 210 202 S330 145 405 170 S500 118 575 145 S690 86 800 105 L800 245 L0 245Z" fill="#5146e51c"/><path d="M0 220 C100 214 120 190 210 202 S330 145 405 170 S500 118 575 145 S690 86 800 105" fill="none" stroke="#5146e5" stroke-width="3"/></svg></div></div><div class="card"><div class="section-title"><h2>Operational Mix</h2><span>Current platform counts</span></div><div class="label">Active subscriptions</div><div class="bar"><span id="activeBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Trial subscriptions</div><div class="bar"><span id="trialBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Pending requests</div><div class="bar"><span id="pendingBar" style="width:0"></span></div></div></div>
    </section>
 
-   <section id="subscriptions" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Catalog Plans</div><div class="metric" id="planCount">—</div></div><div class="card metric-card"><div class="label">Active Plans</div><div class="metric" id="planActive">—</div></div><div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="planPending">—</div></div><div class="card metric-card"><div class="label">Trial Policy</div><div class="metric">7 days</div></div></div><div class="section card table"><div class="row head"><div>Plan</div><div>Price</div><div>Interval</div><div>State</div><div></div></div><div id="planRows"></div></div></section>
+   <section id="subscriptions" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Catalog Plans</div><div class="metric" id="planCount">—</div></div><div class="card metric-card"><div class="label">Active Plans</div><div class="metric" id="planActive">—</div></div><div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="planPending">—</div></div><div class="card metric-card"><div class="label">Trial Policy</div><div class="metric">7 days</div></div></div><div class="section card table"><div class="row head"><div>Plan</div><div>Price</div><div>Interval</div><div>State</div><div></div></div><div id="planRows"></div></div><div class="section card"><div class="section-title"><div><h2>All Unpaid Subscription Bills</h2><span>Payment status is not PAID · rejected requests are excluded</span></div><span id="unpaidBillSummary">Loading…</span></div><div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div>Business</div><div>Owner</div><div>Plan</div><div>Amount</div><div>Payment</div><div>Request</div><div>Requested</div><div>Action</div></div><div id="unpaidBillRows"></div></div></div></section>
    <section id="revenue" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Order Value</div><div class="metric" id="revValue">—</div><div class="sub">Recorded platform orders</div></div><div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="revPaid">—</div></div><div class="card metric-card"><div class="label">Pending Orders</div><div class="metric" id="revPending">—</div></div><div class="card metric-card"><div class="label">Billing Model</div><div class="metric">SaaS</div><div class="sub">Subscription + platform orders</div></div></div><div class="section notice">Revenue and tax automation controls are not connected to this admin UI yet; this page currently exposes the verified order totals only.</div></section>
 
    <section id="reviews" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Reviews</div><div class="metric" id="reviewCount">—</div></div><div class="card metric-card"><div class="label">Approved</div><div class="metric" id="reviewApproved">—</div></div><div class="card metric-card"><div class="label">Published</div><div class="metric" id="reviewPublished">—</div></div><div class="card metric-card"><div class="label">Failed</div><div class="metric" id="reviewFailed">—</div></div></div><div class="section card"><div class="section-title"><h2>Reviews & AI Pipeline</h2><span>Existing production workflow</span></div><div class="mini-grid"><div class="card ok"><div class="label">AI pipeline</div><div class="metric">94%</div><div class="sub">UI reference indicator</div></div><div class="card"><div class="label">Google publish</div><div class="metric">LIVE</div><div class="sub">Existing business workflow</div></div><div class="card"><div class="label">Failures</div><div class="metric" id="reviewFailed2">—</div><div class="sub">Recorded failed replies</div></div></div></div></section>
@@ -482,6 +482,12 @@ async function approvePlanRequest(id,button){
 }
 async function loadUsers(){const d=await api('/admin/users');users=d.users||[];const q=($('globalSearch')?.value||'').toLowerCase();$('anUsers').textContent=users.length;return users.filter(u=>!q||[u.name,u.email,u.role].join(' ').toLowerCase().includes(q))}
  async function loadPlans(){const d=await api('/admin/plans');$('planCount').textContent=d.plans.length;$('planActive').textContent=d.plans.filter(x=>x.active).length;$('planPending').textContent=d.pending;$('planRows').innerHTML=d.plans.map(p=>'<div class="row"><div><div class="name">'+esc(p.name)+'</div><div class="sub">'+esc(p.code)+'</div></div><div>'+money(p.price)+'</div><div>'+esc(p.billingInterval)+'</div><div>'+statusPill(p.active?'ACTIVE':'INACTIVE')+'</div><div></div></div>').join('')||'<div class="empty">No plans.</div>'}
+ async function loadUnpaidBills(){
+  const d=await api('/admin/unpaid-bills');
+  const bills=d.bills||[];
+  $('unpaidBillSummary').textContent=bills.length+' bill'+(bills.length===1?'':'s')+' · '+money(d.totalAmount||0)+' outstanding';
+  $('unpaidBillRows').innerHTML=bills.length?bills.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+statusPill(x.status)+'</div><div>'+date(x.createdAt)+'</div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View</button></div></div>').join(''):'<div class="empty">No unpaid subscription bills.</div>';
+ }
  async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
  async function loadReviews(){const d=await api('/admin/reviews');$('reviewCount').textContent=d.count;$('reviewApproved').textContent=d.approved;$('reviewPublished').textContent=d.published;$('reviewFailed').textContent=d.failed;$('reviewFailed2').textContent=d.failed;$('anReviews').textContent=d.count}
  async function loadIntegrations(){const d=await api('/admin/integrations');$('googleCount').textContent=d.google;$('googleAccounts').textContent=d.googleAccounts;$('waCount').textContent=d.whatsapp;$('waConnected').textContent=d.whatsappConnected;$('ovGoogle').textContent=d.google;$('ovWhatsApp').textContent=d.whatsappConnected}
@@ -532,6 +538,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
      $('anBiz').textContent=rows.length;
     }
     if(view==='subscriptions'||view==='billing')await loadPlans();
+    if(view==='subscriptions')await loadUnpaidBills();
     if(view==='orders'||view==='revenue')await loadOrders();
     if(view==='reviews')await loadReviews();
     if(view==='google'||view==='whatsapp'||view==='overview')await loadIntegrations();
@@ -848,6 +855,27 @@ function install(app){
   const now=Date.now();
   const subscriptions=subs.map(s=>{const business=businessMap.get(s.businessId);const owner=business?.members?.[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.currentPeriodEnd||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:business?.name||'Unknown Business',businessType:business?.type||null,isOpen:business?.isOpen??false,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,currentPeriodEnd:s.currentPeriodEnd,daysRemaining,status:s.status}});
   res.json({subscriptions});
+ }catch(e){next(e)}});
+
+ originalGet.call(app,'/api/admin/unpaid-bills',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const requests=await prisma.planRequest.findMany({
+   where:{paymentStatus:{not:'PAID'},status:{not:'REJECTED'}},
+   include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},
+   orderBy:{createdAt:'asc'}
+  });
+  const bills=requests.map(x=>{
+   const owner=x.business.members[0]?.user;
+   return {
+    id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,
+    ownerName:owner?.user?.name||x.ownerName||x.user?.name||null,
+    ownerEmail:owner?.user?.email||x.user?.email||null,
+    planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,
+    status:x.status,paymentStatus:x.paymentStatus,contact:x.contact,createdAt:x.createdAt,updatedAt:x.updatedAt
+   };
+  });
+  const totalAmount=bills.reduce((sum,x)=>sum+Number(x.price||0),0);
+  res.json({bills,totalAmount});
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/approve',async(req,res,next)=>{try{
