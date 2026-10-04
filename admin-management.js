@@ -1184,15 +1184,15 @@ function install(app){
    prisma.review.count({where:{replyStatus:'PUBLISHED',aiReply:{not:null}}}),
    prisma.review.count({where:{replyStatus:'FAILED',aiReply:{not:null}}})
   ]);
-  const activity=await prisma.review.findMany({where:{aiReply:{not:null}},select:{businessId:true,replyStatus:true},take:10000});
-  const ids=[...new Set(activity.map(x=>x.businessId).filter(Boolean))];
-  const allReviews=ids.length?await prisma.review.findMany({where:{businessId:{in:ids}},select:{businessId:true}}):[];
-  const businesses=ids.length?await prisma.business.findMany({where:{id:{in:ids}},select:{id:true,name:true}}):[];
-  const nameMap=new Map(businesses.map(x=>[x.id,x.name]));
-  const stats=new Map();
-  for(const x of allReviews){const s=stats.get(x.businessId)||{businessId:x.businessId,reviewsProcessed:0,aiReplies:0,pending:0,published:0};s.reviewsProcessed++;stats.set(x.businessId,s)}
-  for(const x of activity){const s=stats.get(x.businessId)||{businessId:x.businessId,reviewsProcessed:0,aiReplies:0,pending:0,published:0};s.aiReplies++;if(x.replyStatus==='PENDING_APPROVAL')s.pending++;if(x.replyStatus==='PUBLISHED')s.published++;stats.set(x.businessId,s)}
-  const rows=[...stats.values()].map(x=>({...x,businessName:nameMap.get(x.businessId)||'Unnamed business'})).sort((a,b)=>b.aiReplies-a.aiReplies);
+  const [activity,businesses,allReviews]=await Promise.all([
+   prisma.review.findMany({where:{aiReply:{not:null}},select:{businessId:true,replyStatus:true},take:10000}),
+   prisma.business.findMany({select:{id:true,name:true},orderBy:{name:'asc'}}),
+   prisma.review.findMany({select:{businessId:true}})
+  ]);
+  const stats=new Map(businesses.map(b=>[b.id,{businessId:b.id,reviewsProcessed:0,aiReplies:0,pending:0,published:0,businessName:b.name||'Unnamed business'}]));
+  for(const x of allReviews){if(!x.businessId)continue;const s=stats.get(x.businessId);if(s)s.reviewsProcessed++;}
+  for(const x of activity){if(!x.businessId)continue;const s=stats.get(x.businessId)||{businessId:x.businessId,reviewsProcessed:0,aiReplies:0,pending:0,published:0,businessName:'Unnamed business'};s.aiReplies++;if(x.replyStatus==='PENDING_APPROVAL')s.pending++;if(x.replyStatus==='PUBLISHED')s.published++;stats.set(x.businessId,s)}
+  const rows=[...stats.values()].sort((a,b)=>b.aiReplies-a.aiReplies||a.businessName.localeCompare(b.businessName));
   res.json({reviewsProcessed:reviews,aiRepliesGenerated:generated,pendingApproval:pending,publishedAiReplies:published,failedReplies:failed,businessCount:rows.length,businesses:rows,providerMode:process.env.OPENAI_API_KEY?'OPENAI':'LOCAL FALLBACK',tokenTelemetry:'Not available from the current AI provider response; no token values are fabricated.'});
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/integrations',async(req,res,next)=>{try{
