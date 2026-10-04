@@ -18,9 +18,15 @@ async function billingFeatureAllowed(req,res){
     select:{id:true}
   });
   // A stale/invalid business-selection cookie must never bypass the feature gate.
+  // A stale business-selection cookie can remain after switching accounts/businesses.
+  // Fall back to the first business this user is actually allowed to access instead
+  // of incorrectly denying the Billing & POS page.
   if(selectedBusinessId && !business){
-    res.status(403).type('html').send('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Business access denied</title></head><body><main style="font-family:system-ui;padding:40px;max-width:620px;margin:auto"><h2>Business access denied</h2><p>Please select your business again.</p></main></body></html>');
-    return false;
+    business=await prisma.business.findFirst({
+      where:{members:{some:{userId:session.user.id}}},
+      orderBy:{createdAt:'asc'},
+      select:{id:true}
+    });
   }
   const rows=business?await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',business.id):[];
   let flags=rows?.[0]?.flags??{};
