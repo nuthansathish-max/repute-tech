@@ -313,7 +313,7 @@ function adminPage(){
         '<div class="kv"><b>Trial Ends</b>'+date(sub.trialEndsAt)+'</div>'+
         '<div class="kv"><b>Latest Payment Status</b>'+statusPill(b.latestPlanRequest?.paymentStatus||'MANUAL')+'</div>'+
       '</div>'+
-      (pending?'<div class="kv warn" style="margin-top:10px"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><label class="sub" style="display:block;margin-bottom:5px">Payment Status</label><select class="select" data-action="payment-status" data-request-id="'+esc(pending.id)+'"><option value="MANUAL" '+(pending.paymentStatus==='MANUAL'?'selected':'')+'>MANUAL</option><option value="PENDING" '+(pending.paymentStatus==='PENDING'?'selected':'')+'>PENDING</option><option value="PAID" '+(pending.paymentStatus==='PAID'?'selected':'')+'>PAID</option><option value="FAILED" '+(pending.paymentStatus==='FAILED'?'selected':'')+'>FAILED</option><option value="EXPIRED" '+(pending.paymentStatus==='EXPIRED'?'selected':'')+'>EXPIRED</option></select></div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice" style="margin-top:10px">No pending subscription request for this business.</div>')+
+      (pending?'<div class="kv warn" style="margin-top:10px"><b>Pending Plan Request</b>'+esc(pending.planName||pending.planCode)+' · '+money(pending.price)+' · '+esc(pending.billingInterval)+'<div class="sub">Requested '+date(pending.createdAt)+'</div><div style="margin-top:9px"><label class="sub" style="display:block;margin-bottom:5px">Payment Status</label><select class="select" data-action="payment-status" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'"><option value="MANUAL" '+(pending.paymentStatus==='MANUAL'?'selected':'')+'>MANUAL</option><option value="PENDING" '+(pending.paymentStatus==='PENDING'?'selected':'')+'>PENDING</option><option value="PAID" '+(pending.paymentStatus==='PAID'?'selected':'')+'>PAID</option><option value="FAILED" '+(pending.paymentStatus==='FAILED'?'selected':'')+'>FAILED</option><option value="EXPIRED" '+(pending.paymentStatus==='EXPIRED'?'selected':'')+'>EXPIRED</option></select></div><div style="margin-top:9px"><button class="smallbtn admin-approve" data-action="approve-subscription" data-request-id="'+esc(pending.id)+'">✓ Approve Subscription</button><button class="smallbtn admin-reject" data-action="reject-subscription" data-request-id="'+esc(pending.id)+'" data-business-id="'+esc(b.id)+'" style="margin-left:5px">✕ Reject</button></div></div>':'<div class="notice" style="margin-top:10px">No pending subscription request for this business.</div>')+
     '</div>'+
     '<div class="wide"><div class="section-title"><h2>Business Feature Controls</h2><span>Admin control state</span></div><div class="detail">'+
       featureRow('GOOGLE','Google Business API','Allow this business to use Google integration')+
@@ -562,10 +562,12 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   if(viewBtn){e.preventDefault();openBusiness(viewBtn.dataset.businessId);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
-  const paymentSelect=e.target.closest('[data-action="payment-status"]');
-  if(paymentSelect){e.preventDefault();changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
   if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn,rejectBtn.dataset.businessId);return}
+ });
+ document.addEventListener('change',e=>{
+  const paymentSelect=e.target.closest('[data-action="payment-status"]');
+  if(paymentSelect){changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
  });
  $('refreshBtn').addEventListener('click',()=>refreshCurrent());
  $('exportBtn').addEventListener('click',()=>{
