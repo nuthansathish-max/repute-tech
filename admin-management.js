@@ -198,6 +198,12 @@ function adminPage(){
      <div class="card metric-card"><div class="label">Monthly Plan Revenue</div><div class="metric" id="anMonthlyRevenue">—</div><div class="sub">Paid monthly subscription plans</div></div>
      <div class="card metric-card"><div class="label">Yearly Plan Revenue</div><div class="metric" id="anYearlyRevenue">—</div><div class="sub">Paid yearly subscription plans</div></div>
     </div>
+    <div class="section grid4">
+     <div class="card metric-card"><div class="label">Overall Subscription Revenue</div><div class="metric" id="anSubscriptionOverallRevenue">—</div><div class="sub">All paid subscription plans only</div></div>
+     <div class="card metric-card"><div class="label">This Week Subscription Revenue</div><div class="metric" id="anSubscriptionWeekRevenue">—</div><div class="sub">Paid subscription plans this week</div></div>
+     <div class="card metric-card"><div class="label">This Month Subscription Revenue</div><div class="metric" id="anSubscriptionMonthRevenue">—</div><div class="sub">Paid subscription plans this month</div></div>
+     <div class="card metric-card"><div class="label">This Year Subscription Revenue</div><div class="metric" id="anSubscriptionYearRevenue">—</div><div class="sub">Paid subscription plans this year</div></div>
+    </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Revenue by Plan</h2><span>Paid subscription requests</span></div><div id="anPlanRevenue" class="mix-list"><div class="empty">Loading revenue data…</div></div></div>
      <div class="card"><div class="section-title"><h2>Operational Mix</h2><span>Current platform counts</span></div><div class="label">Active subscriptions</div><div class="bar"><span id="activeBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Trial subscriptions</div><div class="bar"><span id="trialBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Pending requests</div><div class="bar"><span id="pendingBar" style="width:0"></span></div></div>
@@ -544,6 +550,10 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   $('anThisMonthRevenue').textContent=money(d.thisMonthRevenue??0);
   $('anThisYearRevenue').textContent=money(d.thisYearRevenue??0);
   $('anRevenue').textContent=money(d.totalRevenue??0);
+  $('anSubscriptionOverallRevenue').textContent=money(d.paidSubscriptionRevenue??0);
+  $('anSubscriptionWeekRevenue').textContent=money(d.thisWeekSubscriptionRevenue??0);
+  $('anSubscriptionMonthRevenue').textContent=money(d.thisMonthSubscriptionRevenue??0);
+  $('anSubscriptionYearRevenue').textContent=money(d.thisYearSubscriptionRevenue??0);
   $('anMonthlyRevenue').textContent=money(d.monthlyRevenue??0);
   $('anYearlyRevenue').textContent=money(d.yearlyRevenue??0);
   $('anPaidOrders').textContent=d.paidOrders??0;
@@ -620,6 +630,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    }
   }
   async function refreshCurrent(){await show(currentView)}
+ window.show=show;
  document.querySelectorAll('.nav[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
  document.addEventListener('click',e=>{
   const statusBtn=e.target.closest('[data-admin-status]');
@@ -984,12 +995,16 @@ function install(app){
  originalGet.call(app,'/api/admin/analytics',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const now=new Date();
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit'}).formatToParts(now);
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const istYear=parts.find(x=>x.type==='year').value;
   const istMonth=parts.find(x=>x.type==='month').value;
+  const istDay=parts.find(x=>x.type==='day').value;
   const monthStart=new Date(istYear+'-'+istMonth+'-01T00:00:00+05:30');
   const yearStart=new Date(istYear+'-01-01T00:00:00+05:30');
-  const [businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,paidOrderAgg,monthOrderAgg,yearOrderAgg,paidSubscriptionAgg,monthSubscriptionAgg,yearSubscriptionAgg,paidSubscriptionRequests]=await Promise.all([
+  const istMidnightUtc=Date.UTC(Number(istYear),Number(istMonth)-1,Number(istDay));
+  const istWeekday=new Date(istMidnightUtc).getUTCDay();
+  const weekStart=new Date(istMidnightUtc-((istWeekday+6)%7)*86400000-330*60000);
+  const [businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,paidOrderAgg,monthOrderAgg,yearOrderAgg,paidSubscriptionAgg,weekSubscriptionAgg,monthSubscriptionAgg,yearSubscriptionAgg,paidSubscriptionRequests]=await Promise.all([
    prisma.business.count(),
    prisma.subscription.count({where:{status:'ACTIVE'}}),
    prisma.subscription.count({where:{status:'TRIAL'}}),
@@ -999,6 +1014,7 @@ function install(app){
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{total:true}}),
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{total:true}}),
    prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:weekStart}},_sum:{price:true}}),
    prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{price:true}}),
    prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{price:true}}),
    prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:'PAID'},select:{planCode:true,planName:true,billingInterval:true,price:true}})
@@ -1006,6 +1022,7 @@ function install(app){
   const paidOrders=paidOrderAgg._count._all;
   const paidOrderRevenue=Number(paidOrderAgg._sum.total||0);
   const paidSubscriptionRevenue=Number(paidSubscriptionAgg._sum.price||0);
+  const thisWeekSubscriptionRevenue=Number(weekSubscriptionAgg._sum.price||0);
   const thisMonthOrderRevenue=Number(monthOrderAgg._sum.total||0);
   const thisMonthSubscriptionRevenue=Number(monthSubscriptionAgg._sum.price||0);
   const thisYearOrderRevenue=Number(yearOrderAgg._sum.total||0);
@@ -1018,7 +1035,7 @@ function install(app){
    if(!byPlan[key])byPlan[key]={plan:key,revenue:0,count:0};
    byPlan[key].revenue+=Number(x.price||0);byPlan[key].count++;
   });
-  res.json({businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders:paidOrders,paidOrders,paidOrderRevenue,paidSubscriptionRevenue,totalRevenue:paidOrderRevenue+paidSubscriptionRevenue,thisMonthRevenue:thisMonthOrderRevenue+thisMonthSubscriptionRevenue,thisYearRevenue:thisYearOrderRevenue+thisYearSubscriptionRevenue,monthlyRevenue,yearlyRevenue,byPlan:Object.values(byPlan).sort((a,b)=>b.revenue-a.revenue)});
+  res.json({businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders:paidOrders,paidOrders,paidOrderRevenue,paidSubscriptionRevenue,thisWeekSubscriptionRevenue,thisMonthSubscriptionRevenue,thisYearSubscriptionRevenue,totalRevenue:paidOrderRevenue+paidSubscriptionRevenue,thisMonthRevenue:thisMonthOrderRevenue+thisMonthSubscriptionRevenue,thisYearRevenue:thisYearOrderRevenue+thisYearSubscriptionRevenue,monthlyRevenue,yearlyRevenue,byPlan:Object.values(byPlan).sort((a,b)=>b.revenue-a.revenue)});
  }catch(e){next(e);}});
  originalGet.call(app,'/api/admin/orders',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
