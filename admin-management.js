@@ -180,8 +180,22 @@ function adminPage(){
    </section>
 
    <section id="analytics" class="hidden">
-    <div class="grid4"><div class="card metric-card"><div class="label">Businesses</div><div class="metric" id="anBiz">—</div></div><div class="card metric-card"><div class="label">Users</div><div class="metric" id="anUsers">—</div></div><div class="card metric-card"><div class="label">Orders</div><div class="metric" id="anOrders">—</div></div><div class="card metric-card"><div class="label">Reviews</div><div class="metric" id="anReviews">—</div></div></div>
-    <div class="section grid2"><div class="card"><div class="section-title"><h2>Platform Trend</h2><span>Illustrative telemetry shell</span></div><div class="chart"><svg viewBox="0 0 800 245" preserveAspectRatio="none"><path d="M0 220 C100 214 120 190 210 202 S330 145 405 170 S500 118 575 145 S690 86 800 105 L800 245 L0 245Z" fill="#5146e51c"/><path d="M0 220 C100 214 120 190 210 202 S330 145 405 170 S500 118 575 145 S690 86 800 105" fill="none" stroke="#5146e5" stroke-width="3"/></svg></div></div><div class="card"><div class="section-title"><h2>Operational Mix</h2><span>Current platform counts</span></div><div class="label">Active subscriptions</div><div class="bar"><span id="activeBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Trial subscriptions</div><div class="bar"><span id="trialBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Pending requests</div><div class="bar"><span id="pendingBar" style="width:0"></span></div></div></div>
+    <div class="grid4">
+     <div class="card metric-card"><div class="label">Businesses</div><div class="metric" id="anBiz">—</div><div class="sub">Registered businesses</div></div>
+     <div class="card metric-card"><div class="label">Active Subscriptions</div><div class="metric" id="anActive">—</div><div class="sub">Currently active</div></div>
+     <div class="card metric-card"><div class="label">7-Day Trials</div><div class="metric" id="anTrials">—</div><div class="sub">Currently on trial</div></div>
+     <div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="anPending">—</div><div class="sub">Awaiting admin action</div></div>
+    </div>
+    <div class="section grid4">
+     <div class="card metric-card"><div class="label">Total Platform Revenue</div><div class="metric" id="anRevenue">—</div><div class="sub">Paid orders + paid subscriptions</div></div>
+     <div class="card metric-card"><div class="label">Monthly Subscription Revenue</div><div class="metric" id="anMonthlyRevenue">—</div><div class="sub">Paid monthly plans</div></div>
+     <div class="card metric-card"><div class="label">Yearly Subscription Revenue</div><div class="metric" id="anYearlyRevenue">—</div><div class="sub">Paid yearly plans</div></div>
+     <div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="anPaidOrders">—</div><div class="sub">Orders marked paid</div></div>
+    </div>
+    <div class="section grid2">
+     <div class="card"><div class="section-title"><h2>Revenue by Plan</h2><span>Paid subscription requests</span></div><div id="anPlanRevenue" class="mix-list"><div class="empty">Loading revenue data…</div></div></div>
+     <div class="card"><div class="section-title"><h2>Operational Mix</h2><span>Current platform counts</span></div><div class="label">Active subscriptions</div><div class="bar"><span id="activeBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Trial subscriptions</div><div class="bar"><span id="trialBar" style="width:0"></span></div><div class="label" style="margin-top:13px">Pending requests</div><div class="bar"><span id="pendingBar" style="width:0"></span></div></div>
+    </div>
    </section>
 
    <section id="subscriptions" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Catalog Plans</div><div class="metric" id="planCount">—</div></div><div class="card metric-card"><div class="label">Active Plans</div><div class="metric" id="planActive">—</div></div><div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="planPending">—</div></div><div class="card metric-card"><div class="label">Trial Policy</div><div class="metric">7 days</div></div></div><div class="section card table"><div class="row head"><div>Plan</div><div>Price</div><div>Interval</div><div>State</div><div></div></div><div id="planRows"></div></div><div class="section card"><div class="section-title"><div><h2>All Unpaid Subscription Bills</h2><span>Payment status is not PAID · rejected requests are excluded</span></div><span id="unpaidBillSummary">Loading…</span></div><div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div>Business</div><div>Owner</div><div>Plan</div><div>Amount</div><div>Payment</div><div>Request</div><div>Requested</div><div>Action</div></div><div id="unpaidBillRows"></div></div></div></section>
@@ -499,6 +513,24 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   $('unpaidBillSummary').textContent=bills.length+' bill'+(bills.length===1?'':'s')+' · '+money(d.totalAmount||0)+' outstanding';
   $('unpaidBillRows').innerHTML=bills.length?bills.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+statusPill(x.status)+'</div><div>'+date(x.createdAt)+'</div><div><button class="admin-paid" data-action="mark-subscription-paid" data-request-id="'+esc(x.id)+'"><span class="btn-icon">✓</span><span>Mark Paid</span></button><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'" style="margin-left:4px">View</button></div></div>').join(''):'<div class="empty">No unpaid subscription bills.</div>';
  }
+ async function loadAnalytics(){
+  const d=await api('/admin/analytics');
+  $('anBiz').textContent=d.businesses??0;
+  $('anActive').textContent=d.activeSubscriptions??0;
+  $('anTrials').textContent=d.trialSubscriptions??0;
+  $('anPending').textContent=d.pendingRequests??0;
+  $('anRevenue').textContent=money(d.totalRevenue??0);
+  $('anMonthlyRevenue').textContent=money(d.monthlyRevenue??0);
+  $('anYearlyRevenue').textContent=money(d.yearlyRevenue??0);
+  $('anPaidOrders').textContent=d.paidOrders??0;
+  const total=Number(d.businesses)||1;
+  $('activeBar').style.width=Math.min(100,(Number(d.activeSubscriptions||0)/total)*100)+'%';
+  $('trialBar').style.width=Math.min(100,(Number(d.trialSubscriptions||0)/total)*100)+'%';
+  $('pendingBar').style.width=Math.min(100,(Number(d.pendingRequests||0)/total)*100)+'%';
+  const plans=d.byPlan||[];
+  const max=Math.max(1,...plans.map(x=>Number(x.revenue||0)));
+  $('anPlanRevenue').innerHTML=plans.length?plans.map(x=>'<div class="mix-row"><span>'+esc(x.plan)+'</span><div class="mix-bar"><span style="width:'+Math.round(Number(x.revenue||0)/max*100)+'%"></span></div><b>'+money(x.revenue||0)+'</b><div class="sub">'+x.count+' paid request'+(x.count===1?'':'s')+'</div></div>').join(''):'<div class="empty">No paid subscription revenue recorded yet.</div>';
+ }
  async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.totalRevenue??d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
  async function loadReviews(){const d=await api('/admin/reviews');$('reviewCount').textContent=d.count;$('reviewApproved').textContent=d.approved;$('reviewPublished').textContent=d.published;$('reviewFailed').textContent=d.failed;$('reviewFailed2').textContent=d.failed;$('anReviews').textContent=d.count}
  async function loadIntegrations(){const d=await api('/admin/integrations');$('googleCount').textContent=d.google;$('googleAccounts').textContent=d.googleAccounts;$('waCount').textContent=d.whatsapp;$('waConnected').textContent=d.whatsappConnected;$('ovGoogle').textContent=d.google;$('ovWhatsApp').textContent=d.whatsappConnected}
@@ -542,11 +574,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
    try{
     if(view==='overview'||view==='tenants'||view==='analytics')await loadBusinesses();
     if(view==='analytics'){
-     await loadUsers();
-     $('activeBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='ACTIVE').length/rows.length*100:0)+'%';
-     $('trialBar').style.width=Math.min(100,rows.length?rows.filter(x=>x.subscription?.status==='TRIAL').length/rows.length*100:0)+'%';
-     $('pendingBar').style.width=Math.min(100,(Number($('ovPending').textContent)||0)*10)+'%';
-     $('anBiz').textContent=rows.length;
+     await loadAnalytics();
     }
     if(view==='subscriptions'||view==='billing')await loadPlans();
     if(view==='subscriptions')await loadUnpaidBills();
@@ -929,6 +957,30 @@ function install(app){
   res.json({plans,pending});
  }catch(e){ next(e); }
  });
+ originalGet.call(app,'/api/admin/analytics',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const [businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders,paidSubscriptionRequests]=await Promise.all([
+   prisma.business.count(),
+   prisma.subscription.count({where:{status:'ACTIVE'}}),
+   prisma.subscription.count({where:{status:'TRIAL'}}),
+   prisma.planRequest.count({where:{status:'PENDING'}}),
+   prisma.user.count(),
+   prisma.order.findMany({select:{total:true,paymentStatus:true}}),
+   prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:'PAID'},select:{planCode:true,planName:true,billingInterval:true,price:true}})
+  ]);
+  const paidOrders=orders.filter(x=>x.paymentStatus==='PAID').length;
+  const orderRevenue=orders.reduce((sum,x)=>sum+Number(x.total||0),0);
+  const paidSubscriptionRevenue=paidSubscriptionRequests.reduce((sum,x)=>sum+Number(x.price||0),0);
+  const monthlyRevenue=paidSubscriptionRequests.filter(x=>x.billingInterval==='MONTH').reduce((sum,x)=>sum+Number(x.price||0),0);
+  const yearlyRevenue=paidSubscriptionRequests.filter(x=>x.billingInterval==='YEAR').reduce((sum,x)=>sum+Number(x.price||0),0);
+  const byPlan={};
+  paidSubscriptionRequests.forEach(x=>{
+   const key=x.planName||x.planCode||'Unknown';
+   if(!byPlan[key])byPlan[key]={plan:key,revenue:0,count:0};
+   byPlan[key].revenue+=Number(x.price||0);byPlan[key].count++;
+  });
+  res.json({businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders:orders.length,paidOrders,totalRevenue:orderRevenue+paidSubscriptionRevenue,monthlyRevenue,yearlyRevenue,byPlan:Object.values(byPlan).sort((a,b)=>b.revenue-a.revenue)});
+ }catch(e){next(e);}});
  originalGet.call(app,'/api/admin/orders',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const [count,pending,paid,sum,subscriptionRevenue]=await Promise.all([
