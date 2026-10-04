@@ -893,7 +893,7 @@ function install(app){
       create:{businessId:request.businessId,plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd},
       update:{plan:request.planCode,status:'ACTIVE',monthlyPrice:request.price,billingInterval:request.billingInterval,provider:'manual',currentPeriodEnd:periodEnd,trialStartedAt:null,trialEndsAt:null}
     });
-    const approved=await tx.planRequest.update({where:{id:request.id},data:{status:'APPROVED',approvedAt:now,approvedByUserId:user.id,paymentStatus:'PAID'}});
+    const approved=await tx.planRequest.update({where:{id:request.id},data:{status:'APPROVED',approvedAt:now,approvedByUserId:user.id,paymentStatus:'MANUAL'}});
     await tx.auditLog.create({data:{actorUserId:user.id,action:'APPROVE_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planCode:request.planCode}}});
     return {subscription,approved};
   });
