@@ -187,10 +187,16 @@ function adminPage(){
      <div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="anPending">—</div><div class="sub">Awaiting admin action</div></div>
     </div>
     <div class="section grid4">
-     <div class="card metric-card"><div class="label">Total Platform Revenue</div><div class="metric" id="anRevenue">—</div><div class="sub">Paid orders + paid subscriptions</div></div>
-     <div class="card metric-card"><div class="label">Monthly Subscription Revenue</div><div class="metric" id="anMonthlyRevenue">—</div><div class="sub">Paid monthly plans</div></div>
-     <div class="card metric-card"><div class="label">Yearly Subscription Revenue</div><div class="metric" id="anYearlyRevenue">—</div><div class="sub">Paid yearly plans</div></div>
-     <div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="anPaidOrders">—</div><div class="sub">Orders marked paid</div></div>
+     <div class="card metric-card clickable" onclick="show('revenue')"><div class="label">Paid Customer Order Revenue</div><div class="metric" id="anOrderRevenue">—</div><div class="sub">Paid customer orders · View billing</div></div>
+     <div class="card metric-card clickable" onclick="show('revenue')"><div class="label">Paid Subscription Revenue</div><div class="metric" id="anSubscriptionRevenue">—</div><div class="sub">Paid subscriptions · View billing</div></div>
+     <div class="card metric-card clickable" onclick="show('revenue')"><div class="label">This Month Revenue</div><div class="metric" id="anThisMonthRevenue">—</div><div class="sub">All paid software revenue this month</div></div>
+     <div class="card metric-card clickable" onclick="show('revenue')"><div class="label">This Year Revenue</div><div class="metric" id="anThisYearRevenue">—</div><div class="sub">All paid software revenue this year</div></div>
+    </div>
+    <div class="section grid4">
+     <div class="card metric-card clickable" onclick="show('revenue')"><div class="label">Overall Platform Revenue</div><div class="metric" id="anRevenue">—</div><div class="sub">All paid customer orders + subscriptions</div></div>
+     <div class="card metric-card clickable" onclick="show('orders')"><div class="label">Paid Orders</div><div class="metric" id="anPaidOrders">—</div><div class="sub">Orders marked paid · View orders</div></div>
+     <div class="card metric-card"><div class="label">Monthly Plan Revenue</div><div class="metric" id="anMonthlyRevenue">—</div><div class="sub">Paid monthly subscription plans</div></div>
+     <div class="card metric-card"><div class="label">Yearly Plan Revenue</div><div class="metric" id="anYearlyRevenue">—</div><div class="sub">Paid yearly subscription plans</div></div>
     </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Revenue by Plan</h2><span>Paid subscription requests</span></div><div id="anPlanRevenue" class="mix-list"><div class="empty">Loading revenue data…</div></div></div>
@@ -199,7 +205,21 @@ function adminPage(){
    </section>
 
    <section id="subscriptions" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Catalog Plans</div><div class="metric" id="planCount">—</div></div><div class="card metric-card"><div class="label">Active Plans</div><div class="metric" id="planActive">—</div></div><div class="card metric-card"><div class="label">Pending Requests</div><div class="metric" id="planPending">—</div></div><div class="card metric-card"><div class="label">Trial Policy</div><div class="metric">7 days</div></div></div><div class="section card table"><div class="row head"><div>Plan</div><div>Price</div><div>Interval</div><div>State</div><div></div></div><div id="planRows"></div></div><div class="section card"><div class="section-title"><div><h2>All Unpaid Subscription Bills</h2><span>Payment status is not PAID · rejected requests are excluded</span></div><span id="unpaidBillSummary">Loading…</span></div><div class="card table"><div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.1fr 90px 100px 100px 95px 110px;min-width:1050px"><div>Business</div><div>Owner</div><div>Plan</div><div>Amount</div><div>Payment</div><div>Request</div><div>Requested</div><div>Action</div></div><div id="unpaidBillRows"></div></div></div></section>
-   <section id="revenue" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Platform Revenue</div><div class="metric" id="revValue">—</div><div class="sub">Paid customer orders + paid subscriptions</div></div><div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="revPaid">—</div></div><div class="card metric-card"><div class="label">Pending Orders</div><div class="metric" id="revPending">—</div></div><div class="card metric-card"><div class="label">Billing Model</div><div class="metric">SaaS</div><div class="sub">Subscription + platform orders</div></div></div><div class="section notice">Revenue and tax automation controls are not connected to this admin UI yet; this page currently exposes the verified order totals only.</div></section>
+   <section id="revenue" class="hidden">
+    <div class="grid4">
+     <div class="card metric-card"><div class="label">Overall Platform Revenue</div><div class="metric" id="revValue">—</div><div class="sub">All paid customer orders + subscriptions</div></div>
+     <div class="card metric-card"><div class="label">This Month Revenue</div><div class="metric" id="revMonth">—</div><div class="sub">All paid software revenue this month</div></div>
+     <div class="card metric-card"><div class="label">This Year Revenue</div><div class="metric" id="revYear">—</div><div class="sub">All paid software revenue this year</div></div>
+     <div class="card metric-card"><div class="label">Paid Orders</div><div class="metric" id="revPaid">—</div><div class="sub">Customer orders marked paid</div></div>
+    </div>
+    <div class="section grid4">
+     <div class="card metric-card"><div class="label">Paid Customer Order Revenue</div><div class="metric" id="revOrderRevenue">—</div><div class="sub">Paid customer orders only</div></div>
+     <div class="card metric-card"><div class="label">Paid Subscription Revenue</div><div class="metric" id="revSubscriptionRevenue">—</div><div class="sub">Paid subscriptions only</div></div>
+     <div class="card metric-card"><div class="label">Pending Orders</div><div class="metric" id="revPending">—</div><div class="sub">Orders awaiting payment</div></div>
+     <div class="card metric-card"><div class="label">Billing Model</div><div class="metric">SaaS</div><div class="sub">Subscription + platform orders</div></div>
+    </div>
+    <div class="section notice">Revenue figures are calculated from verified PAID customer orders and PAID subscription requests. Monthly and yearly totals use the India (Asia/Kolkata) calendar period.</div>
+   </section>
 
    <section id="reviews" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Reviews</div><div class="metric" id="reviewCount">—</div></div><div class="card metric-card"><div class="label">Approved</div><div class="metric" id="reviewApproved">—</div></div><div class="card metric-card"><div class="label">Published</div><div class="metric" id="reviewPublished">—</div></div><div class="card metric-card"><div class="label">Failed</div><div class="metric" id="reviewFailed">—</div></div></div><div class="section card"><div class="section-title"><h2>Reviews & AI Pipeline</h2><span>Existing production workflow</span></div><div class="mini-grid"><div class="card ok"><div class="label">AI pipeline</div><div class="metric">94%</div><div class="sub">UI reference indicator</div></div><div class="card"><div class="label">Google publish</div><div class="metric">LIVE</div><div class="sub">Existing business workflow</div></div><div class="card"><div class="label">Failures</div><div class="metric" id="reviewFailed2">—</div><div class="sub">Recorded failed replies</div></div></div></div></section>
    <section id="ai" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">AI Usage</div><div class="metric">MONITOR</div><div class="sub">Telemetry shell</div></div><div class="card metric-card"><div class="label">Token Usage</div><div class="metric">—</div><div class="sub">No verified token ledger endpoint</div></div><div class="card metric-card"><div class="label">AI Errors</div><div class="metric">—</div><div class="sub">No dedicated metric endpoint</div></div><div class="card metric-card"><div class="label">Policy</div><div class="metric">ACTIVE</div></div></div><div class="section notice">This section is intentionally UI-only until the production AI/token telemetry source is connected.</div></section>
@@ -519,6 +539,10 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   $('anActive').textContent=d.activeSubscriptions??0;
   $('anTrials').textContent=d.trialSubscriptions??0;
   $('anPending').textContent=d.pendingRequests??0;
+  $('anOrderRevenue').textContent=money(d.paidOrderRevenue??0);
+  $('anSubscriptionRevenue').textContent=money(d.paidSubscriptionRevenue??0);
+  $('anThisMonthRevenue').textContent=money(d.thisMonthRevenue??0);
+  $('anThisYearRevenue').textContent=money(d.thisYearRevenue??0);
   $('anRevenue').textContent=money(d.totalRevenue??0);
   $('anMonthlyRevenue').textContent=money(d.monthlyRevenue??0);
   $('anYearlyRevenue').textContent=money(d.yearlyRevenue??0);
@@ -531,7 +555,7 @@ async function loadUsers(){const d=await api('/admin/users');users=d.users||[];c
   const max=Math.max(1,...plans.map(x=>Number(x.revenue||0)));
   $('anPlanRevenue').innerHTML=plans.length?plans.map(x=>'<div class="mix-row"><span>'+esc(x.plan)+'</span><div class="mix-bar"><span style="width:'+Math.round(Number(x.revenue||0)/max*100)+'%"></span></div><b>'+money(x.revenue||0)+'</b><div class="sub">'+x.count+' paid request'+(x.count===1?'':'s')+'</div></div>').join(''):'<div class="empty">No paid subscription revenue recorded yet.</div>';
  }
- async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.totalRevenue??d.value);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
+ async function loadOrders(){const d=await api('/admin/orders');$('orderCount').textContent=d.count;$('orderPending').textContent=d.pending;$('orderPaid').textContent=d.paid;$('orderValue').textContent=money(d.value);$('revValue').textContent=money(d.totalRevenue??0);$('revMonth').textContent=money(d.thisMonthRevenue??0);$('revYear').textContent=money(d.thisYearRevenue??0);$('revOrderRevenue').textContent=money(d.paidOrderRevenue??0);$('revSubscriptionRevenue').textContent=money(d.paidSubscriptionRevenue??d.subscriptionRevenue??0);$('revPaid').textContent=d.paid;$('revPending').textContent=d.pending;$('anOrders').textContent=d.count}
  async function loadReviews(){const d=await api('/admin/reviews');$('reviewCount').textContent=d.count;$('reviewApproved').textContent=d.approved;$('reviewPublished').textContent=d.published;$('reviewFailed').textContent=d.failed;$('reviewFailed2').textContent=d.failed;$('anReviews').textContent=d.count}
  async function loadIntegrations(){const d=await api('/admin/integrations');$('googleCount').textContent=d.google;$('googleAccounts').textContent=d.googleAccounts;$('waCount').textContent=d.whatsapp;$('waConnected').textContent=d.whatsappConnected;$('ovGoogle').textContent=d.google;$('ovWhatsApp').textContent=d.whatsappConnected}
  async function loadAudit(){const d=await api('/admin/audit');$('auditRows').innerHTML=d.logs.map(x=>'<div class="row"><div class="name">'+esc(x.action)+'</div><div>'+esc(x.entity)+'</div><div>'+esc(x.actor||'System')+'</div><div>'+date(x.createdAt)+'</div><div></div></div>').join('')||'<div class="empty">No audit events.</div>'}
@@ -959,18 +983,33 @@ function install(app){
  });
  originalGet.call(app,'/api/admin/analytics',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const [businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders,paidSubscriptionRequests]=await Promise.all([
+  const now=new Date();
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit'}).formatToParts(now);
+  const istYear=parts.find(x=>x.type==='year').value;
+  const istMonth=parts.find(x=>x.type==='month').value;
+  const monthStart=new Date(istYear+'-'+istMonth+'-01T00:00:00+05:30');
+  const yearStart=new Date(istYear+'-01-01T00:00:00+05:30');
+  const [businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,paidOrderAgg,monthOrderAgg,yearOrderAgg,paidSubscriptionAgg,monthSubscriptionAgg,yearSubscriptionAgg,paidSubscriptionRequests]=await Promise.all([
    prisma.business.count(),
    prisma.subscription.count({where:{status:'ACTIVE'}}),
    prisma.subscription.count({where:{status:'TRIAL'}}),
    prisma.planRequest.count({where:{status:'PENDING'}}),
    prisma.user.count(),
-   prisma.order.findMany({select:{total:true,paymentStatus:true}}),
+   prisma.order.aggregate({where:{paymentStatus:'PAID'},_sum:{total:true},_count:{_all:true}}),
+   prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{total:true}}),
+   prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{total:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{price:true}}),
    prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:'PAID'},select:{planCode:true,planName:true,billingInterval:true,price:true}})
   ]);
-  const paidOrders=orders.filter(x=>x.paymentStatus==='PAID').length;
-  const orderRevenue=orders.reduce((sum,x)=>sum+Number(x.total||0),0);
-  const paidSubscriptionRevenue=paidSubscriptionRequests.reduce((sum,x)=>sum+Number(x.price||0),0);
+  const paidOrders=paidOrderAgg._count._all;
+  const paidOrderRevenue=Number(paidOrderAgg._sum.total||0);
+  const paidSubscriptionRevenue=Number(paidSubscriptionAgg._sum.price||0);
+  const thisMonthOrderRevenue=Number(monthOrderAgg._sum.total||0);
+  const thisMonthSubscriptionRevenue=Number(monthSubscriptionAgg._sum.price||0);
+  const thisYearOrderRevenue=Number(yearOrderAgg._sum.total||0);
+  const thisYearSubscriptionRevenue=Number(yearSubscriptionAgg._sum.price||0);
   const monthlyRevenue=paidSubscriptionRequests.filter(x=>x.billingInterval==='MONTH').reduce((sum,x)=>sum+Number(x.price||0),0);
   const yearlyRevenue=paidSubscriptionRequests.filter(x=>x.billingInterval==='YEAR').reduce((sum,x)=>sum+Number(x.price||0),0);
   const byPlan={};
@@ -979,20 +1018,36 @@ function install(app){
    if(!byPlan[key])byPlan[key]={plan:key,revenue:0,count:0};
    byPlan[key].revenue+=Number(x.price||0);byPlan[key].count++;
   });
-  res.json({businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders:orders.length,paidOrders,totalRevenue:orderRevenue+paidSubscriptionRevenue,monthlyRevenue,yearlyRevenue,byPlan:Object.values(byPlan).sort((a,b)=>b.revenue-a.revenue)});
+  res.json({businesses,activeSubscriptions,trialSubscriptions,pendingRequests,users,orders:paidOrders,paidOrders,paidOrderRevenue,paidSubscriptionRevenue,totalRevenue:paidOrderRevenue+paidSubscriptionRevenue,thisMonthRevenue:thisMonthOrderRevenue+thisMonthSubscriptionRevenue,thisYearRevenue:thisYearOrderRevenue+thisYearSubscriptionRevenue,monthlyRevenue,yearlyRevenue,byPlan:Object.values(byPlan).sort((a,b)=>b.revenue-a.revenue)});
  }catch(e){next(e);}});
  originalGet.call(app,'/api/admin/orders',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const [count,pending,paid,sum,subscriptionRevenue]=await Promise.all([
+  const now=new Date();
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit'}).formatToParts(now);
+  const istYear=parts.find(x=>x.type==='year').value;
+  const istMonth=parts.find(x=>x.type==='month').value;
+  const monthStart=new Date(istYear+'-'+istMonth+'-01T00:00:00+05:30');
+  const yearStart=new Date(istYear+'-01-01T00:00:00+05:30');
+  const [count,pending,paid,sum,paidOrderAgg,monthOrderAgg,yearOrderAgg,subscriptionRevenue,monthSub,yearSub]=await Promise.all([
    prisma.order.count(),
    prisma.order.count({where:{status:'PENDING'}}),
    prisma.order.count({where:{paymentStatus:'PAID'}}),
    prisma.order.aggregate({_sum:{total:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}})
+   prisma.order.aggregate({where:{paymentStatus:'PAID'},_sum:{total:true}}),
+   prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{total:true}}),
+   prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{total:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{price:true}})
   ]);
   const orderValue=Number(sum._sum.total||0);
+  const paidOrderRevenue=Number(paidOrderAgg._sum.total||0);
   const paidSubscriptionRevenue=Number(subscriptionRevenue._sum.price||0);
-  res.json({count,pending,paid,value:orderValue,subscriptionRevenue:paidSubscriptionRevenue,totalRevenue:orderValue+paidSubscriptionRevenue});
+  const thisMonthOrderRevenue=Number(monthOrderAgg._sum.total||0);
+  const thisMonthSubscriptionRevenue=Number(monthSub._sum.price||0);
+  const thisYearOrderRevenue=Number(yearOrderAgg._sum.total||0);
+  const thisYearSubscriptionRevenue=Number(yearSub._sum.price||0);
+  res.json({count,pending,paid,value:orderValue,paidOrderRevenue,subscriptionRevenue:paidSubscriptionRevenue,paidSubscriptionRevenue,totalRevenue:paidOrderRevenue+paidSubscriptionRevenue,thisMonthRevenue:thisMonthOrderRevenue+thisMonthSubscriptionRevenue,thisYearRevenue:thisYearOrderRevenue+thisYearSubscriptionRevenue});
  }catch(e){ next(e); }
  });
  originalGet.call(app,'/api/admin/reviews',async(req,res,next)=>{try{
