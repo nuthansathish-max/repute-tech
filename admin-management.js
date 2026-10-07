@@ -829,6 +829,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
      await loadAnalytics();
     }
     if(view==='subscriptions'||view==='billing')await loadPlans();
+    if(view==='subscriptions')await loadCustomPlanRequests();
     if(view==='subscriptions')await loadUnpaidBills();
     if(view==='orders'||view==='revenue')await loadOrders();
     if(view==='reviews')await loadReviews();
