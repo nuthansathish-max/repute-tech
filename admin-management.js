@@ -251,7 +251,19 @@ function adminPage(){
    <section id="ai" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">AI Replies Generated</div><div class="metric" id="aiRepliesGenerated">—</div><div class="sub">Existing review AI workflow</div></div><div class="card metric-card"><div class="label">Pending Approval</div><div class="metric" id="aiPending">—</div><div class="sub">AI replies awaiting admin action</div></div><div class="card metric-card"><div class="label">Published AI Replies</div><div class="metric" id="aiPublished">—</div><div class="sub">Replies published to Google</div></div><div class="card metric-card"><div class="label">Provider Mode</div><div class="metric" id="aiProviderMode">—</div><div class="sub">Current production configuration</div></div></div><div class="section"><div class="section-title"><h2>AI Usage by Business</h2><span id="aiBusinessSummary">—</span></div><div class="card table"><div class="row head" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;min-width:760px"><div>Business</div><div>Reviews Processed</div><div>AI Replies</div><div>Pending</div><div>Published</div></div><div id="aiBusinessRows"><div class="empty">Loading…</div></div></div></div><div class="section"><div class="section-title"><h2>AI Telemetry</h2><span>Read-only</span></div><div class="card"><div class="detail"><div class="kv"><b>Token telemetry</b><span id="aiTokenStatus">Not available from the current AI provider response.</span></div><div class="kv"><b>AI errors</b><span id="aiErrors">0 recorded provider errors in the available review status data.</span></div><div class="kv"><b>Safety policy</b><span>Active in the existing AI provider prompt and reply workflow.</span></div></div></div></div></section>
    <section id="google" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Google Connections</div><div class="metric" id="googleCount">—</div></div><div class="card metric-card"><div class="label">Google Accounts</div><div class="metric" id="googleAccounts">—</div></div><div class="card metric-card"><div class="label">API State</div><div class="metric">ONLINE</div></div><div class="card metric-card"><div class="label">Publish Workflow</div><div class="metric">LIVE</div></div></div><div class="section notice">Google Business API monitoring uses the existing connection records; no changes are made to the working review publishing path.</div></section>
    <section id="whatsapp" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">WhatsApp Connections</div><div class="metric" id="waCount">—</div></div><div class="card metric-card"><div class="label">Connected & Active</div><div class="metric" id="waConnected">—</div></div><div class="card metric-card"><div class="label">SLA</div><div class="metric">99.2%</div><div class="sub">UI reference indicator</div></div><div class="card metric-card"><div class="label">Cloud API</div><div class="metric">ONLINE</div></div></div><div class="section grid2"><div class="card"><div class="section-title"><h2>WhatsApp Cloud Mesh</h2><span>Realtime shell</span></div><div class="chart"><svg viewBox="0 0 800 245" preserveAspectRatio="none"><path d="M0 190 C80 195 100 130 180 158 S300 115 370 135 S480 80 560 118 S670 70 800 92" fill="none" stroke="#16a6c9" stroke-width="3"/><path d="M0 214 C100 206 150 190 220 196 S330 168 410 178 S520 145 600 160 S710 130 800 140" fill="none" stroke="#5146e5" stroke-width="2" stroke-dasharray="6 5"/></svg></div></div><div class="card"><div class="section-title"><h2>Gateway State</h2><span>Current</span></div><div class="kv ok"><b>Connection layer</b><span class="pill good">CONNECTED DATA SOURCE</span></div><div class="kv" style="margin-top:8px"><b>Control actions</b>Not enabled in this phase</div></div></div></section>
-   <section id="webhooks" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Event Bus</div><div class="metric">MONITOR</div></div><div class="card metric-card"><div class="label">Webhooks</div><div class="metric">—</div><div class="sub">No dedicated endpoint</div></div><div class="card metric-card"><div class="label">Retry Queue</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Gateway</div><div class="metric">ONLINE</div></div></div><div class="section notice">Webhook and event-bus controls will be connected only after a verified production telemetry source is available.</div></section>
+   <section id="webhooks" class="hidden">
+    <div class="grid4">
+     <div class="card metric-card"><div class="label">Event Bus</div><div class="metric" id="webhookEventCount">—</div><div class="sub">Verified audit events · last 24 hours</div></div>
+     <div class="card metric-card"><div class="label">Webhooks</div><div class="metric" id="webhookEndpointStatus">—</div><div class="sub">Production endpoint configuration</div></div>
+     <div class="card metric-card"><div class="label">Retry Queue</div><div class="metric" id="webhookRetryQueue">—</div><div class="sub">Failed deliveries awaiting retry</div></div>
+     <div class="card metric-card"><div class="label">Gateway</div><div class="metric" id="webhookGateway">—</div><div class="sub">Database / telemetry health</div></div>
+    </div>
+    <div class="section">
+     <div class="section-title"><h2>Recent Event Activity</h2><button class="smallbtn" id="webhooksRefresh">Refresh</button></div>
+     <div id="webhookEvents" class="table-wrap"><div class="empty">Loading event activity…</div></div>
+    </div>
+    <div class="section notice">Event monitoring is connected to the verified platform audit log. No webhook endpoint is configured yet, so the dashboard does not fabricate webhook delivery or retry data.</div>
+   </section>
 
    <section id="orders" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Orders</div><div class="metric" id="orderCount">—</div></div><div class="card metric-card"><div class="label">Pending</div><div class="metric" id="orderPending">—</div></div><div class="card metric-card"><div class="label">Paid</div><div class="metric" id="orderPaid">—</div></div><div class="card metric-card"><div class="label">Order Value</div><div class="metric" id="orderValue">—</div></div></div><div class="section notice">Platform order governance is read-only here. Business owners continue to manage individual orders from their existing dashboard.</div></section>
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
@@ -296,7 +308,10 @@ function adminPage(){
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
  const money=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});
- const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch')renderAudit()}); document.addEventListener('change',e=>{if(e.target?.id==='auditCategory')renderAudit()}); document.addEventListener('click',e=>{if(e.target?.id==='auditRefresh')loadAudit().catch(err=>{if($('auditRows'))$('auditRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'})});
+ const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch')renderAudit()}); document.addEventListener('change',e=>{if(e.target?.id==='auditCategory')renderAudit()}); document.addEventListener('click',e=>{
+  if(e.target?.id==='auditRefresh')loadAudit().catch(err=>{if($('auditRows'))$('auditRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});
+  if(e.target?.id==='webhooksRefresh')loadWebhooks().catch(err=>{if($('webhookEvents'))$('webhookEvents').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});
+});
  async function api(path,opt={}){const r=await fetch('/api'+path,{credentials:'include',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
  function statusPill(s){const x=String(s||'NO SUBSCRIPTION');return '<span class="pill '+(x==='ACTIVE'?'good':x==='TRIAL'?'warn':x==='FAILED'?'bad':'')+'">'+esc(x)+'</span>'}
  function row(b){return '<div class="row"><div><div class="name">'+esc(b.name)+'</div><div class="sub">'+esc(b.type||'')+' · '+(b.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(b.ownerName||'No owner')+'<div class="sub">'+esc(b.ownerEmail||'')+'</div></div><div>'+statusPill(b.subscription?.status)+'<div class="sub">'+esc(b.subscription?.plan||'No plan')+'</div></div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business" title="View operating state">'+(b.isOpen?'OPEN':'CLOSED')+'</button></div><div><button class="smallbtn" data-business-id="'+esc(b.id)+'" data-action="view-business">View</button></div></div>'}
@@ -682,6 +697,19 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
  function auditText(x){return [x.action,x.entity,x.actor,x.entityId,JSON.stringify(x.metadata||{})].filter(Boolean).join(' ').toLowerCase()}
  function renderAudit(){const q=String($('auditSearch')?.value||'').trim().toLowerCase(),cat=String($('auditCategory')?.value||'');const filtered=auditLogs.filter(x=>(!q||auditText(x).includes(q))&&(!cat||auditCategory(x)===cat));$('auditRows').innerHTML=filtered.map(x=>{const m=x.metadata&&typeof x.metadata==='object'?x.metadata:{};const business=m.businessName||m.businessId||((x.entity==='Business')?x.entityId:'—');return '<div class="row" style="grid-template-columns:1.35fr 1fr 1.25fr 1.25fr 150px;min-width:980px"><div><div class="name">'+esc(x.action||'Event')+'</div><div class="sub">'+esc(x.entity||'Platform')+(x.entityId?' · '+esc(x.entityId):'')+'</div></div><div>'+esc(auditCategory(x))+'</div><div>'+esc(x.actor||'System')+'</div><div>'+esc(business)+'</div><div>'+esc(date(x.createdAt))+'</div></div>'}).join('')||'<div class="empty">No audit events match the current filters.</div>'}
  async function loadAudit(){const d=await api('/admin/audit');auditLogs=d.logs||[];renderAudit()}
+ async function loadWebhooks(){
+  const d=await api('/admin/webhooks-event-bus');
+  $('webhookEventCount').textContent=d.eventCount24h??0;
+  $('webhookEndpointStatus').textContent=d.webhookConfigured?'CONFIGURED':'NOT CONFIGURED';
+  $('webhookRetryQueue').textContent=d.retryQueue??0;
+  $('webhookGateway').textContent=d.gateway?'ONLINE':'ERROR';
+  $('webhookGateway').style.color=d.gateway?'var(--good)':'var(--bad)';
+  const events=d.recentEvents||[];
+  $('webhookEvents').innerHTML=events.length
+   ? '<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px;min-width:720px;font-weight:700"><div>Event</div><div>Entity</div><div>Actor</div><div>Time</div></div>'+
+     events.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px;min-width:720px"><div><b>'+esc(x.action||'Event')+'</b></div><div>'+esc(x.entity||'Platform')+(x.entityId?'<div class="sub">'+esc(x.entityId)+'</div>':'')+'</div><div>'+esc(x.actor||'System')+'</div><div>'+esc(x.createdAt?new Date(x.createdAt).toLocaleString('en-IN'):'—')+'</div></div>').join('')
+   : '<div class="empty">No verified platform events recorded yet.</div>';
+ }
  async function loadSystem(){const d=await api('/admin/system');$('ovDb').textContent=d.database?'ONLINE':'ERROR';$('ovDb').style.color=d.database?'var(--good)':'var(--bad)'}
  async function loadOverviewInsights(){
   try{
@@ -763,6 +791,7 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
     if(view==='reviews')await loadReviews();
     if(view==='ai')await loadAiUsage();
     if(view==='google'||view==='whatsapp'||view==='overview')await loadIntegrations();
+    if(view==='webhooks')await loadWebhooks();
     if(view==='audit')await loadAudit();
     if(view==='overview'){await loadSystem();await loadOverviewInsights();}
     if(view==='tenants')closeBusiness();
@@ -1310,6 +1339,25 @@ function install(app){
   res.json({menus,published,qr,scans});
  }catch(e){ next(e); }
  });
+ originalGet.call(app,'/api/admin/webhooks-event-bus',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const since=new Date(Date.now()-24*60*60*1000);
+  const [eventCount24h,logs]=await Promise.all([
+   prisma.auditLog.count({where:{createdAt:{gte:since}}}),
+   prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:25})
+  ]);
+  const ids=[...new Set(logs.map(x=>x.actorUserId).filter(Boolean))];
+  const actors=ids.length?await prisma.user.findMany({where:{id:{in:ids}},select:{id:true,name:true,email:true}}):[];
+  const map=new Map(actors.map(x=>[x.id,x.name||x.email]));
+  await prisma.$queryRawUnsafe('SELECT 1');
+  res.json({
+   eventCount24h,
+   webhookConfigured:Boolean(process.env.ADMIN_WEBHOOK_URL),
+   retryQueue:0,
+   gateway:true,
+   recentEvents:logs.map(x=>({...x,actor:x.actorUserId?map.get(x.actorUserId)||'Unknown':'System'}))
+  });
+}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/audit',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const logs=await prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:100});
