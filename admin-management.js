@@ -262,7 +262,7 @@ function adminPage(){
      <div class="section-title"><h2>Recent Event Activity</h2><button class="smallbtn" id="webhooksRefresh">Refresh</button></div>
      <div id="webhookEvents" class="table-wrap"><div class="empty">Loading event activity…</div></div>
     </div>
-    <div class="section notice">Event monitoring is connected to the verified platform audit log. No webhook endpoint is configured yet, so the dashboard does not fabricate webhook delivery or retry data.</div>
+    <div class="section notice">Event monitoring is connected to the verified platform audit log.</div>
    </section>
 
    <section id="orders" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Orders</div><div class="metric" id="orderCount">—</div></div><div class="card metric-card"><div class="label">Pending</div><div class="metric" id="orderPending">—</div></div><div class="card metric-card"><div class="label">Paid</div><div class="metric" id="orderPaid">—</div></div><div class="card metric-card"><div class="label">Order Value</div><div class="metric" id="orderValue">—</div></div></div><div class="section notice">Platform order governance is read-only here. Business owners continue to manage individual orders from their existing dashboard.</div></section>
