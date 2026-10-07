@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
 import { deflateRawSync } from 'node:zlib';
+import crypto from 'node:crypto';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
@@ -15,6 +16,41 @@ function ensureAdminFeatureColumn(){
     .catch(e=>console.error('Admin feature-control column check failed:',e?.message||e));
 }
 setTimeout(()=>{ ensureAdminFeatureColumn().catch(()=>{}); },1000);
+
+async function ensureWebhookTables(){
+ await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminWebhookEndpoint"("id" TEXT PRIMARY KEY,"url" TEXT NOT NULL,"secret" TEXT NOT NULL,"enabled" BOOLEAN NOT NULL DEFAULT true,"lastEventAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+ await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminWebhookDelivery"("id" TEXT PRIMARY KEY,"endpointId" TEXT NOT NULL,"auditId" TEXT NOT NULL,"eventType" TEXT NOT NULL,"payload" JSONB NOT NULL,"status" TEXT NOT NULL DEFAULT 'PENDING',"attempts" INTEGER NOT NULL DEFAULT 0,"responseCode" INTEGER,"error" TEXT,"nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"deliveredAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE("endpointId","auditId"))`);
+}
+function webhookId(){return crypto.randomUUID()}
+function webhookSignature(secret,body){return 'sha256='+crypto.createHmac('sha256',secret).update(body).digest('hex')}
+async function webhookRequest(url,secret,payload){
+ const body=JSON.stringify(payload),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+ try{const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-repute-webhook-signature':webhookSignature(secret,body),'x-repute-webhook-event':String(payload.event||'EVENT')},body,signal:controller.signal});const text=await response.text().catch(()=> '');return {ok:response.ok,status:response.status,error:response.ok?null:(text||('HTTP '+response.status)).slice(0,500)}}catch(e){return {ok:false,status:null,error:String(e?.message||e).slice(0,500)}}finally{clearTimeout(timer)}
+}
+async function webhookWorker(){
+ try{
+  await ensureWebhookTables();
+  const endpoints=await prisma.$queryRawUnsafe(`SELECT "id","url","secret","enabled","lastEventAt" FROM "AdminWebhookEndpoint" WHERE "enabled"=true`);
+  for(const ep of endpoints){
+   const since=ep.lastEventAt||new Date();
+   const logs=await prisma.auditLog.findMany({where:{createdAt:{gt:since}},orderBy:{createdAt:'asc'},take:50});
+   let cursor=since;
+   for(const log of logs){
+    cursor=log.createdAt;
+    const payload={event:log.action,version:1,id:log.id,occurredAt:log.createdAt.toISOString(),entity:log.entity,entityId:log.entityId||null,actorUserId:log.actorUserId||null,metadata:log.metadata||{}};
+    await prisma.$executeRawUnsafe(`INSERT INTO "AdminWebhookDelivery"("id","endpointId","auditId","eventType","payload") VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT ("endpointId","auditId") DO NOTHING`,webhookId(),ep.id,log.id,log.action,JSON.stringify(payload));
+   }
+   if(logs.length)await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookEndpoint" SET "lastEventAt"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2`,cursor,ep.id);
+  }
+  const pending=await prisma.$queryRawUnsafe(`SELECT d.*,e."url",e."secret" FROM "AdminWebhookDelivery" d JOIN "AdminWebhookEndpoint" e ON e."id"=d."endpointId" WHERE e."enabled"=true AND d."status" IN ('PENDING','FAILED') AND d."nextAttemptAt"<=CURRENT_TIMESTAMP ORDER BY d."createdAt" ASC LIMIT 20`);
+  for(const d of pending){
+   const result=await webhookRequest(d.url,d.secret,d.payload),attempts=Number(d.attempts||0)+1;
+   if(result.ok)await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='DELIVERED',"attempts"=$1,"responseCode"=$2,"error"=NULL,"deliveredAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$3`,attempts,result.status,d.id);
+   else {const delay=Math.min(3600,Math.pow(2,Math.min(attempts,10))*10);await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='FAILED',"attempts"=$1,"responseCode"=$2,"error"=$3,"nextAttemptAt"=CURRENT_TIMESTAMP + ($4 * INTERVAL '1 second'),"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$5`,attempts,result.status,result.error,delay,d.id)}
+  }
+ }catch(e){console.error('Webhook worker error:',e?.message||e)}
+}
+setTimeout(()=>{webhookWorker().catch(()=>{});setInterval(()=>webhookWorker().catch(()=>{}),10000)},5000);
 
 
 function crc32(buf){
@@ -254,15 +290,17 @@ function adminPage(){
    <section id="webhooks" class="hidden">
     <div class="grid4">
      <div class="card metric-card"><div class="label">Event Bus</div><div class="metric" id="webhookEventCount">—</div><div class="sub">Verified audit events · last 24 hours</div></div>
-     <div class="card metric-card"><div class="label">Webhooks</div><div class="metric" id="webhookEndpointStatus">—</div><div class="sub">Production endpoint configuration</div></div>
+     <div class="card metric-card"><div class="label">Webhooks</div><div class="metric" id="webhookEndpointStatus">—</div><div class="sub">Live delivery endpoint</div></div>
      <div class="card metric-card"><div class="label">Retry Queue</div><div class="metric" id="webhookRetryQueue">—</div><div class="sub">Failed deliveries awaiting retry</div></div>
-     <div class="card metric-card"><div class="label">Gateway</div><div class="metric" id="webhookGateway">—</div><div class="sub">Database / telemetry health</div></div>
+     <div class="card metric-card"><div class="label">Gateway</div><div class="metric" id="webhookGateway">—</div><div class="sub">Database / delivery health</div></div>
     </div>
-    <div class="section">
-     <div class="section-title"><h2>Recent Event Activity</h2><button class="smallbtn" id="webhooksRefresh">Refresh</button></div>
-     <div id="webhookEvents" class="table-wrap"><div class="empty">Loading event activity…</div></div>
-    </div>
-    <div class="section notice">Event monitoring is connected to the verified platform audit log.</div>
+    <div class="section"><div class="card">
+      <div class="section-title"><h2>Webhook Configuration</h2><span>HMAC-SHA256 signed delivery</span></div>
+      <div class="toolbar"><input class="input" id="webhookUrl" placeholder="https://your-domain.com/webhook" autocomplete="off"><input class="input" id="webhookSecret" placeholder="Secret (optional — auto-generated if blank)" autocomplete="off"><button class="smallbtn" id="webhookSave">Save & Enable</button><button class="smallbtn" id="webhookTest">Send Test Event</button></div>
+      <div class="sub" id="webhookConfigMessage">Configure a real HTTPS endpoint to receive Repute Tech events.</div>
+    </div></div>
+    <div class="section"><div class="section-title"><h2>Recent Webhook Deliveries</h2><button class="smallbtn" id="webhooksRefresh">Refresh</button></div><div id="webhookDeliveries" class="table-wrap"><div class="empty">Loading webhook deliveries…</div></div></div>
+    <div class="section"><div class="section-title"><h2>Recent Event Activity</h2></div><div id="webhookEvents" class="table-wrap"><div class="empty">Loading event activity…</div></div></div>
    </section>
 
    <section id="orders" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Total Orders</div><div class="metric" id="orderCount">—</div></div><div class="card metric-card"><div class="label">Pending</div><div class="metric" id="orderPending">—</div></div><div class="card metric-card"><div class="label">Paid</div><div class="metric" id="orderPaid">—</div></div><div class="card metric-card"><div class="label">Order Value</div><div class="metric" id="orderValue">—</div></div></div><div class="section notice">Platform order governance is read-only here. Business owners continue to manage individual orders from their existing dashboard.</div></section>
@@ -311,6 +349,8 @@ function adminPage(){
  const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch')renderAudit()}); document.addEventListener('change',e=>{if(e.target?.id==='auditCategory')renderAudit()}); document.addEventListener('click',e=>{
   if(e.target?.id==='auditRefresh')loadAudit().catch(err=>{if($('auditRows'))$('auditRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});
   if(e.target?.id==='webhooksRefresh')loadWebhooks().catch(err=>{if($('webhookEvents'))$('webhookEvents').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});
+  if(e.target?.id==='webhookSave'){const b=e.target;b.disabled=true;api('/admin/webhooks-event-bus/config',{method:'POST',body:{url:$('webhookUrl').value,secret:$('webhookSecret').value}}).then(()=>{ $('webhookConfigMessage').textContent='Webhook endpoint saved and enabled.';return loadWebhooks()}).catch(err=>{$('webhookConfigMessage').textContent=err.message}).finally(()=>{b.disabled=false})}
+  if(e.target?.id==='webhookTest'){const b=e.target;b.disabled=true;api('/admin/webhooks-event-bus/test',{method:'POST'}).then(()=>{ $('webhookConfigMessage').textContent='Test event delivered successfully.';return loadWebhooks()}).catch(err=>{$('webhookConfigMessage').textContent=err.message}).finally(()=>{b.disabled=false})}
 });
  async function api(path,opt={}){const r=await fetch('/api'+path,{credentials:'include',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
  function statusPill(s){const x=String(s||'NO SUBSCRIPTION');return '<span class="pill '+(x==='ACTIVE'?'good':x==='TRIAL'?'warn':x==='FAILED'?'bad':'')+'">'+esc(x)+'</span>'}
@@ -699,18 +739,11 @@ async function loadAnalyticsUsers(){const d=await api('/admin/users');users=d.us
  async function loadAudit(){const d=await api('/admin/audit');auditLogs=d.logs||[];renderAudit()}
  async function loadWebhooks(){
   const d=await api('/admin/webhooks-event-bus');
-  $('webhookEventCount').textContent=d.eventCount24h??0;
-  $('webhookEndpointStatus').textContent=d.webhookConfigured?'CONFIGURED':'NOT CONFIGURED';
-  $('webhookRetryQueue').textContent=d.retryQueue??0;
-  $('webhookGateway').textContent=d.gateway?'ONLINE':'ERROR';
-  $('webhookGateway').style.color=d.gateway?'var(--good)':'var(--bad)';
-  const events=d.recentEvents||[];
-  $('webhookEvents').innerHTML=events.length
-   ? '<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px;min-width:720px;font-weight:700"><div>Event</div><div>Entity</div><div>Actor</div><div>Time</div></div>'+
-     events.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px;min-width:720px"><div><b>'+esc(x.action||'Event')+'</b></div><div>'+esc(x.entity||'Platform')+(x.entityId?'<div class="sub">'+esc(x.entityId)+'</div>':'')+'</div><div>'+esc(x.actor||'System')+'</div><div>'+esc(x.createdAt?new Date(x.createdAt).toLocaleString('en-IN'):'—')+'</div></div>').join('')
-   : '<div class="empty">No verified platform events recorded yet.</div>';
- }
- async function loadSystem(){const d=await api('/admin/system');$('ovDb').textContent=d.database?'ONLINE':'ERROR';$('ovDb').style.color=d.database?'var(--good)':'var(--bad)'}
+  $('webhookEventCount').textContent=d.eventCount24h??0;$('webhookEndpointStatus').textContent=d.webhookConfigured?'CONFIGURED':'NOT CONFIGURED';$('webhookRetryQueue').textContent=d.retryQueue??0;$('webhookGateway').textContent=d.gateway?'ONLINE':'ERROR';$('webhookGateway').style.color=d.gateway?'var(--good)':'var(--bad)';
+  $('webhookUrl').value=d.endpoint?.url||'';$('webhookSecret').value='';$('webhookConfigMessage').textContent=d.endpoint?.enabled?'Webhook endpoint is enabled and receiving new platform events.':'Configure a real HTTPS endpoint to receive Repute Tech events.';
+  const deliveries=d.recentDeliveries||[];$('webhookDeliveries').innerHTML=deliveries.length?'<div class="row" style="grid-template-columns:1.3fr 1fr 70px 70px 1.5fr 150px;min-width:900px;font-weight:700"><div>Event</div><div>Status</div><div>Attempts</div><div>HTTP</div><div>Error</div><div>Time</div></div>'+deliveries.map(x=>'<div class="row" style="grid-template-columns:1.3fr 1fr 70px 70px 1.5fr 150px;min-width:900px"><div><b>'+esc(x.eventType||'Event')+'</b></div><div>'+esc(x.status||'—')+'</div><div>'+Number(x.attempts||0)+'</div><div>'+esc(x.responseCode||'—')+'</div><div>'+esc(x.error||'—')+'</div><div>'+esc(x.createdAt?new Date(x.createdAt).toLocaleString('en-IN'):'—')+'</div></div>').join(''):'<div class="empty">No webhook deliveries yet.</div>';
+  const events=d.recentEvents||[];$('webhookEvents').innerHTML=events.length?'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px;min-width:720px;font-weight:700"><div>Event</div><div>Entity</div><div>Actor</div><div>Time</div></div>'+events.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 150px"><div><b>'+esc(x.action||'Event')+'</b></div><div>'+esc(x.entity||'Platform')+(x.entityId?'<div class="sub">'+esc(x.entityId)+'</div>':'')+'</div><div>'+esc(x.actor||'System')+'</div><div>'+esc(x.createdAt?new Date(x.createdAt).toLocaleString('en-IN'):'—')+'</div></div>').join(''):'<div class="empty">No verified platform events recorded yet.</div>';
+ } async function loadSystem(){const d=await api('/admin/system');$('ovDb').textContent=d.database?'ONLINE':'ERROR';$('ovDb').style.color=d.database?'var(--good)':'var(--bad)'}
  async function loadOverviewInsights(){
   try{
    const [u,o,r,a]=await Promise.all([api('/admin/users'),api('/admin/orders'),api('/admin/reviews'),api('/admin/audit')]);
@@ -1340,23 +1373,28 @@ function install(app){
  }catch(e){ next(e); }
  });
  originalGet.call(app,'/api/admin/webhooks-event-bus',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
-  const since=new Date(Date.now()-24*60*60*1000);
-  const [eventCount24h,logs]=await Promise.all([
-   prisma.auditLog.count({where:{createdAt:{gte:since}}}),
-   prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:25})
-  ]);
-  const ids=[...new Set(logs.map(x=>x.actorUserId).filter(Boolean))];
-  const actors=ids.length?await prisma.user.findMany({where:{id:{in:ids}},select:{id:true,name:true,email:true}}):[];
-  const map=new Map(actors.map(x=>[x.id,x.name||x.email]));
-  await prisma.$queryRawUnsafe('SELECT 1');
-  res.json({
-   eventCount24h,
-   webhookConfigured:Boolean(process.env.ADMIN_WEBHOOK_URL),
-   retryQueue:0,
-   gateway:true,
-   recentEvents:logs.map(x=>({...x,actor:x.actorUserId?map.get(x.actorUserId)||'Unknown':'System'}))
-  });
+ const user=await requireAdmin(req,res);if(!user)return;await ensureWebhookTables();const since=new Date(Date.now()-86400000);
+ const [eventCount24h,logs,endpoints,deliveries,retry]=await Promise.all([
+  prisma.auditLog.count({where:{createdAt:{gte:since}}}),prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:25}),
+  prisma.$queryRawUnsafe(`SELECT "id","url","enabled" FROM "AdminWebhookEndpoint" ORDER BY "createdAt" DESC LIMIT 1`),
+  prisma.$queryRawUnsafe(`SELECT "eventType","status","attempts","responseCode","error","createdAt" FROM "AdminWebhookDelivery" ORDER BY "createdAt" DESC LIMIT 25`),
+  prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS "count" FROM "AdminWebhookDelivery" WHERE "status"='FAILED' AND "nextAttemptAt"<=CURRENT_TIMESTAMP`)
+ ]);
+ const endpoint=endpoints[0]||null;const ids=[...new Set(logs.map(x=>x.actorUserId).filter(Boolean))];const actors=ids.length?await prisma.user.findMany({where:{id:{in:ids}},select:{id:true,name:true,email:true}}):[];const map=new Map(actors.map(x=>[x.id,x.name||x.email]));await prisma.$queryRawUnsafe('SELECT 1');
+ res.json({eventCount24h,webhookConfigured:Boolean(endpoint?.enabled),endpoint:endpoint?{url:endpoint.url,enabled:endpoint.enabled}:null,retryQueue:Number(retry[0]?.count||0),gateway:true,recentDeliveries:deliveries,recentEvents:logs.map(x=>({...x,actor:x.actorUserId?map.get(x.actorUserId)||'Unknown':'System'}))});
+}catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/webhooks-event-bus/config',async(req,res,next)=>{try{
+ const user=await requireAdmin(req,res);if(!user)return;await ensureWebhookTables();const body=await readAdminJsonBody(req),url=String(body?.url||'').trim(),secret=String(body?.secret||'').trim();let parsed;try{parsed=new URL(url)}catch{parsed=null}
+ if(!parsed||parsed.protocol!=='https:')return res.status(400).json({error:'Webhook URL must be a valid HTTPS URL'});
+ const existing=await prisma.$queryRawUnsafe(`SELECT "id","secret" FROM "AdminWebhookEndpoint" ORDER BY "createdAt" DESC LIMIT 1`),endpointSecret=secret||existing[0]?.secret||crypto.randomBytes(32).toString('hex'),id=existing[0]?.id||webhookId();
+ await prisma.$executeRawUnsafe(`INSERT INTO "AdminWebhookEndpoint"("id","url","secret","enabled","lastEventAt") VALUES($1,$2,$3,true,CURRENT_TIMESTAMP) ON CONFLICT ("id") DO UPDATE SET "url"=$2,"secret"=$3,"enabled"=true,"updatedAt"=CURRENT_TIMESTAMP`,id,url,endpointSecret);
+ res.json({ok:true});
+}catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/webhooks-event-bus/test',async(req,res,next)=>{try{
+ const user=await requireAdmin(req,res);if(!user)return;await ensureWebhookTables();const endpoint=(await prisma.$queryRawUnsafe(`SELECT "id","url","secret" FROM "AdminWebhookEndpoint" WHERE "enabled"=true ORDER BY "createdAt" DESC LIMIT 1`))[0];if(!endpoint)return res.status(400).json({error:'Configure and enable a webhook endpoint first'});
+ const payload={event:'WEBHOOK_TEST',version:1,id:webhookId(),occurredAt:new Date().toISOString(),entity:'Platform',entityId:null,actorUserId:user.id,metadata:{source:'reputetechs.in admin dashboard'}},result=await webhookRequest(endpoint.url,endpoint.secret,payload);
+ await prisma.$executeRawUnsafe(`INSERT INTO "AdminWebhookDelivery"("id","endpointId","auditId","eventType","payload","status","attempts","responseCode","error","deliveredAt") VALUES($1,$2,$3,$4,$5::jsonb,$6,1,$7,$8,$9)`,webhookId(),endpoint.id,payload.id,payload.event,JSON.stringify(payload),result.ok?'DELIVERED':'FAILED',result.status,result.error,result.ok?new Date():null);
+ if(!result.ok)return res.status(502).json({error:'Webhook test failed'+(result.status?' (HTTP '+result.status+')':'' )+(result.error?': '+result.error:'')});res.json({ok:true});
 }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/audit',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
