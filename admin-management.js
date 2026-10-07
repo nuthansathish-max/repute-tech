@@ -1424,4 +1424,3 @@ function install(app){
 }
 express.application.get=function(path,...handlers){install(this);return originalGet.call(this,path,...handlers)};
 express.application.post=function(path,...handlers){install(this);return originalPost.call(this,path,...handlers)};
-document.addEventListener('input',e=>{if(e.target?.id==='cprSearch')renderCustomPlanRequests()});document.addEventListener('click',e=>{const r=e.target.closest?.('[data-cpr]');if(r){const a=window.__cpr||[],q=($('cprSearch')?.value||'').toLowerCase(),rows=a.filter(x=>[x.businessName,x.ownerName,x.planName,x.planCode].join(' ').toLowerCase().includes(q));if(rows[Number(r.dataset.cpr)])inspectCustomPlan(rows[Number(r.dataset.cpr)])}});
