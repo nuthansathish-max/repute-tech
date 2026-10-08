@@ -1144,8 +1144,17 @@ function install(app){
 
  originalGet.call(app,'/api/admin/pending-plan-requests',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const requests=await prisma.planRequest.findMany({where:{status:'PENDING'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'asc'}});
+  const requests=await prisma.planRequest.findMany({where:{status:'PENDING',isCustom:false},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'asc'}});
   const mapped=requests.map(x=>{const owner=x.business.members[0]?.user;return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||null,ownerEmail:owner?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,status:x.status,paymentStatus:x.paymentStatus,createdAt:x.createdAt}});
+  res.json({requests:mapped});
+ }catch(e){next(e)}});
+
+ originalGet.call(app,'/api/admin/custom-plan-requests',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE\`);
+  await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT\`);
+  const requests=await prisma.planRequest.findMany({where:{isCustom:true},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
+  const mapped=requests.map(x=>{const owner=x.business.members[0]?.user;return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||null,ownerEmail:owner?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,status:x.status,paymentStatus:x.paymentStatus,customDetails:x.customDetails||'',createdAt:x.createdAt}});
   res.json({requests:mapped});
  }catch(e){next(e)}});
 
