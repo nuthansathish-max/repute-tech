@@ -879,6 +879,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(paidBtn){e.preventDefault();markSubscriptionPaid(paidBtn.dataset.requestId,paidBtn);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
+  const cprFilter=e.target.closest('.cpr-filter-card');
+  if(cprFilter){e.preventDefault();e.stopPropagation();window.__cprFilter=cprFilter.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();return;}
   const cprRow=e.target.closest('.cpr-row');
   if(cprRow){e.preventDefault();const arr=window.__cpr||[];const q=($('cprSearch')?.value||'').toLowerCase();const rows=arr.filter(x=>[x.businessName,x.ownerName,x.planName,x.planCode].join(' ').toLowerCase().includes(q));const x=rows[Number(cprRow.dataset.cpr)];if(x)inspectCustomPlan(x);return}
   const saveQuote=e.target.closest('[data-action="save-custom-quote"]');
