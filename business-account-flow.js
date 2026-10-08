@@ -61,7 +61,7 @@ async function ensureBusinessDetailsTable(){
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "BusinessDetails" ("business_id" TEXT PRIMARY KEY, "owner_count" INTEGER NOT NULL DEFAULT 1, "address" TEXT, "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
 }
 
-async function ensureCustomPlanColumns(){await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE\`);await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT\`)}
+async function ensureCustomPlanColumns(){await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE`);await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT`)}
 
 async function ensureTrialColumns(){
   await prisma.$executeRawUnsafe(`ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "trialStartedAt" TIMESTAMP(3)`);
