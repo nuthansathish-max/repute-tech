@@ -1148,7 +1148,8 @@ function install(app){
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/reject',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const reason=String(req.body?.reason||'').trim();
+  const body=await readAdminJsonBody(req);
+  const reason=String(body?.reason||'').trim();
   if(!reason)return res.status(400).json({error:'Rejection reason is required'});
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
