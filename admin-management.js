@@ -1161,6 +1161,20 @@ function install(app){
   res.json({requests:mapped});
  }catch(e){next(e)}});
 
+ originalPost.call(app,'/api/admin/custom-plan-requests/:requestId/quote',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE\`);
+  await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT\`);
+  const body=await readAdminJsonBody(req);const planName=String(body?.planName||'').trim();const billingInterval=String(body?.billingInterval||'').trim().toUpperCase();const price=Number(body?.price);const customDetails=String(body?.customDetails||'').trim().slice(0,1500);
+  if(!planName||planName.length>80||!['MONTH','YEAR'].includes(billingInterval)||!Number.isFinite(price)||price<0)return res.status(400).json({error:'Invalid custom quotation'});
+  const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
+  if(!request||!request.isCustom)return res.status(404).json({error:'Custom plan request not found'});
+  if(request.status!=='PENDING')return res.status(400).json({error:'This custom plan request is no longer pending'});
+  const updated=await prisma.planRequest.update({where:{id:request.id},data:{planName,price,billingInterval,customDetails}});
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'UPDATE_CUSTOM_PLAN_QUOTE',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planName,billingInterval,price}}});
+  res.json({ok:true,request:updated});
+ }catch(e){next(e)}});
+
  originalGet.call(app,'/api/admin/custom-plan-requests',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$executeRawUnsafe(\`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE\`);
