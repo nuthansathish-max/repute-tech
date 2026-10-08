@@ -17,6 +17,14 @@ function ensureAdminFeatureColumn(){
 }
 setTimeout(()=>{ ensureAdminFeatureColumn().catch(()=>{}); },1000);
 
+function ensureCustomPlanRequestColumns(){
+  return Promise.all([
+    prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE'),
+    prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT')
+  ]).catch(e=>console.error('Custom plan request column check failed:',e?.message||e));
+}
+setTimeout(()=>{ ensureCustomPlanRequestColumns().catch(()=>{}); },1000);
+
 async function ensureWebhookTables(){
  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminWebhookEndpoint"("id" TEXT PRIMARY KEY,"url" TEXT NOT NULL,"secret" TEXT NOT NULL,"enabled" BOOLEAN NOT NULL DEFAULT true,"lastEventAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminWebhookDelivery"("id" TEXT PRIMARY KEY,"endpointId" TEXT NOT NULL,"auditId" TEXT NOT NULL,"eventType" TEXT NOT NULL,"payload" JSONB NOT NULL,"status" TEXT NOT NULL DEFAULT 'PENDING',"attempts" INTEGER NOT NULL DEFAULT 0,"responseCode" INTEGER,"error" TEXT,"nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"deliveredAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE("endpointId","auditId"))`);
