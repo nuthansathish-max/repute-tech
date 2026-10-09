@@ -1393,7 +1393,8 @@ function install(app){
    const sub=subMap.get(b.id), payment=payMap.get(b.id), last=latest.get(b.id);
    const risks=[];
    if(payment)risks.push('PAYMENT DUE');
-   if(sub?.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<=soon)risks.push('TRIAL ENDING');
+   if(sub?.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<now)risks.push('TRIAL EXPIRED');
+   else if(sub?.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<=soon)risks.push('TRIAL ENDING');
    if(!sub||(!['ACTIVE','TRIAL'].includes(sub.status)))risks.push('NO ACTIVE SUBSCRIPTION');
    if(last&&new Date(last)<stale)risks.push('LOW ACTIVITY');
    if(!last)risks.push('NO ACTIVITY');
@@ -1402,10 +1403,10 @@ function install(app){
    const blocked=Object.entries(flags).filter(([k,v])=>v===false).map(([k])=>k);
    if(blocked.length)risks.push(blocked.length+' FEATURE'+(blocked.length>1?'S':'')+' BLOCKED');
    let riskLevel='HEALTHY';
-   if(risks.some(x=>['PAYMENT DUE','NO ACTIVE SUBSCRIPTION','NO ACTIVITY','BUSINESS CLOSED'].includes(x)||x.includes('FEATURE')))riskLevel='HIGH';
+   if(risks.some(x=>['PAYMENT DUE','TRIAL EXPIRED','NO ACTIVE SUBSCRIPTION','NO ACTIVITY','BUSINESS CLOSED'].includes(x)||x.includes('FEATURE')))riskLevel='HIGH';
    else if(risks.length)riskLevel='MEDIUM';
    const owner=b.members?.[0]?.user;
-   return {businessId:b.id,businessName:b.name||'Unnamed business',businessType:b.type||'',ownerName:owner?.name||'',ownerEmail:owner?.email||'',riskLevel,risks,blockedFeatures:blocked,subscriptionLabel:sub?(String(sub.plan||'').replace(/_/g,' ')+' · '+(sub.billingInterval||'')):'No subscription',paymentLabel:payment?('Payment '+String(payment.paymentStatus||'PENDING')):'Paid / none pending',activityLabel:last?('Last activity '+new Date(last).toLocaleDateString('en-IN')):'No recorded order/review activity'};
+   return {businessId:b.id,businessName:b.name||'Unnamed business',businessType:b.type||'',ownerName:owner?.name||'',ownerEmail:owner?.email||'',riskLevel,risks,blockedFeatures:blocked,subscriptionLabel:sub?((sub.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<now?'TRIAL EXPIRED · ':String(sub.plan||'').replace(/_/g,' ')+' · ')+(sub.billingInterval||'')):'No subscription',paymentLabel:payment?('Payment '+String(payment.paymentStatus||'PENDING')):'Paid / none pending',activityLabel:last?('Last activity '+new Date(last).toLocaleDateString('en-IN')):'No recorded order/review activity'};
   });
   const summary={attention:rows.filter(x=>x.riskLevel!=='HEALTHY').length,paymentIssues:rows.filter(x=>x.risks.includes('PAYMENT DUE')).length,trialsEndingSoon:rows.filter(x=>x.risks.includes('TRIAL ENDING')).length,blockedFeatures:rows.filter(x=>x.blockedFeatures.length>0).length};
   res.json({summary,businesses:rows});
