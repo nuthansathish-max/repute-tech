@@ -325,10 +325,10 @@ function adminPage(){
 
    <section id="health" class="hidden">
     <div class="grid4">
-     <div class="card metric-card"><div class="label">Needs Attention</div><div class="metric" id="healthAttention">—</div><div class="sub">Businesses with one or more risk signals</div></div>
-     <div class="card metric-card"><div class="label">Payment Issues</div><div class="metric" id="healthPayments">—</div><div class="sub">Approved subscriptions not paid</div></div>
-     <div class="card metric-card"><div class="label">Trials Ending Soon</div><div class="metric" id="healthTrials">—</div><div class="sub">7 days or less remaining</div></div>
-     <div class="card metric-card"><div class="label">Blocked Features</div><div class="metric" id="healthBlocked">—</div><div class="sub">Businesses with admin-disabled features</div></div>
+     <div class="card metric-card health-kpi" data-health-filter="ATTENTION" role="button" tabindex="0" title="Show businesses needing attention"><div class="label">Needs Attention</div><div class="metric" id="healthAttention">—</div><div class="sub">Businesses with one or more risk signals</div></div>
+     <div class="card metric-card health-kpi" data-health-filter="PAYMENT" role="button" tabindex="0" title="Show businesses with payment issues"><div class="label">Payment Issues</div><div class="metric" id="healthPayments">—</div><div class="sub">Approved subscriptions not paid</div></div>
+     <div class="card metric-card health-kpi" data-health-filter="TRIAL" role="button" tabindex="0" title="Show trials ending soon"><div class="label">Trials Ending Soon</div><div class="metric" id="healthTrials">—</div><div class="sub">7 days or less remaining</div></div>
+     <div class="card metric-card health-kpi" data-health-filter="BLOCKED" role="button" tabindex="0" title="Show businesses with blocked features"><div class="label">Blocked Features</div><div class="metric" id="healthBlocked">—</div><div class="sub">Businesses with admin-disabled features</div></div>
     </div>
     <div class="section-title" style="margin-top:14px"><h2>Business Health & Risk Center</h2><span>Verified signals from current platform data</span></div>
     <div class="card">
@@ -806,10 +806,18 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  function renderHealth(items){
   const q=String($('healthSearch')?.value||'').toLowerCase().trim();
   const filter=String($('healthFilter')?.value||'');
+  const cardFilter=String(window.__healthCardFilter||'');
   const filtered=items.filter(x=>{
    const hay=[x.businessName,x.ownerName,x.ownerEmail,x.riskLevel,(x.risks||[]).join(' ')].join(' ').toLowerCase();
-   return (!q||hay.includes(q))&&(!filter||x.riskLevel===filter);
+   const risks=x.risks||[];
+   const cardMatch=!cardFilter||
+    (cardFilter==='ATTENTION'&&(x.riskLevel!=='HEALTHY'||risks.length>0))||
+    (cardFilter==='PAYMENT'&&risks.includes('PAYMENT DUE'))||
+    (cardFilter==='TRIAL'&&risks.includes('TRIAL ENDING'))||
+    (cardFilter==='BLOCKED'&&risks.some(r=>String(r).includes('FEATURE')));
+   return cardMatch&&(!q||hay.includes(q))&&(!filter||x.riskLevel===filter);
   });
+  document.querySelectorAll('.health-kpi').forEach(card=>{const active=card.dataset.healthFilter===cardFilter;card.style.cursor='pointer';card.style.outline=active?'2px solid #7653e8':'';card.style.outlineOffset=active?'1px':'';card.setAttribute('aria-pressed',active?'true':'false')});
   $('healthRows').innerHTML=filtered.map(x=>{
    const riskClass=x.riskLevel==='HIGH'?'bad':x.riskLevel==='MEDIUM'?'warn':'good';
    const risks=(x.risks||[]).map(r=>'<span class="pill '+riskClass+'" style="margin:2px">'+esc(r)+'</span>').join('');
@@ -825,7 +833,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  }
  document.addEventListener('input',e=>{if(e.target?.id==='healthSearch')renderHealth(window.__healthBusinesses||[])});
  document.addEventListener('change',e=>{if(e.target?.id==='healthFilter')renderHealth(window.__healthBusinesses||[])});
- document.addEventListener('click',e=>{const refresh=e.target.closest?.('#healthRefresh');if(refresh){e.preventDefault();loadHealth().catch(err=>{if($('healthRows'))$('healthRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});return;}const view=e.target.closest?.('[data-action="view-business"]');if(view&&view.closest('#healthRows')){e.preventDefault();openBusiness(view.dataset.businessId);return;}});
+ document.addEventListener('keydown',e=>{const kpi=e.target.closest?.('.health-kpi');if(kpi&&(e.key==='Enter'||e.key===' ')){e.preventDefault();window.__healthCardFilter=window.__healthCardFilter===kpi.dataset.healthFilter?'':kpi.dataset.healthFilter;renderHealth(window.__healthBusinesses||[])}});
+ document.addEventListener('click',e=>{const kpi=e.target.closest?.('.health-kpi');if(kpi){e.preventDefault();window.__healthCardFilter=window.__healthCardFilter===kpi.dataset.healthFilter?'':kpi.dataset.healthFilter;renderHealth(window.__healthBusinesses||[]);return;}const refresh=e.target.closest?.('#healthRefresh');if(refresh){e.preventDefault();loadHealth().catch(err=>{if($('healthRows'))$('healthRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});return;}const view=e.target.closest?.('[data-action="view-business"]');if(view&&view.closest('#healthRows')){e.preventDefault();openBusiness(view.dataset.businessId);return;}});
  async function show(view){
    const section=$(view);
    if(!section)return;
