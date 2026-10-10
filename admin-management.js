@@ -20,7 +20,8 @@ setTimeout(()=>{ ensureAdminFeatureColumn().catch(()=>{}); },1000);
 function ensureCustomPlanRequestColumns(){
   return Promise.all([
     prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE'),
-    prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT')
+    prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT'),
+    prisma.$executeRawUnsafe('ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMP(3)')
   ]).catch(e=>console.error('Custom plan request column check failed:',e?.message||e));
 }
 setTimeout(()=>{ ensureCustomPlanRequestColumns().catch(()=>{}); },1000);
@@ -1144,6 +1145,7 @@ function install(app){
 
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
+  await ensureCustomPlanRequestColumns();
   const body=await readAdminJsonBody(req);
   const paymentStatus=String(body?.paymentStatus||'').trim().toUpperCase();
   const allowed=['PENDING','PAID','FAILED','EXPIRED'];
@@ -1151,8 +1153,9 @@ function install(app){
   if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
-  const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus}});
-  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus}}});
+  const paidAt=paymentStatus==='PAID'?(request.paymentStatus==='PAID'&&request.paidAt?request.paidAt:new Date()):null;
+  const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus,paidAt}});
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus,paidAt:paidAt?.toISOString()||null}}});
   res.json({ok:true,request:updated});
 }catch(e){next(e)}});
 
@@ -1299,9 +1302,9 @@ function install(app){
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{total:true}}),
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{total:true}}),
    prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:weekStart}},_sum:{price:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{price:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',OR:[{paidAt:{gte:weekStart}},{paidAt:null,createdAt:{gte:weekStart}}]},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',OR:[{paidAt:{gte:monthStart}},{paidAt:null,createdAt:{gte:monthStart}}]},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',OR:[{paidAt:{gte:yearStart}},{paidAt:null,createdAt:{gte:yearStart}}]},_sum:{price:true}}),
    prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:'PAID'},select:{planCode:true,planName:true,billingInterval:true,price:true}})
   ]);
   const paidOrders=paidOrderAgg._count._all;
