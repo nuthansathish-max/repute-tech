@@ -79,7 +79,7 @@ app.get('/auth/google/callback',async(req,res,next)=>{try{const userId=verifySta
 
 app.get('/api/google/status',auth,async(req,res,next)=>{try{const c=await prisma.googleConnection.findFirst({where:{userId:req.user.id},orderBy:{createdAt:'desc'}});res.json({connected:!!c,expiresAt:c?.expiresAt||null,scope:c?.scope||null})}catch(e){next(e)}});
 
-app.get('/api/businesses',auth,async (req,res,next)=>{try{const where=req.user.role==='SUPER_ADMIN'||req.user.role==='ADMIN'?{}:{members:{some:{userId:req.user.id}}};res.json(await prisma.business.findMany({where,include:{locations:true,subscription:true}}));}catch(e){next(e)}});
+app.get('/api/businesses',auth,async (req,res,next)=>{try{const isAdmin=['SUPER_ADMIN','ADMIN'].includes(String(req.user.role||'').toUpperCase());const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();const where=isAdmin?{}:{members:{some:{userId:req.user.id}}};const businesses=await prisma.business.findMany({where,include:{locations:true,subscription:true},orderBy:{name:'asc'}});if(selected){const index=businesses.findIndex(b=>b.id===selected);if(index>0){const [chosen]=businesses.splice(index,1);businesses.unshift(chosen);}}res.json(businesses);}catch(e){next(e)}});
 app.get('/api/businesses/:businessId/dashboard',auth,async (req,res,next)=>{try{
  const {businessId}=req.params; const allowed=await prisma.business.findFirst({where:{id:businessId,...(req.user.role==='SUPER_ADMIN'||req.user.role==='ADMIN'?{}:{members:{some:{userId:req.user.id}}})}});if(!allowed)return res.status(404).json({error:'Business not found'});
  const [business,reviews,customers,qr,campaigns,totalReviews]=await Promise.all([prisma.business.findUnique({where:{id:businessId},include:{locations:true,subscription:true}}),prisma.review.findMany({where:{businessId},orderBy:{createdAt:'desc'},take:10}),prisma.customer.count({where:{businessId}}),prisma.smartQr.aggregate({where:{businessId},_sum:{scanCount:true}}),prisma.campaign.aggregate({where:{businessId},_sum:{sentCount:true,deliveredCount:true}}),prisma.review.count({where:{businessId}})]);
@@ -280,14 +280,18 @@ app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.get('/api/plan-requests',auth,async(req,res,next)=>{try{
+  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();
   let where;
-  if(['ADMIN','SUPER_ADMIN'].includes(req.user.role)){where={};}
-  else {
-    const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();
+  if(selected){
+    const business=await prisma.business.findFirst({where:{id:selected,...(isAdmin?{}:{members:{some:{userId:req.user.id}}})},select:{id:true}});
+    if(!business)return res.status(403).json({error:'Business access denied'});
+    where={businessId:business.id};
+  }else if(isAdmin){
+    where={};
+  }else{
     const owned=await prisma.business.findMany({where:{members:{some:{userId:req.user.id}}},select:{id:true}});
-    const allowedIds=owned.map(b=>b.id);
-    if(selected&&allowedIds.includes(selected))where={userId:req.user.id,businessId:selected};
-    else where={userId:req.user.id,businessId:{in:allowedIds}};
+    where={businessId:{in:owned.map(b=>b.id)}};
   }
   res.json(await prisma.planRequest.findMany({where,include:{business:{select:{id:true,name:true,slug:true}},user:{select:{id:true,name:true,email:true}}},orderBy:{createdAt:'desc'}}));
 }catch(e){next(e)}});
