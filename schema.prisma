@@ -288,6 +288,7 @@ model PlanRequest {
   contact String
   status String @default("PENDING")
   paymentStatus String @default("MANUAL")
+  paidAt DateTime?
   isCustom Boolean @default(false)
   customDetails String?
   rejectionReason String?
