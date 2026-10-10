@@ -263,7 +263,7 @@ app.post('/api/whatsapp/connection',auth,async(req,res,next)=>{try{
 
 
 // Plans and manual approval workflow. No payment provider is connected.
-app.get('/api/plans',async(_req,res,next)=>{try{res.json(await prisma.planCatalog.findMany({where:{active:true},orderBy:{price:'asc'}}));}catch(e){next(e)}});
+app.get('/api/plans',async(_req,res,next)=>{try{const plans=await prisma.planCatalog.findMany({where:{active:true},orderBy:{price:'asc'}});res.json(plans.map(p=>{let features=p.features;if(typeof features==='string'){try{features=JSON.parse(features)}catch{features=[]}}if(!Array.isArray(features)){features=features&&typeof features==='object'?Object.entries(features).filter(([,enabled])=>enabled===true).map(([key])=>key):[]}return {...p,features}}));}catch(e){next(e)}});
 app.get('/api/admin/plans',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});res.json(await prisma.planCatalog.findMany({orderBy:{price:'asc'}}));}catch(e){next(e)}});
 app.put('/api/admin/plans/:code',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});const p=z.object({name:z.string().min(2).max(80),price:z.number().nonnegative(),billingInterval:z.enum(['MONTH','YEAR']),description:z.string().max(500).optional(),features:z.array(z.string()).default([]),active:z.boolean().default(true)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const existing=await prisma.planCatalog.findUnique({where:{code:req.params.code}});if(!existing)return res.status(404).json({error:'Plan not found'});const updated=await prisma.planCatalog.update({where:{code:req.params.code},data:p.data});await prisma.auditLog.create({data:{actorUserId:req.user.id,action:'UPDATE_PLAN',entity:'PlanCatalog',entityId:updated.id,metadata:p.data}});res.json(updated);}catch(e){next(e)}});
 
@@ -280,7 +280,15 @@ app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.get('/api/plan-requests',auth,async(req,res,next)=>{try{
-  const where=['ADMIN','SUPER_ADMIN'].includes(req.user.role)?{}:{userId:req.user.id};
+  let where;
+  if(['ADMIN','SUPER_ADMIN'].includes(req.user.role)){where={};}
+  else {
+    const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();
+    const owned=await prisma.business.findMany({where:{members:{some:{userId:req.user.id}}},select:{id:true}});
+    const allowedIds=owned.map(b=>b.id);
+    if(selected&&allowedIds.includes(selected))where={userId:req.user.id,businessId:selected};
+    else where={userId:req.user.id,businessId:{in:allowedIds}};
+  }
   res.json(await prisma.planRequest.findMany({where,include:{business:{select:{id:true,name:true,slug:true}},user:{select:{id:true,name:true,email:true}}},orderBy:{createdAt:'desc'}}));
 }catch(e){next(e)}});
 
