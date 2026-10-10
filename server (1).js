@@ -79,6 +79,15 @@ app.get('/auth/google/callback',async(req,res,next)=>{try{const userId=verifySta
 
 app.get('/api/google/status',auth,async(req,res,next)=>{try{const c=await prisma.googleConnection.findFirst({where:{userId:req.user.id},orderBy:{createdAt:'desc'}});res.json({connected:!!c,expiresAt:c?.expiresAt||null,scope:c?.scope||null})}catch(e){next(e)}});
 
+app.get('/api/businesses/:businessId/owner-profile',auth,async(req,res,next)=>{try{
+  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const business=await prisma.business.findFirst({where:{id:String(req.params.businessId),...(isAdmin?{}:{members:{some:{userId:req.user.id}}})},select:{id:true}});
+  if(!business)return res.status(403).json({error:'Business access denied'});
+  const members=await prisma.businessMember.findMany({where:{businessId:business.id},include:{user:{select:{id:true,name:true,email:true,role:true}}}});
+  const owner=members.find(m=>String(m.role||'').toUpperCase()==='OWNER')||members[0];
+  if(!owner?.user)return res.status(404).json({error:'Business owner information not found'});
+  res.set('Cache-Control','no-store');res.json({businessId:business.id,name:owner.user.name,email:owner.user.email,role:owner.role||owner.user.role});
+}catch(e){next(e)}});
 app.get('/api/businesses',auth,async (req,res,next)=>{try{const isAdmin=['SUPER_ADMIN','ADMIN'].includes(String(req.user.role||'').toUpperCase());const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();const where=isAdmin?{}:{members:{some:{userId:req.user.id}}};const businesses=await prisma.business.findMany({where,include:{locations:true,subscription:true},orderBy:{name:'asc'}});if(selected){const index=businesses.findIndex(b=>b.id===selected);if(index>0){const [chosen]=businesses.splice(index,1);businesses.unshift(chosen);}}res.json(businesses);}catch(e){next(e)}});
 app.get('/api/businesses/:businessId/dashboard',auth,async (req,res,next)=>{try{
  const {businessId}=req.params; const allowed=await prisma.business.findFirst({where:{id:businessId,...(req.user.role==='SUPER_ADMIN'||req.user.role==='ADMIN'?{}:{members:{some:{userId:req.user.id}}})}});if(!allowed)return res.status(404).json({error:'Business not found'});
