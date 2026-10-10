@@ -5,15 +5,21 @@ const prisma = new PrismaClient();
 function normalize(value){
   return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
+function featureAliases(feature){
+  const key=normalize(feature);
+  if(['BILLING','BILLINGPOS','POS'].includes(key))return ['BILLING','BILLINGPOS','POS'];
+  if(['ORDER','ORDERS'].includes(key))return ['ORDER','ORDERS'];
+  return [key];
+}
 
 /**
- * Resolves a feature for a tenant. An explicit business-level flag wins;
- * otherwise the active subscription's PlanCatalog default is applied.
- * Missing subscription/catalog settings preserve the existing allow behavior.
+ * Resolve a feature for a business: an explicit business override wins,
+ * then the subscription plan's feature list/defaults. Accepts both legacy
+ * feature arrays and newer ON/OFF objects.
  */
 export async function isPlanFeatureEnabled(businessId, feature){
-  const key=String(feature||'').toUpperCase();
-  if(!businessId||!key)return true;
+  const aliases=featureAliases(feature);
+  if(!businessId||!aliases.length)return true;
   try{
     const rows=await prisma.$queryRawUnsafe(
       'SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',
@@ -21,8 +27,10 @@ export async function isPlanFeatureEnabled(businessId, feature){
     );
     let flags=rows?.[0]?.flags??{};
     if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
-    if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&typeof flags[key]==='boolean'){
-      return flags[key];
+    if(flags&&typeof flags==='object'&&!Array.isArray(flags)){
+      for(const [savedKey,value] of Object.entries(flags)){
+        if(aliases.includes(normalize(savedKey))&&typeof value==='boolean')return value;
+      }
     }
     const subscription=await prisma.subscription.findUnique({
       where:{businessId:String(businessId)},
@@ -35,11 +43,21 @@ export async function isPlanFeatureEnabled(businessId, feature){
       select:{code:true,name:true,features:true}
     });
     const plan=plans.find(p=>normalize(p.code)===wanted||normalize(p.name)===wanted);
-    if(!plan||!plan.features||typeof plan.features!=='object'||Array.isArray(plan.features))return true;
-    return plan.features[key]===false?false:true;
+    if(!plan||plan.features==null)return true;
+    let features=plan.features;
+    if(typeof features==='string'){try{features=JSON.parse(features)}catch{return true}}
+    if(Array.isArray(features)){
+      const enabled=new Set(features.map(normalize));
+      return aliases.some(alias=>enabled.has(alias));
+    }
+    if(features&&typeof features==='object'){
+      for(const [savedKey,value] of Object.entries(features)){
+        if(aliases.includes(normalize(savedKey))&&typeof value==='boolean')return value;
+      }
+    }
+    return true;
   }catch(error){
     console.error('Plan feature entitlement check failed:',error?.message||error);
-    // Fail open on lookup errors to avoid unexpectedly locking existing businesses.
     return true;
   }
 }
