@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 import { getCookie, tokenHash } from './auth.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 
@@ -34,13 +35,8 @@ function register(app){
     try{
       const a=await businessAccess(req,req.params.businessId);
       if(a.error)return res.status(a.status).json({error:a.error});
-      if(!['ADMIN','SUPER_ADMIN'].includes(String(a.user.role||'').toUpperCase())){
-        const flagRows=await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',a.business.id);
-        let flags=flagRows?.[0]?.flags??{};
-        if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
-        if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags.ORDERS===false){
-          return res.status(403).json({error:'Orders has been disabled by the platform administrator.',featureDisabled:true});
-        }
+      if(!['ADMIN','SUPER_ADMIN'].includes(String(a.user.role||'').toUpperCase()) && !(await isPlanFeatureEnabled(a.business.id,'ORDERS'))){
+        return res.status(403).json({error:'Orders is disabled by the platform administrator or your subscription plan.',feature:'ORDERS',featureDisabled:true});
       }
       const status=String(req.query.status||'');
       const where={businessId:a.business.id,...(status?{status}:{})};
@@ -78,13 +74,8 @@ function register(app){
       if(!order)return res.status(404).json({error:'Order not found'});
       const a=await businessAccess(req,order.businessId);
       if(a.error)return res.status(a.status).json({error:a.error});
-      if(!['ADMIN','SUPER_ADMIN'].includes(String(a.user.role||'').toUpperCase())){
-        const flagRows=await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',order.businessId);
-        let flags=flagRows?.[0]?.flags??{};
-        if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
-        if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags.ORDERS===false){
-          return res.status(403).json({error:'Orders has been disabled by the platform administrator.',featureDisabled:true});
-        }
+      if(!['ADMIN','SUPER_ADMIN'].includes(String(a.user.role||'').toUpperCase()) && !(await isPlanFeatureEnabled(order.businessId,'ORDERS'))){
+        return res.status(403).json({error:'Orders is disabled by the platform administrator or your subscription plan.',feature:'ORDERS',featureDisabled:true});
       }
       const status=String(req.body?.status||'');
       if(!['PENDING','ACCEPTED','CANCELLED'].includes(status))return res.status(400).json({error:'Invalid order status. Use PENDING, ACCEPTED or CANCELLED.'});
