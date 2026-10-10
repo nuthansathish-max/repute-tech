@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const prisma = new PrismaClient();
 let installed = false;
@@ -68,6 +69,7 @@ function install(app){
     const slug=String(req.body?.slug||'').trim(),name=String(req.body?.customerName||'').trim(),phone=String(req.body?.customerPhone||'').trim()||null,notes=String(req.body?.notes||'').trim()||null,raw=Array.isArray(req.body?.items)?req.body.items:[];
     if(!slug||name.length<2||name.length>80||!phone||raw.length===0)return res.status(400).json({error:'Name, phone number and at least one item are required'});
     const data=await load(slug);if(!data)return res.status(404).json({error:'Menu not found'});
+    if(!(await isPlanFeatureEnabled(data.qr.businessId,'ORDERS')))return res.status(403).json({error:'Online ordering is disabled for this business plan.',feature:'ORDERS',featureDisabled:true});
     const wanted=new Map();for(const x of raw){const id=String(x?.menuItemId||''),q=Math.floor(Number(x?.quantity));if(id&&q>0&&q<=50)wanted.set(id,(wanted.get(id)||0)+q)}
     const chosen=data.items.filter(i=>wanted.has(i.id));if(!chosen.length)return res.status(400).json({error:'No available items selected'});
     const orderItems=chosen.map(i=>{const quantity=wanted.get(i.id);return {menuItemId:i.id,itemName:i.name,quantity,unitPrice:i.price,lineTotal:Number((i.price*quantity).toFixed(2))}});
