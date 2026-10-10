@@ -1342,8 +1342,8 @@ function install(app){
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{total:true}}),
    prisma.order.aggregate({where:{paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{total:true}}),
    prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID'},_sum:{price:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:monthStart}},_sum:{price:true}}),
-   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',createdAt:{gte:yearStart}},_sum:{price:true}})
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',OR:[{paidAt:{gte:monthStart}},{paidAt:null,createdAt:{gte:monthStart}}]},_sum:{price:true}}),
+   prisma.planRequest.aggregate({where:{status:'APPROVED',paymentStatus:'PAID',OR:[{paidAt:{gte:yearStart}},{paidAt:null,createdAt:{gte:yearStart}}]},_sum:{price:true}})
   ]);
   const orderValue=Number(sum._sum.total||0);
   const paidOrderRevenue=Number(paidOrderAgg._sum.total||0);
