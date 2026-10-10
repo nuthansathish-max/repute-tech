@@ -34,7 +34,7 @@ async function access(req,businessId){
   if(!user) return {error:'Authentication required',status:401};
   const business=await prisma.business.findFirst({where:{id:String(businessId),...(['ADMIN','SUPER_ADMIN'].includes(user.role)?{}:{members:{some:{userId:user.id}}})}});
   if(!business) return {error:'Business access denied',status:403};
-  if(!['ADMIN','SUPER_ADMIN'].includes(user.role) && !(await isPlanFeatureEnabled(business.id,'ORDERS'))){
+  if(!(await isPlanFeatureEnabled(business.id,'ORDERS'))){
     return {error:'Orders is disabled by the platform administrator or your subscription plan.',status:403,feature:'ORDERS',featureDisabled:true};
   }
   return {user,business};
