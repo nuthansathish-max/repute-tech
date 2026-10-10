@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const prisma = new PrismaClient();
 const originalListen = express.application.listen;
@@ -24,8 +25,8 @@ async function access(req,businessId){
   const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(user.role||'').toUpperCase());
   const business=await prisma.business.findFirst({where:{id:String(businessId),...(isAdmin?{}:{members:{some:{userId:user.id}}})},select:{id:true,name:true,type:true,phone:true,adminFeatureFlags:true}});
   if(!business)return {status:403,error:'Business access denied'};
-  if(!isAdmin && business.adminFeatureFlags && typeof business.adminFeatureFlags==='object' && business.adminFeatureFlags.BILLING===false){
-    return {status:403,error:'Billing & POS has been disabled by the platform administrator.',featureDisabled:true};
+  if(!(await isPlanFeatureEnabled(business.id,'BILLING'))){
+    return {status:403,error:'Billing & POS has been disabled by the platform administrator or your subscription plan.',featureDisabled:true};
   }
   return {user,business};
 }
@@ -72,13 +73,8 @@ function register(app){if(registered)return;registered=true;
       select:{id:true}
     });
     if(!business)return res.status(403).send('Business access denied');
-    if(!isAdmin){
-      const flagRows=await prisma.$queryRawUnsafe('SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',business.id);
-      let flags=flagRows?.[0]?.flags??{};
-      if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
-      if(flags && typeof flags==='object' && !Array.isArray(flags) && flags.BILLING===false){
-        return res.status(403).send('Billing & POS has been disabled by the platform administrator.');
-      }
+    if(!(await isPlanFeatureEnabled(business.id,'BILLING'))){
+      return res.status(403).send('Billing & POS has been disabled by the platform administrator or your subscription plan.');
     }
     if(!['ADMIN','SUPER_ADMIN','OWNER'].includes(String(u.role||'').toUpperCase())){
       const rows=await prisma.$queryRawUnsafe(`SELECT permissions FROM "BusinessMember" WHERE "userId"=$1 AND "businessId"=$2 LIMIT 1`,u.id,business.id);
