@@ -52,7 +52,7 @@ async function load(){
     const rememberedBusinessId=requestedBusinessId||localStorage.getItem('rp_selected_business_id')||'';
     const selectedBusiness=bs.find(b=>String(b.id)===String(rememberedBusinessId))||bs[0];
     businessId=selectedBusiness.id;
-    if(requestedBusinessId)localStorage.setItem('rp_selected_business_id',businessId);
+    localStorage.setItem('rp_selected_business_id',businessId);
     window.businessId=businessId;
     try{await post('/businesses/select',{businessId})}catch(selectionError){/* Keep the page usable if selection persistence is unavailable. */}
     window.adminFeatureFlags=bs[0].adminFeatureFlags||{};
