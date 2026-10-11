@@ -46,10 +46,15 @@ async function loadAdminPlans(){try{const d=await get('/admin/plans');$('planCat
 async function loadAdminPlanRequests(){try{const d=await get('/admin/plan-requests');$('adminPlanRequests').innerHTML=d.map(r=>`<div class="item"><b>${esc(r.business?.name||'Business')}</b><div class="sub">${esc(r.plan?.name||r.planCode)} · ${esc(r.status)}</div></div>`).join('')||'<div class="sub">No pending requests.</div>'}catch{$('adminPlanRequests').innerHTML='<div class="notice">Admin controls require an Admin or Super Admin account.</div>'}}
 async function load(){
   try{
-    const bs=await get('/businesses');
+    const requestedBusinessId=new URLSearchParams(window.location.search).get('businessId')||'';
+    const bs=await get(requestedBusinessId?'/businesses?businessId='+encodeURIComponent(requestedBusinessId):'/businesses');
     if(!bs.length)throw new Error('No business found. Complete onboarding first.');
-    businessId=bs[0].id;
+    const rememberedBusinessId=requestedBusinessId||localStorage.getItem('rp_selected_business_id')||'';
+    const selectedBusiness=bs.find(b=>String(b.id)===String(rememberedBusinessId))||bs[0];
+    businessId=selectedBusiness.id;
+    if(requestedBusinessId)localStorage.setItem('rp_selected_business_id',businessId);
     window.businessId=businessId;
+    try{await post('/businesses/select',{businessId})}catch(selectionError){/* Keep the page usable if selection persistence is unavailable. */}
     window.adminFeatureFlags=bs[0].adminFeatureFlags||{};
     $('businessName').textContent=`${bs[0].name} · ${bs[0].type||'Business'}`;
     try{window.currentBusinessOwner=await get(`/businesses/${encodeURIComponent(businessId)}/owner-profile`);setAccountFields(window.currentBusinessOwner)}catch(ownerError){window.currentBusinessOwner=null;setAccountFields()}
