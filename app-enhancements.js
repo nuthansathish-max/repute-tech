@@ -28,8 +28,15 @@
 
   async function getBusiness(){
     try{
-      const bs=await req('/businesses');
-      if(Array.isArray(bs)&&bs.length){window.businessId=bs[0].id;window.adminFeatureFlags=bs[0].adminFeatureFlags||{};return bs[0];}
+      const requestedBusinessId=new URLSearchParams(window.location.search).get('businessId')||'';
+      const bs=await req(requestedBusinessId?'/businesses?businessId='+encodeURIComponent(requestedBusinessId):'/businesses');
+      if(Array.isArray(bs)&&bs.length){
+        const rememberedBusinessId=requestedBusinessId||localStorage.getItem('rp_selected_business_id')||'';
+        const selected=bs.find(b=>String(b.id)===String(rememberedBusinessId))||bs[0];
+        localStorage.setItem('rp_selected_business_id',selected.id);
+        window.businessId=selected.id;window.adminFeatureFlags=selected.adminFeatureFlags||{};
+        return selected;
+      }
     }catch{}
     const status=await req('/business/status');
     if(status?.businessId)return {id:status.businessId,name:status.businessName||'your business',adminFeatureFlags:status.adminFeatureFlags||{}};
