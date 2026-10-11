@@ -69,7 +69,7 @@ function register(app){if(registered)return;registered=true;
     const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(u.role||'').toUpperCase());
     const selectedBusinessId=getCookie(req,'rp_business_id');
     const business=await prisma.business.findFirst({
-      where:{members:{some:{userId:u.id}},...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
+      where:{...(isAdmin?{}:{members:{some:{userId:u.id}}}),...(selectedBusinessId?{id:String(selectedBusinessId)}:{})},
       select:{id:true}
     });
     if(!business)return res.status(403).send('Business access denied');
