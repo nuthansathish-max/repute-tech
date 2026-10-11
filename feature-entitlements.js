@@ -51,9 +51,18 @@ export async function isPlanFeatureEnabled(businessId, feature){
       return aliases.some(alias=>enabled.has(alias));
     }
     if(features&&typeof features==='object'){
+      let matched=false;
       for(const [savedKey,value] of Object.entries(features)){
-        if(aliases.includes(normalize(savedKey))&&typeof value==='boolean')return value;
+        if(aliases.includes(normalize(savedKey))&&typeof value==='boolean'){
+          matched=true;
+          if(value)return true;
+        }
       }
+      if(matched)return false;
+      // An explicitly configured feature-toggle object treats missing feature keys as OFF.
+      // Preserve legacy behavior only when the object has no recognizable feature-toggle keys.
+      const knownFeatureKeys=new Set(['DASHBOARD','REVIEWS','AI','AIASSISTANT','QR','MENU','DIGITALMENU','WHATSAPP','ORDERS','ORDER','BILLING','BILLINGPOS','POS','CUSTOMERS','ANALYTICS','PRICING','STAFF','SETTINGS']);
+      if(Object.keys(features).some(key=>knownFeatureKeys.has(normalize(key))))return false;
     }
     return true;
   }catch(error){
