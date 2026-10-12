@@ -7,9 +7,66 @@ function normalize(value){
 }
 function featureAliases(feature){
   const key=normalize(feature);
-  if(['BILLING','BILLINGPOS','POS'].includes(key))return ['BILLING','BILLINGPOS','POS'];
-  if(['ORDER','ORDERS'].includes(key))return ['ORDER','ORDERS'];
-  return [key];
+  const groups={
+    BILLING:['BILLING','BILLINGPOS','POS'],
+    BILLINGPOS:['BILLING','BILLINGPOS','POS'],
+    POS:['BILLING','BILLINGPOS','POS'],
+    ORDER:['ORDER','ORDERS'],
+    ORDERS:['ORDER','ORDERS'],
+    AI:['AI','AIASSISTANT','AIREPLIES','AIREPLYSUGGESTIONS','AIINSIGHTS'],
+    AIASSISTANT:['AI','AIASSISTANT','AIREPLIES','AIREPLYSUGGESTIONS','AIINSIGHTS'],
+    QR:['QR','SMARTQR'],
+    SMARTQR:['QR','SMARTQR'],
+    MENU:['MENU','DIGITALMENU'],
+    DIGITALMENU:['MENU','DIGITALMENU'],
+    CUSTOMERS:['CUSTOMERS','CUSTOMERCRM','CRM'],
+    CUSTOMERCRM:['CUSTOMERS','CUSTOMERCRM','CRM'],
+    CRM:['CUSTOMERS','CUSTOMERCRM','CRM'],
+    ANALYTICS:['ANALYTICS','BASICANALYTICS','ADVANCEDANALYTICS'],
+    GOOGLE:['GOOGLE','GOOGLEBUSINESS','GOOGLEBUSINESSPROFILE'],
+    WHATSAPP:['WHATSAPP','WHATSAPPMARKETING','WHATSAPPCAMPAIGNS'],
+    REVIEWS:['REVIEWS','REVIEW']
+  };
+  return groups[key]||[key];
+}
+function labelFeatureAliases(label){
+  const key=normalize(label);
+  const labels={
+    REVIEWS:['REVIEWS'],
+    AIREPLYSUGGESTIONS:['AI'],
+    AIREPLYDRAFTS:['AI'],
+    AIREPLIES:['AI'],
+    AIINSIGHTS:['AI','ANALYTICS'],
+    SMARTQR:['QR'],
+    BASICANALYTICS:['ANALYTICS'],
+    ADVANCEDANALYTICS:['ANALYTICS'],
+    DIGITALMENU:['MENU'],
+    CUSTOMERCRM:['CUSTOMERS'],
+    WHATSAPPMARKETING:['WHATSAPP'],
+    WHATSAPPCAMPAIGNS:['WHATSAPP'],
+    MULTILOCATION:['MULTILOCATION'],
+    PRIORITYSUPPORT:['PRIORITYSUPPORT'],
+    HIGHERUSAGELIMITS:['USAGELIMITS']
+  };
+  return labels[key]||[key];
+}
+function arrayPlanHasFeature(plan, plans, aliases, seen=new Set()){
+  if(!plan||seen.has(plan.code))return false;
+  seen.add(plan.code);
+  const features=Array.isArray(plan.features)?plan.features:[];
+  for(const item of features){
+    const key=normalize(item);
+    if(labelFeatureAliases(key).some(alias=>aliases.includes(alias)))return true;
+    if(key==='EVERYTHINGINSTARTER'){
+      const base=plans.find(p=>normalize(p.code)==='STARTER'||normalize(p.name)==='STARTER');
+      if(arrayPlanHasFeature(base,plans,aliases,seen))return true;
+    }
+    if(key==='EVERYTHINGINGROWTHPRO'){
+      const base=plans.find(p=>normalize(p.code)==='GROWTH'||normalize(p.name)==='GROWTHPRO');
+      if(arrayPlanHasFeature(base,plans,aliases,seen))return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -47,8 +104,10 @@ export async function isPlanFeatureEnabled(businessId, feature){
     let features=plan.features;
     if(typeof features==='string'){try{features=JSON.parse(features)}catch{return true}}
     if(Array.isArray(features)){
-      const enabled=new Set(features.map(normalize));
-      return aliases.some(alias=>enabled.has(alias));
+      // Older catalog records store display labels rather than stable entitlement keys.
+      // Resolve those labels (and explicit "Everything in ..." inheritance) without
+      // changing the catalog data itself.
+      return arrayPlanHasFeature({...plan,features},plans,aliases);
     }
     if(features&&typeof features==='object'){
       let matched=false;
