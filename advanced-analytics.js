@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 import { getCookie, tokenHash } from './auth.js';
 
 const prisma = new PrismaClient();
@@ -59,6 +60,7 @@ function install(app){if(installed)return;installed=true;
   originalGet.call(app,'/analytics',async(req,res,next)=>{try{const user=await sessionUser(req);if(!user)return res.redirect('/');res.type('html').send(page)}catch(e){next(e)}});
   originalGet.call(app,'/api/businesses/:businessId/analytics',async(req,res,next)=>{try{
     const user=await sessionUser(req);if(!user)return res.status(401).json({error:'Authentication required'});const business=await allowedBusiness(user,req.params.businessId);if(!business)return res.status(404).json({error:'Business not found'});
+    if(!(await isPlanFeatureEnabled(business.id,'ADVANCEDANALYTICS')))return res.status(403).json({error:'Advanced Analytics is not included in your current subscription plan. Please upgrade your plan to access this dashboard.',feature:'ADVANCEDANALYTICS',featureDisabled:true});
     const range=['day','week','month'].includes(String(req.query.range))?String(req.query.range):'month';const start=rangeStart(range);const days=range==='day'?1:range==='week'?7:30;const businessId=business.id;
     const [orders,reviews,scans,totalQr,allCustomerOrders]=await Promise.all([
       prisma.order.findMany({where:{businessId,createdAt:{gte:start}},select:{id:true,total:true,createdAt:true,customerId:true,customerPhone:true,items:{select:{itemName:true,quantity:true,lineTotal:true}}},orderBy:{createdAt:'asc'}}),
