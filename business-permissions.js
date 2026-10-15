@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +36,9 @@ async function businessIdForRequest(req) {
   if (direct) return String(direct);
 
   const path = req.path;
+
+  const businessRouteMatch = path.match(/^\\/api\\/businesses\\/([^/]+)/);
+  if (businessRouteMatch) return businessRouteMatch[1];
 
   const reviewMatch = path.match(/^\/api\/reviews\/([^/]+)/);
   if (reviewMatch) {
@@ -101,6 +105,9 @@ function adminFeaturesForPath(path) {
   if (path.includes('/reviews/') && (path.endsWith('/publish') || path.endsWith('/sync'))) return ['REVIEWS','GOOGLE'];
   if (path.includes('/reviews/') && (path.includes('/ai-') || path.endsWith('/analyze') || path.endsWith('/approve'))) return ['REVIEWS','AI'];
   if (path.includes('/whatsapp')) return ['WHATSAPP'];
+  if (path.includes('/ai-insights') || path.includes('/ai/insights')) return ['AIINSIGHTS'];
+  if (path.includes('/basic-analytics')) return ['BASICANALYTICS'];
+  if (path.includes('/advanced-analytics') || path.includes('/analytics')) return ['ADVANCEDANALYTICS'];
   if (path.includes('/ai-settings') || path.includes('/ai')) return ['AI'];
   if (path.includes('/review')) return ['REVIEWS'];
   if (path.includes('/order')) return ['ORDERS'];
@@ -145,6 +152,21 @@ async function enforceAdminFeature(req, res, user) {
       featureDisabled: true
     });
     return false;
+  }
+
+  // Enforce saved plan-catalog defaults on the server for every protected feature.
+  // isPlanFeatureEnabled checks explicit business overrides first, so individual
+  // business exceptions continue to take precedence over plan defaults.
+  for (const feature of features) {
+    if (!(await isPlanFeatureEnabled(businessId, feature))) {
+      res.status(403).json({
+        error: 'This feature is not included in the current subscription plan. Please upgrade your plan to access it.',
+        feature,
+        featureDisabled: true,
+        planEntitlement: true
+      });
+      return false;
+    }
   }
   return true;
 }
