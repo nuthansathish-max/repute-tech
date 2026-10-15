@@ -9,6 +9,7 @@ import { analyzeReview, generateReply } from './ai.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
 import { businessPermissionMiddleware } from './business-permissions.js';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -59,6 +60,17 @@ async function adminFeatureAllowed(req,res,feature,businessId){
   if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
   if(flags&&typeof flags==='object'&&!Array.isArray(flags)&&flags[feature]===false){
     res.status(403).json({error:'This feature has been disabled by the platform administrator.',feature,featureDisabled:true});
+    return false;
+  }
+  // Custom route handlers call this helper directly and do not always pass through
+  // businessPermissionMiddleware. Enforce saved plan defaults here as well.
+  if(!(await isPlanFeatureEnabled(String(businessId),feature))){
+    res.status(403).json({
+      error:'This feature is not included in the current subscription plan. Please upgrade your plan to access it.',
+      feature,
+      featureDisabled:true,
+      planEntitlement:true
+    });
     return false;
   }
   return true;
