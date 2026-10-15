@@ -37,7 +37,7 @@ async function businessIdForRequest(req) {
 
   const path = req.path;
 
-  const businessRouteMatch = path.match(/^\\/api\\/businesses\\/([^/]+)/);
+  const businessRouteMatch = path.match(/^\/api\/businesses\/([^/]+)/);
   if (businessRouteMatch) return businessRouteMatch[1];
 
   const reviewMatch = path.match(/^\/api\/reviews\/([^/]+)/);
