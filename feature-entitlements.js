@@ -77,9 +77,10 @@ function arrayPlanHasFeature(plan, plans, aliases, seen=new Set()){
  * then the subscription plan's feature list/defaults. Accepts both legacy
  * feature arrays and newer ON/OFF objects.
  */
-export async function isPlanFeatureEnabled(businessId, feature){
+export async function isPlanFeatureEnabled(businessId, feature, options={}){
+  const fallback=options?.failClosed===true?false:true;
   const aliases=featureAliases(feature);
-  if(!businessId||!aliases.length)return true;
+  if(!businessId||!aliases.length)return fallback;
   try{
     const rows=await prisma.$queryRawUnsafe(
       'SELECT COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business" WHERE "id"=$1 LIMIT 1',
@@ -96,16 +97,16 @@ export async function isPlanFeatureEnabled(businessId, feature){
       where:{businessId:String(businessId)},
       select:{plan:true}
     });
-    if(!subscription?.plan)return true;
+    if(!subscription?.plan)return fallback;
     const wanted=normalize(subscription.plan);
     const plans=await prisma.planCatalog.findMany({
       where:{active:true},
       select:{code:true,name:true,features:true}
     });
     const plan=plans.find(p=>normalize(p.code)===wanted||normalize(p.name)===wanted);
-    if(!plan||plan.features==null)return true;
+    if(!plan||plan.features==null)return fallback;
     let features=plan.features;
-    if(typeof features==='string'){try{features=JSON.parse(features)}catch{return true}}
+    if(typeof features==='string'){try{features=JSON.parse(features)}catch{return fallback}}
     if(Array.isArray(features)){
       // Older catalog records store display labels rather than stable entitlement keys.
       // Resolve those labels (and explicit "Everything in ..." inheritance) without
@@ -126,9 +127,9 @@ export async function isPlanFeatureEnabled(businessId, feature){
       const knownFeatureKeys=new Set(['DASHBOARD','REVIEWS','AI','AIASSISTANT','AIINSIGHTS','BASICANALYTICS','ADVANCEDANALYTICS','QR','SMARTQR','MENU','DIGITALMENU','WHATSAPP','ORDERS','ORDER','BILLING','BILLINGPOS','POS','CUSTOMERS','CUSTOMERCRM','ANALYTICS','GOOGLE','USAGELIMITS','PRICING','STAFF','SETTINGS']);
       if(Object.keys(features).some(key=>knownFeatureKeys.has(normalize(key))))return false;
     }
-    return true;
+    return fallback;
   }catch(error){
     console.error('Plan feature entitlement check failed:',error?.message||error);
-    return true;
+    return fallback;
   }
 }
