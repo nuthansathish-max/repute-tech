@@ -123,7 +123,7 @@ export async function isPlanFeatureEnabled(businessId, feature){
       if(matched)return false;
       // An explicitly configured feature-toggle object treats missing feature keys as OFF.
       // Preserve legacy behavior only when the object has no recognizable feature-toggle keys.
-      const knownFeatureKeys=new Set(['DASHBOARD','REVIEWS','AI','AIASSISTANT','QR','MENU','DIGITALMENU','WHATSAPP','ORDERS','ORDER','BILLING','BILLINGPOS','POS','CUSTOMERS','ANALYTICS','PRICING','STAFF','SETTINGS']);
+      const knownFeatureKeys=new Set(['DASHBOARD','REVIEWS','AI','AIASSISTANT','AIINSIGHTS','BASICANALYTICS','ADVANCEDANALYTICS','QR','SMARTQR','MENU','DIGITALMENU','WHATSAPP','ORDERS','ORDER','BILLING','BILLINGPOS','POS','CUSTOMERS','CUSTOMERCRM','ANALYTICS','GOOGLE','USAGELIMITS','PRICING','STAFF','SETTINGS']);
       if(Object.keys(features).some(key=>knownFeatureKeys.has(normalize(key))))return false;
     }
     return true;
