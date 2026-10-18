@@ -79,6 +79,7 @@ function arrayPlanHasFeature(plan, plans, aliases, seen=new Set()){
  */
 export async function isPlanFeatureEnabled(businessId, feature, options={}){
   const fallback=options?.failClosed===true?false:true;
+  const requestedKey=normalize(feature);
   const aliases=featureAliases(feature);
   if(!businessId||!aliases.length)return fallback;
   try{
@@ -89,6 +90,10 @@ export async function isPlanFeatureEnabled(businessId, feature, options={}){
     let flags=rows?.[0]?.flags??{};
     if(typeof flags==='string'){try{flags=JSON.parse(flags)}catch{flags={}}}
     if(flags&&typeof flags==='object'&&!Array.isArray(flags)){
+      // Analytics entitlements must honor their explicit key before legacy aliases.
+      // In particular, ADVANCEDANALYTICS:false must not be overridden by an old
+      // ANALYTICS:true entry. Other feature override behavior remains unchanged.
+      if((requestedKey==='ADVANCEDANALYTICS'||requestedKey==='BASICANALYTICS')&&typeof flags[requestedKey]==='boolean')return flags[requestedKey];
       for(const [savedKey,value] of Object.entries(flags)){
         if(aliases.includes(normalize(savedKey))&&typeof value==='boolean')return value;
       }
@@ -114,6 +119,10 @@ export async function isPlanFeatureEnabled(businessId, feature, options={}){
       return arrayPlanHasFeature({...plan,features},plans,aliases);
     }
     if(features&&typeof features==='object'){
+      // The explicit analytics key is authoritative over the legacy ANALYTICS alias.
+      // This prevents a stale ANALYTICS:true value from bypassing an explicit
+      // ADVANCEDANALYTICS:false saved by the plan entitlement editor.
+      if((requestedKey==='ADVANCEDANALYTICS'||requestedKey==='BASICANALYTICS')&&typeof features[requestedKey]==='boolean')return features[requestedKey];
       let matched=false;
       for(const [savedKey,value] of Object.entries(features)){
         if(aliases.includes(normalize(savedKey))&&typeof value==='boolean'){
