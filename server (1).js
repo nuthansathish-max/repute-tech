@@ -14,6 +14,7 @@ import { startReviewSyncScheduler } from './scheduler.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 import { whatsappConfigured, verifyMetaWebhook, verifyMetaSignature, sendText, sendTemplate } from './whatsapp.js';
 import { businessPermissionMiddleware } from './business-permissions.js';
+import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
@@ -92,7 +93,10 @@ app.get('/api/businesses',auth,async (req,res,next)=>{try{const isAdmin=['SUPER_
 app.get('/api/businesses/:businessId/dashboard',auth,async (req,res,next)=>{try{
  const {businessId}=req.params; const allowed=await prisma.business.findFirst({where:{id:businessId,...(req.user.role==='SUPER_ADMIN'||req.user.role==='ADMIN'?{}:{members:{some:{userId:req.user.id}}})}});if(!allowed)return res.status(404).json({error:'Business not found'});
  const [business,reviews,customers,qr,campaigns,totalReviews]=await Promise.all([prisma.business.findUnique({where:{id:businessId},include:{locations:true,subscription:true}}),prisma.review.findMany({where:{businessId},orderBy:{createdAt:'desc'},take:10}),prisma.customer.count({where:{businessId}}),prisma.smartQr.aggregate({where:{businessId},_sum:{scanCount:true}}),prisma.campaign.aggregate({where:{businessId},_sum:{sentCount:true,deliveredCount:true}}),prisma.review.count({where:{businessId}})]);
- const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;const positive=reviews.filter(r=>r.rating>=4).length;res.json({business,recentReviews:reviews,metrics:{reviewCount:totalReviews,averageRating:Number(avg.toFixed(1)),customers,qrScans:qr._sum.scanCount??0,messagesSent:campaigns._sum.sentCount??0,messagesDelivered:campaigns._sum.deliveredCount??0,positiveRate:reviews.length?Math.round(positive/reviews.length*100):0}});
+ const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;const positive=reviews.filter(r=>r.rating>=4).length;
+ const featureKeys=['REVIEWS','AI','QR','MENU','CUSTOMERS','WHATSAPP','ADVANCEDANALYTICS','ORDERS','BILLING'];
+ const featureEntitlements=Object.fromEntries(await Promise.all(featureKeys.map(async feature=>[feature,await isPlanFeatureEnabled(businessId,feature,{failClosed:true})])));
+ res.json({business,recentReviews:reviews,featureEntitlements,metrics:{reviewCount:totalReviews,averageRating:Number(avg.toFixed(1)),customers,qrScans:qr._sum.scanCount??0,messagesSent:campaigns._sum.sentCount??0,messagesDelivered:campaigns._sum.deliveredCount??0,positiveRate:reviews.length?Math.round(positive/reviews.length*100):0}});
 }catch(e){next(e)}});
 
 app.get('/api/businesses/:businessId/reviews',auth,async (req,res,next)=>{try{res.json(await prisma.review.findMany({where:{businessId:req.params.businessId},orderBy:{createdAt:'desc'},take:100}));}catch(e){next(e)}});
