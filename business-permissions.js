@@ -104,7 +104,8 @@ function adminFeaturesForPath(path) {
   if (path.includes('/businesses/') && path.includes('/google/')) return ['GOOGLE','REVIEWS'];
   if (path.includes('/reviews/') && (path.endsWith('/publish') || path.endsWith('/sync'))) return ['REVIEWS','GOOGLE'];
   if (path.includes('/reviews/') && (path.includes('/ai-') || path.endsWith('/analyze') || path.endsWith('/approve'))) return ['REVIEWS','AI'];
-  if (path.includes('/whatsapp')) return ['WHATSAPP'];
+  if (path.includes('/whatsapp') || path.includes('/campaign')) return ['WHATSAPP'];
+  if (path.includes('/customers') || path.startsWith('/api/customers')) return ['CUSTOMERS'];
   if (path.includes('/ai-insights') || path.includes('/ai/insights')) return ['AIINSIGHTS'];
   if (path.includes('/basic-analytics')) return ['BASICANALYTICS'];
   if (path.includes('/advanced-analytics') || path.includes('/analytics')) return ['ADVANCEDANALYTICS'];
