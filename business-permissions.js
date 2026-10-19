@@ -175,6 +175,9 @@ async function enforceAdminFeature(req, res, user) {
 export async function businessPermissionMiddleware(req, res, next) {
   try {
     const googleAuthPath = req.path === '/auth/google' || req.path === '/auth/google/callback';
+    // Let the Analytics HTML page render its normal upgrade message; the data API
+    // remains protected by the same plan entitlement and admin-feature checks.
+    if (req.method === 'GET' && req.path === '/analytics') return next();
     const adminFeatures = adminFeaturesForPath(req.path);
     const apiPath = req.path.startsWith('/api/');
     if (!apiPath && !googleAuthPath && !adminFeatures.length) return next();
