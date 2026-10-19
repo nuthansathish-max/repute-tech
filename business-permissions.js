@@ -88,7 +88,7 @@ function permissionForPath(path, method) {
   if (path.includes('/qr') || path.startsWith('/api/qr')) return 'QR';
   if (path.includes('/menus') || path.startsWith('/api/menus')) return 'MENU';
   if (path.includes('/customers') || path.startsWith('/api/customers')) return 'CUSTOMERS';
-  if (path.includes('/whatsapp')) return 'WHATSAPP';
+  if (path.includes('/whatsapp') || path.includes('/campaign')) return 'WHATSAPP';
   if (path.includes('/plan-requests') || path === '/api/plans' || path.includes('/entitlements')) return 'PRICING';
   if (path.includes('/dashboard')) return 'DASHBOARD';
   if (path.includes('/settings')) return 'SETTINGS';
