@@ -1566,7 +1566,7 @@ function install(app){
  originalGet.call(app,'/api/admin/platform-settings',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminPlatformSetting" ("key" TEXT PRIMARY KEY,"value" TEXT NOT NULL,"updatedByUserId" TEXT,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
-  const rows=await prisma.$queryRawUnsafe('SELECT "key","value","updatedAt" FROM "AdminPlatformSetting" WHERE "key" IN (\'platformName\',\'platformTagline\')');
+    const rows=await prisma.$queryRawUnsafe('SELECT "key","value","updatedAt" FROM "AdminPlatformSetting" WHERE "key" = ANY($1::text[])',['platformName','platformTagline']);
   const settings={platformName:'reputetechs.in',platformTagline:''};
   for(const row of rows){if(row.key in settings)settings[row.key]=row.value}
   res.json({settings,canEdit:user.role==='SUPER_ADMIN'});
