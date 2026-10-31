@@ -351,6 +351,30 @@ function adminPage(){
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
    <section id="payouts" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Payouts</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Gateway</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Settled</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exceptions</div><div class="metric">—</div></div></div><div class="section notice">Payout gateway data is not currently exposed by a verified admin endpoint.</div></section>
 
+   <section id="notifications" class="hidden">
+    <div class="grid4">
+     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Open Alerts</div><div class="metric" id="alertTotal">—</div><div class="sub">Based on verified platform records</div></div>
+     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">High Priority</div><div class="metric" id="alertHigh">—</div><div class="sub">Needs review</div></div>
+     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Medium Priority</div><div class="metric" id="alertMedium">—</div><div class="sub">Operational follow-up</div></div>
+     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Sources Checked</div><div class="metric" id="alertSources">—</div><div class="sub">Live admin endpoints</div></div>
+    </div>
+    <div class="section card" style="border:1px solid #7653e8">
+     <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Platform-wide operational signals · read-only · no fabricated delivery statuses</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
+     <div class="toolbar" style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <input class="input" id="alertsSearch" placeholder="Search alerts or business" style="flex:1;min-width:180px">
+      <select class="input" id="alertsSeverity" style="min-width:150px"><option value="">All priorities</option><option value="HIGH">High priority</option><option value="MEDIUM">Medium priority</option><option value="INFO">Information</option></select>
+      <select class="input" id="alertsCategory" style="min-width:170px"><option value="">All categories</option><option value="BUSINESS">Business health</option><option value="PAYMENT">Orders & payments</option><option value="WEBHOOK">Webhooks</option><option value="REVIEWS">Reviews pipeline</option><option value="INTEGRATION">Integrations</option></select>
+     </div>
+     <div id="alertsSourceMessage" class="notice" style="margin-bottom:12px">Loading verified platform signals…</div>
+     <div id="alertsRows"><div class="empty">Loading alerts…</div></div>
+    </div>
+    <div class="section card" style="border:1px solid #7653e8"><div class="section-title"><div><h2>Alert handling notes</h2><span>Safe operational behavior</span></div></div><div class="detail">
+     <div class="kv"><b>Data source</b><span>Alerts are derived from existing business-health, orders, reviews and webhook APIs.</span></div>
+     <div class="kv"><b>Read / dismiss</b><span>Persistent acknowledgement is not enabled because no verified admin alert-storage workflow exists yet.</span></div>
+     <div class="kv"><b>Delivery</b><span>This dashboard monitors conditions; it does not claim to send email, SMS or WhatsApp notifications.</span></div>
+    </div></div>
+   </section>
+
    <section id="health" class="hidden">
     <div class="grid4">
      <div class="card metric-card health-kpi" data-health-filter="ATTENTION" role="button" tabindex="0" title="Show businesses needing attention"><div class="label">Needs Attention</div><div class="metric" id="healthAttention">—</div><div class="sub">Businesses with one or more risk signals</div></div>
@@ -905,6 +929,35 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   }
  }
  const titles={health:['Business Health','Business risk, subscription and activity monitoring'],users:['Users & IAM','Platform users, roles and business access overview'],overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],featureflags:['Feature Flags & Entitlements','Platform feature availability and entitlement governance'],settings:['Platform Settings','Platform-wide operational configuration'],announcements:['Announcements','Platform owner announcements and notices'],menuqr:['Digital Menu & QR','Digital menu and QR platform operations'],rbac:['Admin Accounts & RBAC','Administrator roles and access governance'],dangerous:['Dangerous Actions','Protected high-impact administrative operations'],notifications:['Notifications & Alerts','Platform notifications and operational alerts'],kill:['Emergency Kill Switch','Emergency operational controls']};
+ let platformAlerts=[];
+ function renderPlatformAlerts(){
+  const q=String($('alertsSearch')?.value||'').trim().toLowerCase(),severity=String($('alertsSeverity')?.value||''),category=String($('alertsCategory')?.value||'');
+  const list=platformAlerts.filter(a=>(!q||[a.title,a.message,a.business,a.category].join(' ').toLowerCase().includes(q))&&(!severity||a.severity===severity)&&(!category||a.category===category));
+  $('alertsRows').innerHTML=list.map(a=>{
+   const tone=a.severity==='HIGH'?'bad':a.severity==='MEDIUM'?'warn':'good',edge=a.severity==='HIGH'?'#dc3545':a.severity==='MEDIUM'?'#e0a020':'#7653e8';
+   return '<div class="card" style="margin-bottom:10px;border:1px solid #7653e8;border-left:4px solid '+edge+'"><div class="section-title"><div><span class="pill '+tone+'">'+esc(a.severity)+'</span> <span class="pill">'+esc(a.categoryLabel)+'</span><h3 style="margin:8px 0 4px">'+esc(a.title)+'</h3></div><span class="sub">Current status</span></div><div>'+esc(a.message)+'</div>'+(a.business?'<div class="sub" style="margin-top:6px">Business: '+esc(a.business)+'</div>':'')+(a.view?'<div style="margin-top:10px"><button class="smallbtn" data-alert-view="'+esc(a.view)+'">Open dashboard</button></div>':'')+'</div>';
+  }).join('')||'<div class="empty">No alerts match these filters. This means no matching condition was returned by the available sources; it does not guarantee every system is healthy.</div>';
+ }
+ async function loadNotifications(){
+  const sources=[{name:'business health',path:'/admin/business-health'},{name:'orders & payments',path:'/admin/orders'},{name:'reviews pipeline',path:'/admin/reviews'},{name:'webhook delivery',path:'/admin/webhooks-event-bus'},{name:'integrations',path:'/admin/integrations'}];
+  const results=await Promise.all(sources.map(async s=>{try{return {name:s.name,data:await api(s.path)}}catch(e){return {name:s.name,error:e.message}}}));
+  const ok=results.filter(x=>x.data),failed=results.filter(x=>x.error),get=n=>results.find(x=>x.name===n)?.data,alerts=[];
+  const health=get('business health');
+  if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,view:'health'});}
+  const orders=get('orders');if(orders&&Number(orders.pending||0)>0)alerts.push({severity:'MEDIUM',category:'PAYMENT',categoryLabel:'Orders & payments',title:'Orders awaiting action',message:Number(orders.pending)+' order(s) are currently marked pending. Review the platform order summary and follow up as appropriate.',view:'orders'});
+  const reviews=get('reviews');if(reviews&&Number(reviews.failed||0)>0)alerts.push({severity:'HIGH',category:'REVIEWS',categoryLabel:'Reviews pipeline',title:'Failed review replies recorded',message:Number(reviews.failed)+' review reply record(s) have FAILED status in the current database.',view:'reviews'});
+  const hooks=get('webhook delivery');if(hooks&&Number(hooks.retryQueue||0)>0)alerts.push({severity:'HIGH',category:'WEBHOOK',categoryLabel:'Webhooks',title:'Webhook retries waiting',message:Number(hooks.retryQueue)+' failed webhook delivery record(s) are eligible for retry.',view:'webhooks'});
+  if(hooks&&!hooks.webhookConfigured)alerts.push({severity:'INFO',category:'WEBHOOK',categoryLabel:'Webhooks',title:'Webhook endpoint is not configured',message:'No enabled webhook endpoint was reported. Configure one only if external event delivery is required.',view:'webhooks'});
+  const integrations=get('integrations');if(integrations&&Number(integrations.google||0)===0)alerts.push({severity:'INFO',category:'INTEGRATION',categoryLabel:'Integrations',title:'No Google connection records found',message:'The integrations API reports zero Google connection records. Verify whether this is expected.',view:'google'});
+  if(integrations&&Number(integrations.whatsapp||0)>0&&Number(integrations.whatsappConnected||0)===0)alerts.push({severity:'MEDIUM',category:'INTEGRATION',categoryLabel:'Integrations',title:'WhatsApp connections are not marked connected',message:integrations.whatsapp+' WhatsApp connection record(s) exist and none currently report CONNECTED.',view:'whatsapp'});
+  const priority={HIGH:0,MEDIUM:1,INFO:2};platformAlerts=alerts.sort((a,b)=>priority[a.severity]-priority[b.severity]);
+  $('alertTotal').textContent=alerts.length;$('alertHigh').textContent=alerts.filter(a=>a.severity==='HIGH').length;$('alertMedium').textContent=alerts.filter(a=>a.severity==='MEDIUM').length;$('alertSources').textContent=ok.length+'/'+sources.length;
+  $('alertsSourceMessage').textContent=failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Alerts are derived from current records, not sent notifications.';
+  renderPlatformAlerts();
+ }
+ document.addEventListener('input',e=>{if(e.target?.id==='alertsSearch')renderPlatformAlerts()});
+ document.addEventListener('change',e=>{if(['alertsSeverity','alertsCategory'].includes(e.target?.id))renderPlatformAlerts()});
+ document.addEventListener('click',e=>{if(e.target?.id==='alertsRefresh'){e.preventDefault();const btn=e.target;btn.disabled=true;loadNotifications().catch(err=>{$('alertsSourceMessage').textContent='Could not load alert sources: '+err.message}).finally(()=>{btn.disabled=false});}const view=e.target.closest?.('[data-alert-view]');if(view){e.preventDefault();show(view.dataset.alertView)}});
  async function loadHealth(){
   const d=await api('/admin/business-health');
   $('healthAttention').textContent=d.summary?.attention??0;
@@ -958,6 +1011,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
    try{
     if(view==='overview'||view==='tenants'||view==='analytics'||view==='featureflags')await loadBusinesses();
     if(view==='featureflags'){renderFeatureFlags();await loadFeaturePlanDefaults();}
+    if(view==='notifications')await loadNotifications();
     if(view==='health')await loadHealth();
     if(view==='users')await loadUsers();
     if(view==='analytics'){
