@@ -932,15 +932,18 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  function renderPlatformAlerts(){
   const q=String($('alertsSearch')?.value||'').trim().toLowerCase(),severity=String($('alertsSeverity')?.value||''),category=String($('alertsCategory')?.value||'');
   const list=platformAlerts.filter(a=>(!q||[a.title,a.message,a.business,a.category].join(' ').toLowerCase().includes(q))&&(!severity||a.severity===severity)&&(!category||a.category===category));
+  const checkedLabel=window.__alertLastChecked?new Date(window.__alertLastChecked).toLocaleString():'Not checked yet';
   $('alertsRows').innerHTML=list.map(a=>{
    const tone=a.severity==='HIGH'?'bad':a.severity==='MEDIUM'?'warn':'good',edge=a.severity==='HIGH'?'#dc3545':a.severity==='MEDIUM'?'#e0a020':'#7653e8';
-   return '<div class="card" style="margin-bottom:10px;border:1px solid #7653e8;border-left:4px solid '+edge+'"><div class="section-title"><div><span class="pill '+tone+'">'+esc(a.severity)+'</span> <span class="pill">'+esc(a.categoryLabel)+'</span><h3 style="margin:8px 0 4px">'+esc(a.title)+'</h3></div><span class="sub">Current status</span></div><div>'+esc(a.message)+'</div>'+(a.business?'<div class="sub" style="margin-top:6px">Business: '+esc(a.business)+'</div>':'')+(a.view?'<div style="margin-top:10px"><button class="smallbtn" data-alert-view="'+esc(a.view)+'">Open dashboard</button></div>':'')+'</div>';
+   return '<div class="card" style="margin-bottom:10px;border:1px solid #7653e8;border-left:4px solid '+edge+'"><div class="section-title"><div><span class="pill '+tone+'">'+esc(a.severity)+'</span> <span class="pill">'+esc(a.categoryLabel)+'</span><h3 style="margin:8px 0 4px">'+esc(a.title)+'</h3></div><span class="sub">Current status</span></div><div>'+esc(a.message)+'</div><div class="sub" style="margin-top:7px">Condition checked: '+esc(checkedLabel)+'</div>'+(a.business?'<div class="sub" style="margin-top:6px">Business: '+esc(a.business)+'</div>':'')+(a.view?'<div style="margin-top:10px"><button class="smallbtn" data-alert-view="'+esc(a.view)+'">Open dashboard</button></div>':'')+'</div>';
   }).join('')||'<div class="empty">No alerts match these filters. This means no matching condition was returned by the available sources; it does not guarantee every system is healthy.</div>';
  }
  async function loadNotifications(){
   const sources=[{name:'business health',path:'/admin/business-health'},{name:'orders & payments',path:'/admin/orders'},{name:'reviews pipeline',path:'/admin/reviews'},{name:'webhook delivery',path:'/admin/webhooks-event-bus'},{name:'integrations',path:'/admin/integrations'}];
   const results=await Promise.all(sources.map(async s=>{try{return {name:s.name,path:s.path,data:await api(s.path)}}catch(e){return {name:s.name,path:s.path,error:e.message}}}));
-  window.__alertSourceStatuses=results.map(x=>({name:x.name,path:x.path,status:x.data?'Responding':'Unavailable',detail:x.data?'Endpoint returned data':String(x.error||'No response')}));
+  const checkedAt=new Date().toISOString();
+  window.__alertLastChecked=checkedAt;
+  window.__alertSourceStatuses=results.map(x=>({name:x.name,path:x.path,status:x.data?'Responding':'Unavailable',detail:x.data?'Endpoint returned data':String(x.error||'No response'),checkedAt}));
   const ok=results.filter(x=>x.data),failed=results.filter(x=>x.error),get=n=>results.find(x=>x.name===n)?.data,alerts=[];
   const health=get('business health');
   if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,view:'health'});}
@@ -952,7 +955,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(integrations&&Number(integrations.whatsapp||0)>0&&Number(integrations.whatsappConnected||0)===0)alerts.push({severity:'MEDIUM',category:'INTEGRATION',categoryLabel:'Integrations',title:'WhatsApp connections are not marked connected',message:integrations.whatsapp+' WhatsApp connection record(s) exist and none currently report CONNECTED.',view:'whatsapp'});
   const priority={HIGH:0,MEDIUM:1,INFO:2};platformAlerts=alerts.sort((a,b)=>priority[a.severity]-priority[b.severity]);
   $('alertTotal').textContent=alerts.length;$('alertHigh').textContent=alerts.filter(a=>a.severity==='HIGH').length;$('alertMedium').textContent=alerts.filter(a=>a.severity==='MEDIUM').length;$('alertSources').textContent=ok.length+'/'+sources.length;
-  $('alertsSourceMessage').textContent=failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Alerts are derived from current records, not sent notifications.';
+  const checkedLabel=new Date(checkedAt).toLocaleString();
+  $('alertsSourceMessage').textContent=(failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Alerts are derived from current records, not sent notifications.')+' Last checked: '+checkedLabel+'.';
   renderPlatformAlerts();
   renderAlertSourceDetails();
  }
@@ -963,7 +967,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   let panel=$('alertSourceDetails');
   if(!panel){panel=document.createElement('div');panel.id='alertSourceDetails';panel.className='notice';panel.style.marginBottom='12px';panel.style.display='none';$('alertsSourceMessage')?.after(panel);}
   const rows=window.__alertSourceStatuses||[];
-  panel.innerHTML='<b>Live source status</b><div style="display:grid;gap:7px;margin-top:9px">'+rows.map(s=>'<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><span class="pill '+(s.status==='Responding'?'good':'bad')+'">'+esc(s.status)+'</span><b>'+esc(s.name)+'</b><span class="sub">'+esc(s.path)+' · '+esc(s.detail)+'</span></div>').join('')+'</div>';
+  panel.innerHTML='<b>Live source status</b><div class="sub" style="margin-top:4px">Last checked: '+esc(window.__alertLastChecked?new Date(window.__alertLastChecked).toLocaleString():'Not checked yet')+'</div><div style="display:grid;gap:7px;margin-top:9px">'+rows.map(s=>'<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><span class="pill '+(s.status==='Responding'?'good':'bad')+'">'+esc(s.status)+'</span><b>'+esc(s.name)+'</b><span class="sub">'+esc(s.path)+' · '+esc(s.detail)+'</span></div>').join('')+'</div>';
  }
  document.addEventListener('click',e=>{
   const metric=e.target.closest?.('[data-alert-metric]');
