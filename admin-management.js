@@ -353,10 +353,10 @@ function adminPage(){
 
    <section id="notifications" class="hidden">
     <div class="grid4">
-     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Open Alerts</div><div class="metric" id="alertTotal">—</div><div class="sub">Based on verified platform records</div></div>
-     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">High Priority</div><div class="metric" id="alertHigh">—</div><div class="sub">Needs review</div></div>
-     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Medium Priority</div><div class="metric" id="alertMedium">—</div><div class="sub">Operational follow-up</div></div>
-     <div class="card metric-card" style="border:1px solid #7653e8"><div class="label">Sources Checked</div><div class="metric" id="alertSources">—</div><div class="sub">Live admin endpoints</div></div>
+     <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="ALL" aria-label="Show all open alerts" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">Open Alerts</div><div class="metric" id="alertTotal">—</div><div class="sub">Tap to view all alerts</div></button>
+     <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="HIGH" aria-label="Filter high priority alerts" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">High Priority</div><div class="metric" id="alertHigh">—</div><div class="sub">Tap to review high priority</div></button>
+     <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="MEDIUM" aria-label="Filter medium priority alerts" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">Medium Priority</div><div class="metric" id="alertMedium">—</div><div class="sub">Tap to review medium priority</div></button>
+     <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="SOURCES" aria-label="Show live alert source status" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">Sources Checked</div><div class="metric" id="alertSources">—</div><div class="sub">Tap to inspect live sources</div></button>
     </div>
     <div class="section card" style="border:1px solid #7653e8">
      <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Platform-wide operational signals · read-only · no fabricated delivery statuses</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
@@ -368,12 +368,11 @@ function adminPage(){
      <div id="alertsSourceMessage" class="notice" style="margin-bottom:12px">Loading verified platform signals…</div>
      <div id="alertsRows"><div class="empty">Loading alerts…</div></div>
     </div>
-    <div class="section card" style="border:1px solid #7653e8"><div class="section-title"><div><h2>Alert handling notes</h2><span>Safe operational behavior</span></div></div><div class="detail">
-     <div class="kv"><b>Data source</b><span>Alerts are derived from existing business-health, orders, reviews and webhook APIs.</span></div>
-     <div class="kv"><b>Read / dismiss</b><span>Persistent acknowledgement is not enabled because no verified admin alert-storage workflow exists yet.</span></div>
-     <div class="kv"><b>Delivery</b><span>This dashboard monitors conditions; it does not claim to send email, SMS or WhatsApp notifications.</span></div>
-    </div></div>
-   </section>
+    <div class="section card" style="border:1px solid #7653e8"><div class="section-title"><div><h2>Alert handling notes</h2><span>Choose a note to see its operational details and available actions</span></div></div><div class="detail" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+     <button type="button" class="kv alert-note" data-alert-note="source" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Data source　＋</b><span>Inspect the live endpoint checks behind the current alert list.</span><span class="alert-note-detail hidden" id="alertNoteSource">The dashboard checks Business Health, Platform Orders, Reviews, Webhooks & Event Bus, and Integrations. Select Sources Checked above to inspect each endpoint's response status. A failed source means the alert count may be incomplete.</span></button>
+     <button type="button" class="kv alert-note" data-alert-note="ack" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Read / dismiss　＋</b><span>Review how acknowledgement works safely.</span><span class="alert-note-detail hidden" id="alertNoteAck">Alerts currently represent live conditions, not stored notification messages. A persistent dismiss/read feature requires a verified, access-controlled storage workflow so acknowledgements are not lost or applied to another admin. No alerts are silently deleted or hidden by this control.</span></button>
+     <button type="button" class="kv alert-note" data-alert-note="delivery" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Delivery　＋</b><span>Understand what this dashboard does and does not send.</span><span class="alert-note-detail hidden" id="alertNoteDelivery">This page detects conditions from existing platform records only. It does not send email, SMS, or WhatsApp notifications, and it will not show delivery as successful unless a real delivery provider and verified delivery result are implemented.</span></button>
+    </div></div>   </section>
 
    <section id="health" class="hidden">
     <div class="grid4">
@@ -940,7 +939,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  }
  async function loadNotifications(){
   const sources=[{name:'business health',path:'/admin/business-health'},{name:'orders & payments',path:'/admin/orders'},{name:'reviews pipeline',path:'/admin/reviews'},{name:'webhook delivery',path:'/admin/webhooks-event-bus'},{name:'integrations',path:'/admin/integrations'}];
-  const results=await Promise.all(sources.map(async s=>{try{return {name:s.name,data:await api(s.path)}}catch(e){return {name:s.name,error:e.message}}}));
+  const results=await Promise.all(sources.map(async s=>{try{return {name:s.name,path:s.path,data:await api(s.path)}}catch(e){return {name:s.name,path:s.path,error:e.message}}}));
+  window.__alertSourceStatuses=results.map(x=>({name:x.name,path:x.path,status:x.data?'Responding':'Unavailable',detail:x.data?'Endpoint returned data':String(x.error||'No response')}));
   const ok=results.filter(x=>x.data),failed=results.filter(x=>x.error),get=n=>results.find(x=>x.name===n)?.data,alerts=[];
   const health=get('business health');
   if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,view:'health'});}
@@ -954,10 +954,43 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('alertTotal').textContent=alerts.length;$('alertHigh').textContent=alerts.filter(a=>a.severity==='HIGH').length;$('alertMedium').textContent=alerts.filter(a=>a.severity==='MEDIUM').length;$('alertSources').textContent=ok.length+'/'+sources.length;
   $('alertsSourceMessage').textContent=failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Alerts are derived from current records, not sent notifications.';
   renderPlatformAlerts();
+  renderAlertSourceDetails();
  }
  document.addEventListener('input',e=>{if(e.target?.id==='alertsSearch')renderPlatformAlerts()});
  document.addEventListener('change',e=>{if(['alertsSeverity','alertsCategory'].includes(e.target?.id))renderPlatformAlerts()});
  document.addEventListener('click',e=>{if(e.target?.id==='alertsRefresh'){e.preventDefault();const btn=e.target;btn.disabled=true;loadNotifications().catch(err=>{$('alertsSourceMessage').textContent='Could not load alert sources: '+err.message}).finally(()=>{btn.disabled=false});}const view=e.target.closest?.('[data-alert-view]');if(view){e.preventDefault();show(view.dataset.alertView)}});
+ function renderAlertSourceDetails(){
+  let panel=$('alertSourceDetails');
+  if(!panel){panel=document.createElement('div');panel.id='alertSourceDetails';panel.className='notice';panel.style.marginBottom='12px';panel.style.display='none';$('alertsSourceMessage')?.after(panel);}
+  const rows=window.__alertSourceStatuses||[];
+  panel.innerHTML='<b>Live source status</b><div style="display:grid;gap:7px;margin-top:9px">'+rows.map(s=>'<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><span class="pill '+(s.status==='Responding'?'good':'bad')+'">'+esc(s.status)+'</span><b>'+esc(s.name)+'</b><span class="sub">'+esc(s.path)+' · '+esc(s.detail)+'</span></div>').join('')+'</div>';
+ }
+ document.addEventListener('click',e=>{
+  const metric=e.target.closest?.('[data-alert-metric]');
+  if(metric){
+   e.preventDefault();
+   const type=metric.dataset.alertMetric;
+   const sourcePanel=$('alertSourceDetails');
+   if(type==='SOURCES'){
+    if(sourcePanel){sourcePanel.style.display=sourcePanel.style.display==='none'?'block':'none';sourcePanel.scrollIntoView({behavior:'smooth',block:'center'});}
+    return;
+   }
+   if(sourcePanel)sourcePanel.style.display='none';
+   $('alertsSearch').value='';
+   $('alertsCategory').value='';
+   $('alertsSeverity').value=type==='ALL'?'':type;
+   renderPlatformAlerts();
+   $('alertsRows').scrollIntoView({behavior:'smooth',block:'start'});
+   document.querySelectorAll('[data-alert-metric]').forEach(x=>x.style.outline=x===metric?'2px solid #7653e8':'');
+   return;
+  }
+  const note=e.target.closest?.('[data-alert-note]');
+  if(note){
+   e.preventDefault();
+   const key=note.dataset.alertNote,detail=$('alertNote'+key.charAt(0).toUpperCase()+key.slice(1));
+   if(detail){const open=detail.classList.toggle('hidden')===false;note.setAttribute('aria-expanded',open?'true':'false');const label=note.querySelector('b');if(label)label.textContent=label.textContent.replace(/[＋−]$/,'').trim()+(open?'　−':'　＋');}
+  }
+ });
  async function loadHealth(){
   const d=await api('/admin/business-health');
   $('healthAttention').textContent=d.summary?.attention??0;
