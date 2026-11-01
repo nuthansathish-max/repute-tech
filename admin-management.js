@@ -933,7 +933,9 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const q=String($('alertsSearch')?.value||'').trim().toLowerCase(),severity=String($('alertsSeverity')?.value||''),category=String($('alertsCategory')?.value||'');
   const list=platformAlerts.filter(a=>(!q||[a.title,a.message,a.business,a.category].join(' ').toLowerCase().includes(q))&&(!severity||a.severity===severity)&&(!category||a.category===category));
   const checkedLabel=window.__alertLastChecked?new Date(window.__alertLastChecked).toLocaleString():'Not checked yet';
-  $('alertsRows').innerHTML=list.map(a=>{
+  const assignedToMe=platformAlerts.filter(a=>{const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));const state=(window.__alertActions||{})[key]||{};return state.assignedToUserId&&state.assignedToUserId===window.__alertCurrentUserId&&state.status!=='RESOLVED'});
+  const assignmentNotice=window.__alertCurrentUserId?'<div class="notice" style="margin-bottom:12px;border-left:4px solid #7653e8"><b>Assigned to you: '+assignedToMe.length+'</b>'+(assignedToMe.length?'<div class="sub" style="margin-top:5px">'+assignedToMe.map(a=>esc(a.title)+(a.business?' · '+esc(a.business):'')).join('<br>')+'</div>':'<div class="sub" style="margin-top:5px">No unresolved alerts are currently assigned to your account.</div>')+'</div>':'';
+  $('alertsRows').innerHTML=assignmentNotice+list.map(a=>{
    const tone=a.severity==='HIGH'?'bad':a.severity==='MEDIUM'?'warn':'good',edge=a.severity==='HIGH'?'#dc3545':a.severity==='MEDIUM'?'#e0a020':'#7653e8';
    const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));
    const state=(window.__alertActions||{})[key]||{status:'OPEN',assignedToUserId:'',notes:''};
@@ -948,7 +950,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   window.__alertLastChecked=checkedAt;
   window.__alertSourceStatuses=results.map(x=>({name:x.name,path:x.path,status:x.data?'Responding':'Unavailable',detail:x.data?'Endpoint returned data':String(x.error||'No response'),checkedAt}));
   const ok=results.filter(x=>x.data),failed=results.filter(x=>x.error),get=n=>results.find(x=>x.name===n)?.data,alerts=[];
-  try{const actionData=await api('/admin/alert-actions');window.__alertActions=actionData.actions||{};window.__alertAdmins=actionData.admins||[];}catch(e){window.__alertActions={};window.__alertAdmins=[];$('alertsSourceMessage').textContent='Alert handling storage unavailable: '+e.message+'. Live condition detection continues; changes cannot be saved.';}
+  try{const actionData=await api('/admin/alert-actions');window.__alertActions=actionData.actions||{};window.__alertAdmins=actionData.admins||[];window.__alertCurrentUserId=actionData.currentUserId||'';window.__alertCurrentUserName=actionData.currentUserName||'';}catch(e){window.__alertActions={};window.__alertAdmins=[];$('alertsSourceMessage').textContent='Alert handling storage unavailable: '+e.message+'. Live condition detection continues; changes cannot be saved.';}
   const health=get('business health');
   if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,businessId:b.businessId,view:'health'});}
   const orders=get('orders');if(orders&&Number(orders.pending||0)>0)alerts.push({severity:'MEDIUM',category:'PAYMENT',categoryLabel:'Orders & payments',title:'Orders awaiting action',message:Number(orders.pending)+' order(s) are currently marked pending. Review the platform order summary and follow up as appropriate.',view:'orders'});
@@ -971,7 +973,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const save=e.target.closest?.('[data-alert-save]');if(!save)return;
   const key=save.dataset.alertSave,statusEl=document.querySelector('[data-alert-status="'+CSS.escape(key)+'"]'),assigneeEl=document.querySelector('[data-alert-assignee="'+CSS.escape(key)+'"]'),notesEl=document.querySelector('[data-alert-notes="'+CSS.escape(key)+'"]'),msg=document.querySelector('[data-alert-action-message="'+CSS.escape(key)+'"]');
   save.disabled=true;if(msg)msg.textContent='Saving…';
-  try{const result=await api('/admin/alert-actions',{method:'POST',body:JSON.stringify({alertKey:key,status:statusEl?.value||'OPEN',assignedToUserId:assigneeEl?.value||null,notes:notesEl?.value||''})});window.__alertActions=result.actions||window.__alertActions||{};if(msg)msg.textContent='Saved '+new Date(result.updatedAt).toLocaleString()+(result.updatedBy?' by '+result.updatedBy:'');renderPlatformAlerts();}
+  try{const result=await api('/admin/alert-actions',{method:'POST',body:JSON.stringify({alertKey:key,status:statusEl?.value||'OPEN',assignedToUserId:assigneeEl?.value||null,notes:notesEl?.value||''})});window.__alertActions=window.__alertActions||{};window.__alertActions[key]={status:result.status||statusEl?.value||'OPEN',assignedToUserId:result.assignedToUserId||'',notes:result.notes??notesEl?.value??'',updatedAt:result.updatedAt,updatedBy:result.updatedBy||''};if(msg)msg.textContent='Saved '+new Date(result.updatedAt).toLocaleString()+(result.updatedBy?' by '+result.updatedBy:'');renderPlatformAlerts();}
   catch(err){if(msg)msg.textContent='Not saved: '+err.message;}
   finally{save.disabled=false;}
  });
@@ -1758,7 +1760,7 @@ function install(app){
   const actors=actorIds.length?await prisma.user.findMany({where:{id:{in:actorIds}},select:{id:true,name:true,email:true}}):[];
   const actorMap=new Map(actors.map(x=>[x.id,x.name||x.email]));
   const actions={};for(const row of rows)actions[row.alertKey]={status:row.status,assignedToUserId:row.assignedToUserId||'',notes:row.notes||'',updatedAt:row.updatedAt,updatedBy:actorMap.get(row.updatedByUserId)||''};
-  res.json({actions,admins});
+  res.json({actions,admins,currentUserId:user.id,currentUserName:user.name||user.email});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/alert-actions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
