@@ -935,7 +935,10 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const checkedLabel=window.__alertLastChecked?new Date(window.__alertLastChecked).toLocaleString():'Not checked yet';
   $('alertsRows').innerHTML=list.map(a=>{
    const tone=a.severity==='HIGH'?'bad':a.severity==='MEDIUM'?'warn':'good',edge=a.severity==='HIGH'?'#dc3545':a.severity==='MEDIUM'?'#e0a020':'#7653e8';
-   return '<div class="card" style="margin-bottom:10px;border:1px solid #7653e8;border-left:4px solid '+edge+'"><div class="section-title"><div><span class="pill '+tone+'">'+esc(a.severity)+'</span> <span class="pill">'+esc(a.categoryLabel)+'</span><h3 style="margin:8px 0 4px">'+esc(a.title)+'</h3></div><span class="sub">Current status</span></div><div>'+esc(a.message)+'</div><div class="sub" style="margin-top:7px">Condition checked: '+esc(checkedLabel)+'</div>'+(a.business?'<div class="sub" style="margin-top:6px">Business: '+esc(a.business)+'</div>':'')+(a.view?'<div style="margin-top:10px"><button class="smallbtn" data-alert-view="'+esc(a.view)+'">Open dashboard</button></div>':'')+'</div>';
+   const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));
+   const state=(window.__alertActions||{})[key]||{status:'OPEN',assignedToUserId:'',notes:''};
+   const admins=window.__alertAdmins||[];
+   return '<div class="card" style="margin-bottom:10px;border:1px solid #7653e8;border-left:4px solid '+edge+'"><div class="section-title"><div><span class="pill '+tone+'">'+esc(a.severity)+'</span> <span class="pill">'+esc(a.categoryLabel)+'</span> <span class="pill '+(state.status==='RESOLVED'?'good':state.status==='ACKNOWLEDGED'?'warn':'')+'">'+esc(state.status||'OPEN')+'</span><h3 style="margin:8px 0 4px">'+esc(a.title)+'</h3></div><span class="sub">Current status</span></div><div>'+esc(a.message)+'</div><div class="sub" style="margin-top:7px">Condition checked: '+esc(checkedLabel)+'</div>'+(a.business?'<div class="sub" style="margin-top:6px">Business: '+esc(a.business)+'</div>':'')+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px"><label class="sub">Status <select class="input" data-alert-status="'+esc(key)+'" style="min-width:130px"><option value="OPEN" '+(state.status==='OPEN'?'selected':'')+'>Open</option><option value="ACKNOWLEDGED" '+(state.status==='ACKNOWLEDGED'?'selected':'')+'>Acknowledged</option><option value="RESOLVED" '+(state.status==='RESOLVED'?'selected':'')+'>Resolved</option></select></label><label class="sub">Assigned to <select class="input" data-alert-assignee="'+esc(key)+'" style="min-width:150px"><option value="">Unassigned</option>'+admins.map(u=>'<option value="'+esc(u.id)+'" '+(state.assignedToUserId===u.id?'selected':'')+'>'+esc(u.name||u.email)+'</option>').join('')+'</select></label><button class="smallbtn" data-alert-save="'+esc(key)+'">Save handling</button>'+(a.view?'<button class="smallbtn" data-alert-view="'+esc(a.view)+'">Open dashboard</button>':'')+'</div><div style="margin-top:8px"><textarea class="input" data-alert-notes="'+esc(key)+'" rows="2" maxlength="1000" placeholder="Internal handling note (optional)" style="width:100%;box-sizing:border-box">'+esc(state.notes||'')+'</textarea></div><div class="sub" data-alert-action-message="'+esc(key)+'" style="margin-top:5px">'+(state.updatedAt?'Last updated '+esc(new Date(state.updatedAt).toLocaleString())+(state.updatedBy?' by '+esc(state.updatedBy):''):'Handling changes are not saved until you tap Save handling.')+'</div></div>';
   }).join('')||'<div class="empty">No alerts match these filters. This means no matching condition was returned by the available sources; it does not guarantee every system is healthy.</div>';
  }
  async function loadNotifications(){
@@ -945,8 +948,9 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   window.__alertLastChecked=checkedAt;
   window.__alertSourceStatuses=results.map(x=>({name:x.name,path:x.path,status:x.data?'Responding':'Unavailable',detail:x.data?'Endpoint returned data':String(x.error||'No response'),checkedAt}));
   const ok=results.filter(x=>x.data),failed=results.filter(x=>x.error),get=n=>results.find(x=>x.name===n)?.data,alerts=[];
+  try{const actionData=await api('/admin/alert-actions');window.__alertActions=actionData.actions||{};window.__alertAdmins=actionData.admins||[];}catch(e){window.__alertActions={};window.__alertAdmins=[];$('alertsSourceMessage').textContent='Alert handling storage unavailable: '+e.message+'. Live condition detection continues; changes cannot be saved.';}
   const health=get('business health');
-  if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,view:'health'});}
+  if(health)for(const b of (health.businesses||[])){const risks=b.risks||[];if(b.riskLevel==='HIGH'||b.riskLevel==='MEDIUM')alerts.push({severity:b.riskLevel==='HIGH'?'HIGH':'MEDIUM',category:'BUSINESS',categoryLabel:'Business health',title:b.riskLevel==='HIGH'?'Business needs attention':'Business health follow-up',message:risks.join(' · ')||'Risk signal reported by Business Health.',business:b.businessName,businessId:b.businessId,view:'health'});}
   const orders=get('orders');if(orders&&Number(orders.pending||0)>0)alerts.push({severity:'MEDIUM',category:'PAYMENT',categoryLabel:'Orders & payments',title:'Orders awaiting action',message:Number(orders.pending)+' order(s) are currently marked pending. Review the platform order summary and follow up as appropriate.',view:'orders'});
   const reviews=get('reviews');if(reviews&&Number(reviews.failed||0)>0)alerts.push({severity:'HIGH',category:'REVIEWS',categoryLabel:'Reviews pipeline',title:'Failed review replies recorded',message:Number(reviews.failed)+' review reply record(s) have FAILED status in the current database.',view:'reviews'});
   const hooks=get('webhook delivery');if(hooks&&Number(hooks.retryQueue||0)>0)alerts.push({severity:'HIGH',category:'WEBHOOK',categoryLabel:'Webhooks',title:'Webhook retries waiting',message:Number(hooks.retryQueue)+' failed webhook delivery record(s) are eligible for retry.',view:'webhooks'});
@@ -960,6 +964,17 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   renderPlatformAlerts();
   renderAlertSourceDetails();
  }
+ document.addEventListener('change',e=>{
+  if(e.target?.matches?.('[data-alert-status],[data-alert-assignee]')){const key=e.target.dataset.alertStatus||e.target.dataset.alertAssignee;const msg=document.querySelector('[data-alert-action-message="'+CSS.escape(key)+'"]');if(msg)msg.textContent='Unsaved handling change — tap Save handling.';}
+ });
+ document.addEventListener('click',async e=>{
+  const save=e.target.closest?.('[data-alert-save]');if(!save)return;
+  const key=save.dataset.alertSave,statusEl=document.querySelector('[data-alert-status="'+CSS.escape(key)+'"]'),assigneeEl=document.querySelector('[data-alert-assignee="'+CSS.escape(key)+'"]'),notesEl=document.querySelector('[data-alert-notes="'+CSS.escape(key)+'"]'),msg=document.querySelector('[data-alert-action-message="'+CSS.escape(key)+'"]');
+  save.disabled=true;if(msg)msg.textContent='Saving…';
+  try{const result=await api('/admin/alert-actions',{method:'POST',body:JSON.stringify({alertKey:key,status:statusEl?.value||'OPEN',assignedToUserId:assigneeEl?.value||null,notes:notesEl?.value||''})});window.__alertActions=result.actions||window.__alertActions||{};if(msg)msg.textContent='Saved '+new Date(result.updatedAt).toLocaleString()+(result.updatedBy?' by '+result.updatedBy:'');renderPlatformAlerts();}
+  catch(err){if(msg)msg.textContent='Not saved: '+err.message;}
+  finally{save.disabled=false;}
+ });
  document.addEventListener('input',e=>{if(e.target?.id==='alertsSearch')renderPlatformAlerts()});
  document.addEventListener('change',e=>{if(['alertsSeverity','alertsCategory'].includes(e.target?.id))renderPlatformAlerts()});
  document.addEventListener('click',e=>{if(e.target?.id==='alertsRefresh'){e.preventDefault();const btn=e.target;btn.disabled=true;loadNotifications().catch(err=>{$('alertsSourceMessage').textContent='Could not load alert sources: '+err.message}).finally(()=>{btn.disabled=false});}const view=e.target.closest?.('[data-alert-view]');if(view){e.preventDefault();show(view.dataset.alertView)}});
@@ -1732,6 +1747,31 @@ function install(app){
   res.json({logs:logs.map(x=>({...x,actor:x.actorUserId?map.get(x.actorUserId)||'Unknown':'System'}))});
  }catch(e){ next(e); }
  });
+ originalGet.call(app,'/api/admin/alert-actions',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+  const [rows,admins]=await Promise.all([
+   prisma.$queryRawUnsafe('SELECT "alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt" FROM "AdminAlertAction"'),
+   prisma.user.findMany({where:{role:{in:['ADMIN','SUPER_ADMIN']}},select:{id:true,name:true,email:true},orderBy:{name:'asc'}})
+  ]);
+  const actorIds=[...new Set(rows.map(x=>x.updatedByUserId).filter(Boolean))];
+  const actors=actorIds.length?await prisma.user.findMany({where:{id:{in:actorIds}},select:{id:true,name:true,email:true}}):[];
+  const actorMap=new Map(actors.map(x=>[x.id,x.name||x.email]));
+  const actions={};for(const row of rows)actions[row.alertKey]={status:row.status,assignedToUserId:row.assignedToUserId||'',notes:row.notes||'',updatedAt:row.updatedAt,updatedBy:actorMap.get(row.updatedByUserId)||''};
+  res.json({actions,admins});
+ }catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/alert-actions',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const body=await readAdminJsonBody(req),alertKey=String(body.alertKey||'').trim(),status=String(body.status||'OPEN').toUpperCase(),assignedToUserId=body.assignedToUserId?String(body.assignedToUserId):null,notes=String(body.notes||'').trim();
+  if(!alertKey||alertKey.length>500)return res.status(400).json({error:'Invalid alert key.'});
+  if(!['OPEN','ACKNOWLEDGED','RESOLVED'].includes(status))return res.status(400).json({error:'Invalid alert status.'});
+  if(notes.length>1000)return res.status(400).json({error:'Handling notes must be 1000 characters or fewer.'});
+  if(assignedToUserId){const assignee=await prisma.user.findUnique({where:{id:assignedToUserId},select:{id:true,role:true}});if(!assignee||!['ADMIN','SUPER_ADMIN'].includes(assignee.role))return res.status(400).json({error:'Choose an active admin account.'});}
+  await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+  await prisma.$executeRawUnsafe('INSERT INTO "AdminAlertAction" ("alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt") VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP) ON CONFLICT ("alertKey") DO UPDATE SET "status"=EXCLUDED."status","assignedToUserId"=EXCLUDED."assignedToUserId","notes"=EXCLUDED."notes","updatedByUserId"=EXCLUDED."updatedByUserId","updatedAt"=CURRENT_TIMESTAMP',alertKey,status,assignedToUserId,notes,user.id);
+  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_ALERT_HANDLING_UPDATED',entity:'AdminAlertAction',entityId:alertKey,metadata:{status,assignedToUserId,notesLength:notes.length}}});
+  res.json({ok:true,status,assignedToUserId,notes,updatedAt:new Date().toISOString(),updatedBy:user.name||user.email});
+ }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/system',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$queryRawUnsafe('SELECT 1');
