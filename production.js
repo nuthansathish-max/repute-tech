@@ -1,5 +1,9 @@
 import 'dotenv/config';
 
+// Apply the existing Supabase session-pool safeguard before importing any
+// route/server modules that construct PrismaClient instances.
+await import('./db-pool.js');
+
 function tuneDatabaseUrl(value) {
   const raw = String(value || '').trim();
   if (!raw) return raw;
