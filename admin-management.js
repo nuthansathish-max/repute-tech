@@ -367,7 +367,7 @@ function adminPage(){
      <div class="sub" style="margin-top:8px">Important business, order, subscription, review, webhook and integration events can be sent to registered admin devices. Your browser must allow notifications.</div>
     </div>
     <div class="section card" style="border:1px solid #7653e8">
-     <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Platform-wide operational signals · read-only · no fabricated delivery statuses</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
+     <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Verified platform signals · saved alert handling · honest push status</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
      <div class="toolbar" style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
       <input class="input" id="alertsSearch" placeholder="Search alerts or business" style="flex:1;min-width:180px">
       <select class="input" id="alertsSeverity" style="min-width:150px"><option value="">All priorities</option><option value="HIGH">High priority</option><option value="MEDIUM">Medium priority</option><option value="INFO">Information</option></select>
