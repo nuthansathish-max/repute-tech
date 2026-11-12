@@ -195,6 +195,81 @@ function adminPage(){
 @media(max-width:760px){#featureflags #ffPlanMatrix{grid-template-columns:1fr!important}#featureflags>.grid4{gap:8px}#featureflags>.grid4>.card{padding:11px}#featureflags .section.card{padding:11px}#featureflags #ffRows{overflow:auto}#featureflags #ffRows .row{min-width:900px}#featureflags #ffPlanMatrix .sub{min-height:0}}
 @media(max-width:700px){.health-table{overflow:visible!important}.health-table>.row.head{display:none!important}.health-table #healthRows>.row{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;min-width:0!important;gap:10px;padding:12px!important;white-space:normal!important}.health-table #healthRows>.row>div{min-width:0;overflow-wrap:anywhere;white-space:normal}.health-table #healthRows>.row>div:first-child,.health-table #healthRows>.row>div:nth-child(5),.health-table #healthRows>.row>div:last-child{grid-column:1/-1}.health-table #healthRows .pill{white-space:normal;overflow-wrap:anywhere}.health-table #healthRows .smallbtn{max-width:100%}} 
  
+
+/* Device Push Notifications panel: visual refinement only */
+#notifications #adminPushPanel{
+ position:relative;isolation:isolate;overflow:hidden;
+ padding:18px 20px 16px!important;
+ border:1px solid #d9d2f4!important;border-radius:16px!important;
+ background:linear-gradient(118deg,#fff 0%,#fbfaff 58%,#f4f0ff 100%);
+ box-shadow:0 5px 20px rgba(47,35,91,.055);
+}
+#notifications #adminPushPanel:before{
+ content:"";position:absolute;z-index:-1;right:-42px;top:-62px;
+ width:170px;height:170px;border-radius:50%;
+ background:radial-gradient(circle,rgba(118,83,232,.12),rgba(118,83,232,0) 70%);
+ pointer-events:none;
+}
+#notifications #adminPushPanel .section-title{align-items:center;gap:12px;margin-bottom:9px}
+#notifications #adminPushPanel .section-title>div{min-width:0}
+#notifications #adminPushPanel .section-title h2{
+ display:flex;align-items:center;gap:9px;margin:0 0 5px;
+ color:#20243a;font-size:16px;font-weight:800;letter-spacing:-.02em
+}
+#notifications #adminPushPanel .section-title h2:before{
+ content:"";display:inline-block;flex:0 0 32px;width:32px;height:32px;
+ border-radius:10px;background:#eee9ff;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b4bd5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='2' width='12' height='20' rx='2'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E");
+ background-repeat:no-repeat;background-position:center;background-size:17px;
+}
+#notifications #adminPushPanel .section-title span:not(.pill){color:#69738a;font-size:11px;line-height:1.5}
+#notifications #adminPushPanel #adminPushDeviceCount{
+ padding:6px 10px;border:1px solid #e3def6;border-radius:999px;
+ background:#f2efff;color:#5b43b2;font-size:10px;font-weight:800;
+ white-space:nowrap
+}
+#notifications #adminPushPanel #adminPushMessage{
+ display:flex;align-items:flex-start;gap:8px;margin:12px 0!important;
+ padding:10px 12px;border:1px solid #e7e3f1;border-radius:11px;
+ background:rgba(255,255,255,.82);color:#46516a;font-size:11px;line-height:1.5
+}
+#notifications #adminPushPanel #adminPushMessage:before{
+ content:"";flex:0 0 7px;width:7px;height:7px;margin-top:4px;
+ border-radius:50%;background:#8b79d8;box-shadow:0 0 0 3px #eeeaff
+}
+#notifications #adminPushPanel>div[style*="display:flex"]{gap:9px!important;align-items:center}
+#notifications #adminPushPanel button{
+ min-height:38px;padding:0 13px;border-radius:9px;font-size:11px;font-weight:750;
+ transition:transform .15s ease,box-shadow .15s ease,background .15s ease
+}
+#notifications #adminPushPanel #adminPushEnable{
+ border:1px solid #6246c8;background:linear-gradient(135deg,#684bd4,#795be0);
+ color:#fff;box-shadow:0 4px 11px rgba(104,75,212,.19)
+}
+#notifications #adminPushPanel #adminPushTest{
+ border:1px solid #d9d2f0;background:#fff;color:#5942a8
+}
+#notifications #adminPushPanel #adminPushDisable{
+ border:1px solid #eadcdd;background:#fff;color:#a34b55
+}
+#notifications #adminPushPanel button:not(:disabled):active{transform:translateY(1px)}
+#notifications #adminPushPanel button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+#notifications #adminPushPanel>.sub:last-child{
+ margin-top:12px!important;padding-top:10px;border-top:1px solid #e9e5f2;
+ color:#778097;font-size:10px;line-height:1.55
+}
+@media(max-width:600px){
+ #notifications #adminPushPanel{padding:14px!important;border-radius:14px!important}
+ #notifications #adminPushPanel .section-title{align-items:flex-start}
+ #notifications #adminPushPanel .section-title h2{font-size:14px}
+ #notifications #adminPushPanel .section-title h2:before{flex-basis:30px;width:30px;height:30px}
+ #notifications #adminPushPanel #adminPushDeviceCount{font-size:9px;padding:5px 8px}
+ #notifications #adminPushPanel>div[style*="display:flex"]{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+ #notifications #adminPushPanel button{width:100%;min-height:42px;padding:0 8px;font-size:10px}
+ #notifications #adminPushPanel #adminPushEnable{grid-column:1/-1}
+ #notifications #adminPushPanel>.sub:last-child{font-size:10px}
+}
+
 /* Notifications & Alerts: responsive layout only */
 #notifications{min-width:0}
 #notifications>.grid4{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
