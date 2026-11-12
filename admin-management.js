@@ -363,7 +363,7 @@ function adminPage(){
     <div class="section card" id="adminPushPanel" style="border:1px solid #7653e8">
      <div class="section-title"><div><h2>Device push notifications</h2><span>Receive important Repute Tech alerts on this device, even when the dashboard is closed</span></div><span class="pill" id="adminPushDeviceCount">Checking device…</span></div>
      <div class="sub" id="adminPushMessage" role="status" aria-live="polite" style="margin-bottom:10px">Checking push notification support…</div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="smallbtn" id="adminPushEnable">Enable on this device</button><button type="button" class="smallbtn" id="adminPushTest" disabled>Send test notification</button><button type="button" class="smallbtn" id="adminPushDisable" disabled>Disable on this device</button></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="smallbtn" id="adminPushEnable" disabled>Enable on this device</button><button type="button" class="smallbtn" id="adminPushTest" disabled>Send test notification</button><button type="button" class="smallbtn" id="adminPushDisable" disabled>Disable on this device</button></div>
      <div class="sub" style="margin-top:8px">Important business, order, subscription, review, webhook and integration events can be sent to registered admin devices. Your browser must allow notifications.</div>
     </div>
     <div class="section card" style="border:1px solid #7653e8">
@@ -944,6 +944,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  async function loadAdminPushSettings(){
   const count=$('adminPushDeviceCount'),enable=$('adminPushEnable'),test=$('adminPushTest'),disable=$('adminPushDisable');
   const config=await api('/admin/push-config');
+  window.__adminPushConfig=config;
   if(count)count.textContent=String(config.deviceCount||0)+' device(s) registered';
   if(!config.configured){pushUiMessage('Push delivery is not configured on the server yet.');if(enable)enable.disabled=true;if(test)test.disabled=true;if(disable)disable.disabled=true;return;}
   const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&window.isSecureContext;
@@ -958,8 +959,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   pushUiMessage(subscription?'Push notifications are enabled on this device. Test one now to confirm the push service accepts it.':permission==='denied'?'Notifications are blocked in browser settings. Allow them for reputetechs.in, then refresh this page.':'Push is ready. Enable it on this device to receive important admin alerts.');
  }
  async function enableAdminPush(){
-  const config=await api('/admin/push-config');
-  if(!config.configured||!config.publicKey)throw new Error('Push delivery is not configured on the server.');
+  const config=window.__adminPushConfig;
+  if(!config?.configured||!config.publicKey)throw new Error('Push delivery is not configured on the server. Refresh the page and try again.');
   if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)||!window.isSecureContext)throw new Error('This browser does not support secure device push notifications.');
   const permission=await Notification.requestPermission();
   if(permission!=='granted')throw new Error('Notification permission was not granted. Check your browser site settings.');
