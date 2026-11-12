@@ -1,4 +1,5 @@
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
+import { queueAdminPushEvent } from './admin-push.js';
 
 export function startReviewSyncScheduler({ prisma }) {
   const parsedMinutes = Number(process.env.REVIEW_SYNC_INTERVAL_MINUTES || 30);
@@ -55,6 +56,7 @@ export function startReviewSyncScheduler({ prisma }) {
                 }
               });
             }
+            await queueAdminPushEvent(prisma,{eventKey:'NEW_REVIEWS_SYNCED:'+location.id+':'+new Date().toISOString().slice(0,16),title:'New reviews synced',body:`${count} new review${count===1?'':'s'} were synced for ${location.name}.`,category:'REVIEWS',url:'/admin-panel'}).catch(e=>console.error('New reviews push queue failed:',e?.message||e));
           }
         } catch (err) {
           failed += 1;
@@ -66,6 +68,7 @@ export function startReviewSyncScheduler({ prisma }) {
               error: String(err?.message || err)
             }
           }).catch(() => {});
+          await queueAdminPushEvent(prisma,{eventKey:'REVIEW_SYNC_FAILED:'+location.id+':'+new Date().toISOString().slice(0,10),title:'Google review sync failed',body:`Review sync failed for ${location.name}. Open the admin alerts to investigate.`,category:'REVIEWS',url:'/admin-panel'}).catch(e=>console.error('Review sync failure push queue failed:',e?.message||e));
         }
       }
 
