@@ -1001,7 +1001,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('alertsRows').innerHTML=overview+assignmentNotice+list.map(a=>{
    const high=a.severity==='HIGH',medium=a.severity==='MEDIUM',tone=high?'bad':medium?'warn':'good',edge=high?'#dc3545':medium?'#d99a18':'#7653e8';
    const key=keyFor(a),state=stateFor(a),admins=window.__alertAdmins||[];
-   const icon=a.category==='NEW_BUSINESS'?'🏢':a.category==='PAYMENT'?'₹':a.category==='REVIEWS'?'★':a.category==='WEBHOOK'?'↗':a.category==='INTEGRATION'?'🔌':'◈';
+   const icon=(a.businessId||a.category==='BUSINESS'||a.category==='NEW_BUSINESS')?'🏢':a.category==='PAYMENT'?'₹':a.category==='REVIEWS'?'★':a.category==='WEBHOOK'?'↗':a.category==='INTEGRATION'?'🔌':'◈';
    const stateTone=state.status==='RESOLVED'?'good':state.status==='ACKNOWLEDGED'?'warn':'';
    const updated=state.updatedAt?'Updated '+esc(new Date(state.updatedAt).toLocaleString('en-IN'))+(state.updatedBy?' · '+esc(state.updatedBy):''):'Handling not yet saved';
    return '<article class="card" style="margin:0 0 12px;border:1px solid var(--border,#e5e7eb);border-left:5px solid '+edge+';border-radius:15px;padding:15px;box-shadow:0 5px 18px rgba(20,20,40,.045)">'+
