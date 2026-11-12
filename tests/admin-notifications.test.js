@@ -6,6 +6,7 @@ import { normalizeAdminPushPayload } from '../admin-push.js';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const admin = read('../admin-management.js');
+const pushWorker = read('../admin-push-sw.js');
 
 test('push payloads cannot navigate outside the Repute Tech origin', () => {
   const external = normalizeAdminPushPayload({
@@ -29,6 +30,24 @@ test('push payload text is bounded before delivery', () => {
   });
   assert.equal(payload.title.length, 100);
   assert.equal(payload.body.length, 220);
+  assert.equal(payload.severity, 'INFO');
+  assert.ok(payload.timestamp > 0);
+});
+
+test('high-priority push notifications expose useful actions and priority cues', () => {
+  const payload = normalizeAdminPushPayload({
+    title: 'Business needs attention',
+    severity: 'HIGH',
+    category: 'BUSINESS',
+    eventKey: 'BUSINESS_RISK:123'
+  });
+  assert.equal(payload.severity, 'HIGH');
+  assert.equal(payload.category, 'BUSINESS');
+  assert.match(pushWorker, /requireInteraction: severity === 'HIGH'/);
+  assert.match(pushWorker, /vibrate: severity === 'HIGH'/);
+  assert.match(pushWorker, /title: 'View alert'/);
+  assert.match(pushWorker, /title: 'Dismiss'/);
+  assert.match(pushWorker, /event.action === 'dismiss'/);
 });
 
 test('Web Push dependency accepts a generated VAPID key pair', () => {
@@ -68,6 +87,9 @@ test('alert status, severity, category, search and saved handling remain wired',
   assert.match(admin, /api\('\/admin\/alert-actions'/);
   assert.match(admin, /data-alert-note/);
   assert.match(admin, /alertSourceDetails/);
+  assert.match(admin, /Alerts & Delivery Command Center/);
+  assert.match(admin, /Internal notes & activity/);
+  assert.match(admin, /matching alert/);
 });
 
 test('device push settings and protected API routes are present', () => {
