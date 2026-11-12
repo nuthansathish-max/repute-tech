@@ -56,7 +56,7 @@ async function webhookWorker(){
   for(const d of pending){
    const result=await webhookRequest(d.url,d.secret,d.payload),attempts=Number(d.attempts||0)+1;
    if(result.ok)await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='DELIVERED',"attempts"=$1,"responseCode"=$2,"error"=NULL,"deliveredAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$3`,attempts,result.status,d.id);
-   else {const delay=Math.min(3600,Math.pow(2,Math.min(attempts,10))*10);await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='FAILED',"attempts"=$1,"responseCode"=$2,"error"=$3,"nextAttemptAt"=CURRENT_TIMESTAMP + ($4 * INTERVAL '1 second'),"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$5`,attempts,result.status,result.error,delay,d.id)}
+   else {const delay=Math.min(3600,Math.pow(2,Math.min(attempts,10))*10);await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='FAILED',"attempts"=$1,"responseCode"=$2,"error"=$3,"nextAttemptAt"=CURRENT_TIMESTAMP + ($4 * INTERVAL '1 second'),"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$5`,attempts,result.status,result.error,delay,d.id);if(attempts===1)await queueAdminPushEvent(prisma,{eventKey:'WEBHOOK_FAILED:'+d.id,title:'Webhook delivery failed',body:`A ${d.eventType||'platform'} webhook delivery failed and will be retried.`,category:'WEBHOOK',url:'/admin-panel'}).catch(e=>console.error('Webhook failure push queue failed:',e?.message||e))}
   }
   await dispatchAdminPushQueue(prisma,12).catch(e=>console.error('Admin push retry worker error:',e?.message||e));
  }catch(e){console.error('Webhook worker error:',e?.message||e)}
@@ -1379,6 +1379,7 @@ function install(app){
   if(!business)return res.status(404).json({error:'Business not found'});
   const updated=await prisma.business.update({where:{id:business.id},data:{isOpen}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:isOpen?'ADMIN_BUSINESS_OPENED':'ADMIN_BUSINESS_CLOSED',entity:'Business',entityId:business.id,metadata:{isOpen}}});
+  if(!isOpen)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_CLOSED:'+business.id+':'+updated.updatedAt.toISOString(),title:'Business marked closed',body:`${business.name} has been marked closed in the Super Admin dashboard.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Business health push queue failed:',e?.message||e));
   res.json({ok:true,isOpen:Boolean(updated.isOpen)});
 }catch(e){next(e)}});
 
@@ -1404,6 +1405,7 @@ function install(app){
     }
   }
   await prisma.auditLog.create({data:{actorUserId:user.id,action:enabled?'ADMIN_FEATURE_ENABLED':'ADMIN_FEATURE_DISABLED',entity:'Business',entityId:business.id,metadata:{feature,enabled}}});
+  if(!enabled)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_FEATURE_DISABLED:'+business.id+':'+feature+':'+new Date().toISOString().slice(0,16),title:'Business feature disabled',body:`${feature} was disabled for ${business.name}.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Feature status push queue failed:',e?.message||e));
   res.json({ok:true,feature,enabled,flags});
 }catch(e){next(e)}});
 
@@ -1477,6 +1479,7 @@ function install(app){
   const paidAt=paymentStatus==='PAID'?(request.paymentStatus==='PAID'&&request.paidAt?request.paidAt:new Date()):null;
   const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus,paidAt}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus,paidAt:paidAt?.toISOString()||null}}});
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_PAYMENT_STATUS:'+request.id+':'+paymentStatus+':'+updated.updatedAt.toISOString(),title:'Subscription payment status updated',body:`A subscription payment status changed to ${paymentStatus}.`,category:'PAYMENT',url:'/admin-panel'}).catch(e=>console.error('Payment status push queue failed:',e?.message||e));
   res.json({ok:true,request:updated});
 }catch(e){next(e)}});
 
@@ -1490,6 +1493,7 @@ function install(app){
   if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
   const rejected=await prisma.planRequest.update({where:{id:request.id},data:{status:'REJECTED',rejectionReason:reason,rejectedAt:new Date()}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'REJECT_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,reason}}});
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_REQUEST_REJECTED:'+request.id,title:'Subscription request rejected',body:'A pending subscription request was rejected.',category:'SUBSCRIPTION',url:'/admin-panel'}).catch(e=>console.error('Plan rejection push queue failed:',e?.message||e));
   res.json({ok:true,request:rejected});
 }catch(e){next(e)}});
 
@@ -1583,6 +1587,7 @@ function install(app){
     await tx.auditLog.create({data:{actorUserId:user.id,action:'APPROVE_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planCode:request.planCode}}});
     return {subscription,approved};
   });
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_REQUEST_APPROVED:'+result.approved.id,title:'Subscription request approved',body:`${result.approved.planName} subscription request was approved.`,category:'SUBSCRIPTION',url:'/admin-panel'}).catch(e=>console.error('Plan approval push queue failed:',e?.message||e));
   res.json({ok:true,subscription:result.subscription,request:result.approved});
  }catch(e){next(e)}});
 
