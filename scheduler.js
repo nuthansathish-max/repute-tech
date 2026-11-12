@@ -13,7 +13,6 @@ export function startReviewSyncScheduler({ prisma }) {
     const [trials, unpaid] = await Promise.all([
       prisma.subscription.findMany({
         where: { status: 'TRIAL', trialEndsAt: { lte: soon } },
-        include: { business: { select: { name: true } } },
         select: { businessId: true, trialEndsAt: true, business: { select: { name: true } } }
       }),
       prisma.planRequest.findMany({
