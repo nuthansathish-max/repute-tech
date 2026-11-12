@@ -1379,7 +1379,7 @@ function install(app){
   if(!business)return res.status(404).json({error:'Business not found'});
   const updated=await prisma.business.update({where:{id:business.id},data:{isOpen}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:isOpen?'ADMIN_BUSINESS_OPENED':'ADMIN_BUSINESS_CLOSED',entity:'Business',entityId:business.id,metadata:{isOpen}}});
-  if(!isOpen)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_CLOSED:'+business.id+':'+updated.updatedAt.toISOString(),title:'Business marked closed',body:`${business.name} has been marked closed in the Super Admin dashboard.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Business health push queue failed:',e?.message||e));
+  if(!isOpen)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_CLOSED:'+business.id+':'+new Date().toISOString(),title:'Business marked closed',body:`${business.name} has been marked closed in the Super Admin dashboard.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Business health push queue failed:',e?.message||e));
   res.json({ok:true,isOpen:Boolean(updated.isOpen)});
 }catch(e){next(e)}});
 
