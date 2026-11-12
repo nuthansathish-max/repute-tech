@@ -194,7 +194,54 @@ function adminPage(){
 #featureflags .toolbar .input,#featureflags .toolbar .select{border-color:#dfe5ef;background:#fff}
 @media(max-width:760px){#featureflags #ffPlanMatrix{grid-template-columns:1fr!important}#featureflags>.grid4{gap:8px}#featureflags>.grid4>.card{padding:11px}#featureflags .section.card{padding:11px}#featureflags #ffRows{overflow:auto}#featureflags #ffRows .row{min-width:900px}#featureflags #ffPlanMatrix .sub{min-height:0}}
 @media(max-width:700px){.health-table{overflow:visible!important}.health-table>.row.head{display:none!important}.health-table #healthRows>.row{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;min-width:0!important;gap:10px;padding:12px!important;white-space:normal!important}.health-table #healthRows>.row>div{min-width:0;overflow-wrap:anywhere;white-space:normal}.health-table #healthRows>.row>div:first-child,.health-table #healthRows>.row>div:nth-child(5),.health-table #healthRows>.row>div:last-child{grid-column:1/-1}.health-table #healthRows .pill{white-space:normal;overflow-wrap:anywhere}.health-table #healthRows .smallbtn{max-width:100%}} 
- </style></head><body><div class="app">
+ 
+/* Notifications & Alerts: responsive layout only */
+#notifications{min-width:0}
+#notifications>.grid4{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#notifications .section.card{min-width:0}
+#notifications .section-title{gap:12px;align-items:center;flex-wrap:wrap}
+#notifications .toolbar>*{min-width:0;max-width:100%;box-sizing:border-box}
+#notifications #alertsRows article{min-width:0;overflow-wrap:anywhere}
+#notifications #alertsRows article select,
+#notifications #alertsRows article textarea{max-width:100%;box-sizing:border-box}
+#notifications #adminPushPanel>div[style*="display:flex"]{align-items:center}
+@media(max-width:900px){
+ #notifications>.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #notifications .section.card{padding:14px}
+ #notifications .toolbar{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ #notifications .toolbar #alertsSearch{grid-column:1/-1}
+ #notifications .toolbar .input{width:100%;min-width:0!important}
+}
+@media(max-width:600px){
+ #notifications>.grid4{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #notifications>.grid4>.card{padding:11px;min-width:0}
+ #notifications>.grid4 .label{font-size:10px}
+ #notifications>.grid4 .metric{font-size:21px}
+ #notifications .section.card{padding:12px;margin-top:12px}
+ #notifications .section-title{align-items:flex-start}
+ #notifications .section-title>button{width:100%;min-height:42px}
+ #notifications #adminPushPanel>div[style*="display:flex"]{display:grid!important;grid-template-columns:1fr;gap:8px}
+ #notifications #adminPushPanel button{width:100%;min-height:42px}
+ #notifications .toolbar{grid-template-columns:1fr}
+ #notifications .toolbar #alertsSearch{grid-column:auto}
+ #notifications #alertsRows article{padding:12px!important;border-radius:13px!important}
+ #notifications #alertsRows article>div[style*="align-items:flex-end"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px!important}
+ #notifications #alertsRows article>div[style*="align-items:flex-end"] label{min-width:0;width:100%;font-size:11px}
+ #notifications #alertsRows article>div[style*="align-items:flex-end"] select{width:100%;min-width:0!important;min-height:40px}
+ #notifications #alertsRows article>div[style*="align-items:flex-end"] button{width:100%;min-height:40px}
+ #notifications #alertsRows article>div[style*="align-items:flex-end"] [data-alert-save],
+ #notifications #alertsRows article>div[style*="align-items:flex-end"] [data-alert-view]{grid-column:1/-1}
+ #notifications #alertsRows article p{font-size:13px;line-height:1.55}
+ #notifications #alertsRows article details summary{padding:8px 0}
+ #notifications #alertsRows article textarea{width:100%;min-height:76px}
+ #notifications .alert-note{min-width:0;padding:11px!important}
+}
+@media(min-width:1200px){
+ #notifications>.grid4{grid-template-columns:repeat(4,minmax(0,1fr))}
+ #notifications .section.card{padding:20px}
+ #notifications #alertsRows article{padding:18px!important}
+}
+</style></head><body><div class="app">
  <aside class="side">
   <div class="brand">repute<span>techs.in</span></div><div class="role">SUPER ADMIN · PLATFORM OWNER</div>
   <div class="group">Platform Governance</div>
