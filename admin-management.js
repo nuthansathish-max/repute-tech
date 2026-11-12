@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
 import { deflateRawSync } from 'node:zlib';
 import crypto from 'node:crypto';
+import { adminPushConfigured, adminPushPublicKey, ensureAdminPushTables, queueAdminPushEvent, dispatchAdminPushQueue } from './admin-push.js';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
@@ -55,8 +56,9 @@ async function webhookWorker(){
   for(const d of pending){
    const result=await webhookRequest(d.url,d.secret,d.payload),attempts=Number(d.attempts||0)+1;
    if(result.ok)await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='DELIVERED',"attempts"=$1,"responseCode"=$2,"error"=NULL,"deliveredAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$3`,attempts,result.status,d.id);
-   else {const delay=Math.min(3600,Math.pow(2,Math.min(attempts,10))*10);await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='FAILED',"attempts"=$1,"responseCode"=$2,"error"=$3,"nextAttemptAt"=CURRENT_TIMESTAMP + ($4 * INTERVAL '1 second'),"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$5`,attempts,result.status,result.error,delay,d.id)}
+   else {const delay=Math.min(3600,Math.pow(2,Math.min(attempts,10))*10);await prisma.$executeRawUnsafe(`UPDATE "AdminWebhookDelivery" SET "status"='FAILED',"attempts"=$1,"responseCode"=$2,"error"=$3,"nextAttemptAt"=CURRENT_TIMESTAMP + ($4 * INTERVAL '1 second'),"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$5`,attempts,result.status,result.error,delay,d.id);if(attempts===1)await queueAdminPushEvent(prisma,{eventKey:'WEBHOOK_FAILED:'+d.id,title:'Webhook delivery failed',body:`A ${d.eventType||'platform'} webhook delivery failed and will be retried.`,category:'WEBHOOK',url:'/admin-panel'}).catch(e=>console.error('Webhook failure push queue failed:',e?.message||e))}
   }
+  await dispatchAdminPushQueue(prisma,12).catch(e=>console.error('Admin push retry worker error:',e?.message||e));
  }catch(e){console.error('Webhook worker error:',e?.message||e)}
 }
 setTimeout(()=>{webhookWorker().catch(()=>{});setInterval(()=>webhookWorker().catch(()=>{}),10000)},5000);
@@ -358,20 +360,27 @@ function adminPage(){
      <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="MEDIUM" aria-label="Filter medium priority alerts" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">Medium Priority</div><div class="metric" id="alertMedium">—</div><div class="sub">Tap to review medium priority</div></button>
      <button type="button" class="card metric-card clickable alert-metric" data-alert-metric="SOURCES" aria-label="Show live alert source status" style="border:1px solid #7653e8;text-align:left;color:inherit;width:100%"><div class="label">Sources Checked</div><div class="metric" id="alertSources">—</div><div class="sub">Tap to inspect live sources</div></button>
     </div>
+    <div class="section card" id="adminPushPanel" style="border:1px solid #7653e8">
+     <div class="section-title"><div><h2>Device push notifications</h2><span>Receive important Repute Tech alerts on this device, even when the dashboard is closed</span></div><span class="pill" id="adminPushDeviceCount">Checking device…</span></div>
+     <div class="sub" id="adminPushMessage" role="status" aria-live="polite" style="margin-bottom:10px">Checking push notification support…</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="smallbtn" id="adminPushEnable" disabled>Enable on this device</button><button type="button" class="smallbtn" id="adminPushTest" disabled>Send test notification</button><button type="button" class="smallbtn" id="adminPushDisable" disabled>Disable on this device</button></div>
+     <div class="sub" style="margin-top:8px">Important business, order, subscription, review, webhook and integration events can be sent to registered admin devices. Your browser must allow notifications.</div>
+    </div>
     <div class="section card" style="border:1px solid #7653e8">
-     <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Platform-wide operational signals · read-only · no fabricated delivery statuses</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
+     <div class="section-title"><div><h2>Notification & Alert Center</h2><span>Verified platform signals · saved alert handling · honest push status</span></div><button class="smallbtn" id="alertsRefresh">Refresh alerts</button></div>
      <div class="toolbar" style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
       <input class="input" id="alertsSearch" placeholder="Search alerts or business" style="flex:1;min-width:180px">
       <select class="input" id="alertsSeverity" style="min-width:150px"><option value="">All priorities</option><option value="HIGH">High priority</option><option value="MEDIUM">Medium priority</option><option value="INFO">Information</option></select>
-      <select class="input" id="alertsCategory" style="min-width:170px"><option value="">All categories</option><option value="BUSINESS">Business health</option><option value="PAYMENT">Orders & payments</option><option value="WEBHOOK">Webhooks</option><option value="REVIEWS">Reviews pipeline</option><option value="INTEGRATION">Integrations</option></select>
+      <select class="input" id="alertsCategory" style="min-width:170px"><option value="">All categories</option><option value="BUSINESS">Business health</option><option value="NEW_BUSINESS">New business</option><option value="PAYMENT">Orders & payments</option><option value="WEBHOOK">Webhooks</option><option value="REVIEWS">Reviews pipeline</option><option value="INTEGRATION">Integrations</option></select>
+      <select class="input" id="alertsStatus" style="min-width:150px"><option value="OPEN" selected>Open alerts</option><option value="ACKNOWLEDGED">Acknowledged</option><option value="RESOLVED">Resolved</option><option value="ALL">All statuses</option></select>
      </div>
      <div id="alertsSourceMessage" class="notice" style="margin-bottom:12px">Loading verified platform signals…</div>
      <div id="alertsRows"><div class="empty">Loading alerts…</div></div>
     </div>
     <div class="section card" style="border:1px solid #7653e8"><div class="section-title"><div><h2>Alert handling notes</h2><span>Choose a note to see its operational details and available actions</span></div></div><div class="detail" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
      <button type="button" class="kv alert-note" data-alert-note="source" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Data source　＋</b><span>Inspect the live endpoint checks behind the current alert list.</span><span class="alert-note-detail hidden" id="alertNoteSource">The dashboard checks Business Health, Platform Orders, Reviews, Webhooks & Event Bus, and Integrations. Select Sources Checked above to inspect each endpoint's response status. A failed source means the alert count may be incomplete.</span></button>
-     <button type="button" class="kv alert-note" data-alert-note="ack" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Read / dismiss　＋</b><span>Review how acknowledgement works safely.</span><span class="alert-note-detail hidden" id="alertNoteAck">Alerts currently represent live conditions, not stored notification messages. A persistent dismiss/read feature requires a verified, access-controlled storage workflow so acknowledgements are not lost or applied to another admin. No alerts are silently deleted or hidden by this control.</span></button>
-     <button type="button" class="kv alert-note" data-alert-note="delivery" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Delivery　＋</b><span>Understand what this dashboard does and does not send.</span><span class="alert-note-detail hidden" id="alertNoteDelivery">This page detects conditions from existing platform records only. It does not send email, SMS, or WhatsApp notifications, and it will not show delivery as successful unless a real delivery provider and verified delivery result are implemented.</span></button>
+     <button type="button" class="kv alert-note" data-alert-note="ack" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Read / dismiss　＋</b><span>Review how acknowledgement works safely.</span><span class="alert-note-detail hidden" id="alertNoteAck">Each alert has a saved handling status: Open, Acknowledged or Resolved. Choose a status and assignee, add an internal note, then select Save handling. These changes are stored per alert and remain available after refresh.</span></button>
+     <button type="button" class="kv alert-note" data-alert-note="delivery" aria-expanded="false" style="text-align:left;cursor:pointer;color:inherit"><b>Delivery　＋</b><span>Understand what this dashboard does and does not send.</span><span class="alert-note-detail hidden" id="alertNoteDelivery">Important platform events can be sent as browser push notifications to admin devices that have enabled permission. The server records whether the push service accepted a message; this is not a read receipt and cannot prove that a person viewed it.</span></button>
     </div></div>   </section>
 
    <section id="health" class="hidden">
@@ -929,9 +938,59 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  }
  const titles={health:['Business Health','Business risk, subscription and activity monitoring'],users:['Users & IAM','Platform users, roles and business access overview'],overview:['Master Overview','Platform-wide SaaS command center for reputetechs.in'],tenants:['Tenant Workspaces','Live registry of businesses, owners and subscriptions'],analytics:['Platform Analytics','Platform-wide operational telemetry'],subscriptions:['Subscriptions & Plans','Plan catalog, trials and subscription governance'],revenue:['Platform Revenue & Billing','Verified platform order and billing overview'],reviews:['Reviews & AI Pipeline','Review processing and publishing overview'],ai:['AI Usage & Tokens','AI and token telemetry workspace'],google:['Google Business API','Google Business connection and publishing health'],whatsapp:['WhatsApp Cloud','WhatsApp Cloud API and gateway health'],webhooks:['Webhooks & Event Bus','Webhook and event delivery monitoring'],orders:['Platform Orders','Platform-wide order governance'],invoices:['Invoices & GST Tax','Invoice and tax governance workspace'],payouts:['Payouts & Gateways','Payout and gateway monitoring'],audit:['Audit Logs','Administrative security trail'],billing:['Billing Tiers','Subscription tier reference'],featureflags:['Feature Flags & Entitlements','Platform feature availability and entitlement governance'],settings:['Platform Settings','Platform-wide operational configuration'],announcements:['Announcements','Platform owner announcements and notices'],menuqr:['Digital Menu & QR','Digital menu and QR platform operations'],rbac:['Admin Accounts & RBAC','Administrator roles and access governance'],dangerous:['Dangerous Actions','Protected high-impact administrative operations'],notifications:['Notifications & Alerts','Platform notifications and operational alerts'],kill:['Emergency Kill Switch','Emergency operational controls']};
  let platformAlerts=[];
+
+ function pushUiMessage(message){const el=$('adminPushMessage');if(el)el.textContent=message;}
+ function pushBase64UrlToBytes(value){const padding='='.repeat((4-value.length%4)%4);const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(base64);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));}
+ async function loadAdminPushSettings(){
+  const count=$('adminPushDeviceCount'),enable=$('adminPushEnable'),test=$('adminPushTest'),disable=$('adminPushDisable');
+  const config=await api('/admin/push-config');
+  window.__adminPushConfig=config;
+  if(count)count.textContent=String(config.deviceCount||0)+' device(s) registered';
+  if(!config.configured){pushUiMessage('Push delivery is not configured on the server yet.');if(enable)enable.disabled=true;if(test)test.disabled=true;if(disable)disable.disabled=true;return;}
+  const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&window.isSecureContext;
+  if(!supported){pushUiMessage('This browser does not support secure device push notifications. Open the Super Admin page in a supported browser.');if(enable)enable.disabled=true;if(test)test.disabled=true;if(disable)disable.disabled=true;return;}
+  let registration=await navigator.serviceWorker.getRegistration('/');
+  let subscription=registration?await registration.pushManager.getSubscription():null;
+  if(subscription){await api('/admin/push-subscriptions',{method:'POST',body:JSON.stringify(subscription.toJSON())});}
+  const permission=Notification.permission;
+  if(enable)enable.disabled=Boolean(subscription)||permission==='denied';
+  if(test)test.disabled=!subscription;
+  if(disable)disable.disabled=!subscription;
+  pushUiMessage(subscription?'Push notifications are enabled on this device. Test one now to confirm the push service accepts it.':permission==='denied'?'Notifications are blocked in browser settings. Allow them for reputetechs.in, then refresh this page.':'Push is ready. Enable it on this device to receive important admin alerts.');
+ }
+ async function enableAdminPush(){
+  const config=window.__adminPushConfig;
+  if(!config?.configured||!config.publicKey)throw new Error('Push delivery is not configured on the server. Refresh the page and try again.');
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)||!window.isSecureContext)throw new Error('This browser does not support secure device push notifications.');
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted')throw new Error('Notification permission was not granted. Check your browser site settings.');
+  const registration=await navigator.serviceWorker.register('/admin-push-sw.js',{scope:'/'});
+  let subscription=await registration.pushManager.getSubscription();
+  if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushBase64UrlToBytes(config.publicKey)});
+  await api('/admin/push-subscriptions',{method:'POST',body:JSON.stringify(subscription.toJSON())});
+  await loadAdminPushSettings();
+  pushUiMessage('Push notifications are enabled. Send a test notification to verify this device.');
+ }
+ async function disableAdminPush(){
+  const registration=await navigator.serviceWorker.getRegistration('/');
+  const subscription=registration?await registration.pushManager.getSubscription():null;
+  if(subscription){await api('/admin/push-unsubscribe',{method:'POST',body:JSON.stringify({endpoint:subscription.endpoint})});await subscription.unsubscribe();}
+  await loadAdminPushSettings();
+  pushUiMessage('Push notifications are disabled on this device.');
+ }
+ async function testAdminPush(){
+  const result=await api('/admin/push-test',{method:'POST',body:JSON.stringify({})});
+  pushUiMessage(result.queued>0?'Test notification accepted by the push service. Check this device.':'No registered device subscription was found.');
+ }
+ document.addEventListener('click',e=>{
+  const enable=e.target.closest?.('#adminPushEnable');if(enable){enable.disabled=true;pushUiMessage('Requesting notification permission…');enableAdminPush().catch(err=>pushUiMessage('Could not enable push: '+err.message)).finally(()=>{enable.disabled=false;loadAdminPushSettings().catch(()=>{})});return;}
+  const disable=e.target.closest?.('#adminPushDisable');if(disable){disable.disabled=true;disableAdminPush().catch(err=>pushUiMessage('Could not disable push: '+err.message)).finally(()=>loadAdminPushSettings().catch(()=>{}));return;}
+  const test=e.target.closest?.('#adminPushTest');if(test){test.disabled=true;pushUiMessage('Sending test notification…');testAdminPush().catch(err=>pushUiMessage('Test notification failed: '+err.message)).finally(()=>loadAdminPushSettings().catch(()=>{}));return;}
+ });
  function renderPlatformAlerts(){
   const q=String($('alertsSearch')?.value||'').trim().toLowerCase(),severity=String($('alertsSeverity')?.value||''),category=String($('alertsCategory')?.value||'');
-  const list=platformAlerts.filter(a=>(!q||[a.title,a.message,a.business,a.category].join(' ').toLowerCase().includes(q))&&(!severity||a.severity===severity)&&(!category||a.category===category));
+  const status=String($('alertsStatus')?.value||'OPEN');
+  const list=platformAlerts.filter(a=>{const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));const state=(window.__alertActions||{})[key]||{};const currentStatus=state.status||'OPEN';return (status==='ALL'||currentStatus===status)&&(!q||[a.title,a.message,a.business,a.category].join(' ').toLowerCase().includes(q))&&(!severity||a.severity===severity)&&(!category||a.category===category)});
   const checkedLabel=window.__alertLastChecked?new Date(window.__alertLastChecked).toLocaleString():'Not checked yet';
   const assignedToMe=platformAlerts.filter(a=>{const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));const state=(window.__alertActions||{})[key]||{};return state.assignedToUserId&&state.assignedToUserId===window.__alertCurrentUserId&&state.status!=='RESOLVED'});
   const assignmentNotice=window.__alertCurrentUserId?'<div class="notice" style="margin-bottom:12px;border-left:4px solid #7653e8"><b>Assigned to you: '+assignedToMe.length+'</b>'+(assignedToMe.length?'<div class="sub" style="margin-top:5px">'+assignedToMe.map(a=>esc(a.title)+(a.business?' · '+esc(a.business):'')).join('<br>')+'</div>':'<div class="sub" style="margin-top:5px">No unresolved alerts are currently assigned to your account.</div>')+'</div>':'';
@@ -960,11 +1019,14 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const integrations=get('integrations');if(integrations&&Number(integrations.google||0)===0)alerts.push({severity:'INFO',category:'INTEGRATION',categoryLabel:'Integrations',title:'No Google connection records found',message:'The integrations API reports zero Google connection records. Verify whether this is expected.',view:'google'});
   if(integrations&&Number(integrations.whatsapp||0)>0&&Number(integrations.whatsappConnected||0)===0)alerts.push({severity:'MEDIUM',category:'INTEGRATION',categoryLabel:'Integrations',title:'WhatsApp connections are not marked connected',message:integrations.whatsapp+' WhatsApp connection record(s) exist and none currently report CONNECTED.',view:'whatsapp'});
   const priority={HIGH:0,MEDIUM:1,INFO:2};platformAlerts=alerts.sort((a,b)=>priority[a.severity]-priority[b.severity]);
-  $('alertTotal').textContent=alerts.length;$('alertHigh').textContent=alerts.filter(a=>a.severity==='HIGH').length;$('alertMedium').textContent=alerts.filter(a=>a.severity==='MEDIUM').length;$('alertSources').textContent=ok.length+'/'+sources.length;
+  const statusFor=a=>{const key=a.alertKey||([a.category,a.businessId||a.view||'platform',a.title].join(':'));return (window.__alertActions||{})[key]?.status||'OPEN'};
+  const openAlerts=alerts.filter(a=>statusFor(a)==='OPEN');
+  $('alertTotal').textContent=openAlerts.length;$('alertHigh').textContent=openAlerts.filter(a=>a.severity==='HIGH').length;$('alertMedium').textContent=openAlerts.filter(a=>a.severity==='MEDIUM').length;$('alertSources').textContent=ok.length+'/'+sources.length;
   const checkedLabel=new Date(checkedAt).toLocaleString();
-  $('alertsSourceMessage').textContent=(failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Alerts are derived from current records, not sent notifications.')+' Last checked: '+checkedLabel+'.';
+  $('alertsSourceMessage').textContent=(failed.length?'Partial data: '+ok.length+' of '+sources.length+' sources loaded. Unavailable: '+failed.map(x=>x.name+' ('+x.error+')').join('; ')+'. Alert totals may be incomplete.':'All '+sources.length+' configured data sources responded. Live alerts are derived from current records; important new events can also be sent to registered admin devices.')+' Last checked: '+checkedLabel+'.';
   renderPlatformAlerts();
   renderAlertSourceDetails();
+  loadAdminPushSettings().catch(error=>{const message=$('adminPushMessage');if(message)message.textContent='Device push settings unavailable: '+error.message});
  }
  document.addEventListener('change',e=>{
   if(e.target?.matches?.('[data-alert-status],[data-alert-assignee]')){const key=e.target.dataset.alertStatus||e.target.dataset.alertAssignee;const msg=document.querySelector('[data-alert-action-message="'+CSS.escape(key)+'"]');if(msg)msg.textContent='Unsaved handling change — tap Save handling.';}
@@ -978,7 +1040,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   finally{save.disabled=false;}
  });
  document.addEventListener('input',e=>{if(e.target?.id==='alertsSearch')renderPlatformAlerts()});
- document.addEventListener('change',e=>{if(['alertsSeverity','alertsCategory'].includes(e.target?.id))renderPlatformAlerts()});
+ document.addEventListener('change',e=>{if(['alertsSeverity','alertsCategory','alertsStatus'].includes(e.target?.id))renderPlatformAlerts()});
  document.addEventListener('click',e=>{if(e.target?.id==='alertsRefresh'){e.preventDefault();const btn=e.target;btn.disabled=true;loadNotifications().catch(err=>{$('alertsSourceMessage').textContent='Could not load alert sources: '+err.message}).finally(()=>{btn.disabled=false});}const businessLink=e.target.closest?.('[data-alert-business]');if(businessLink){e.preventDefault();const id=businessLink.dataset.alertBusiness;businessLink.disabled=true;businessLink.textContent='Opening business…';openBusiness(id).catch(err=>{businessLink.disabled=false;businessLink.textContent='Could not open — retry';const card=businessLink.closest('.card');const note=card?.querySelector('[data-alert-action-message]');if(note)note.textContent='Could not open business details: '+err.message;});return;}const view=e.target.closest?.('[data-alert-view]');if(view){e.preventDefault();show(view.dataset.alertView)}});
  function renderAlertSourceDetails(){
   let panel=$('alertSourceDetails');
@@ -999,6 +1061,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
    if(sourcePanel)sourcePanel.style.display='none';
    $('alertsSearch').value='';
    $('alertsCategory').value='';
+   $('alertsStatus').value='OPEN';
    $('alertsSeverity').value=type==='ALL'?'':type;
    renderPlatformAlerts();
    $('alertsRows').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1149,6 +1212,46 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
 }
 function install(app){
  if(installed)return;installed=true;
+
+ originalGet.call(app,'/api/admin/push-config',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  await ensureAdminPushTables(prisma);
+  const [devices,last]=await Promise.all([
+   prisma.$queryRawUnsafe('SELECT COUNT(*)::int AS count FROM "AdminPushSubscription" WHERE "userId"=$1 AND "enabled"=TRUE',user.id),
+   prisma.$queryRawUnsafe('SELECT "status","createdAt","lastError" FROM "AdminPushDelivery" WHERE "userId"=$1 ORDER BY "createdAt" DESC LIMIT 1',user.id)
+  ]);
+  res.json({configured:adminPushConfigured(),publicKey:adminPushPublicKey(),deviceCount:Number(devices?.[0]?.count||0),lastDelivery:last?.[0]||null});
+ }catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/push-subscriptions',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  if(!adminPushConfigured())return res.status(503).json({error:'Device push delivery is not configured on the server.'});
+  await ensureAdminPushTables(prisma);
+  const body=await readAdminJsonBody(req),endpoint=String(body.endpoint||'').trim(),p256dh=String(body.keys?.p256dh||''),auth=String(body.keys?.auth||'');
+  let parsed;try{parsed=new URL(endpoint)}catch{parsed=null}
+  if(!parsed||parsed.protocol!=='https:'||endpoint.length>2048||!p256dh||!auth)return res.status(400).json({error:'Invalid browser push subscription.'});
+  await prisma.$executeRawUnsafe(
+   `INSERT INTO "AdminPushSubscription" ("id","userId","endpoint","p256dh","auth","expirationTime","userAgent","enabled","updatedAt")
+    VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,CURRENT_TIMESTAMP)
+    ON CONFLICT ("endpoint") DO UPDATE SET "userId"=$2,"p256dh"=$4,"auth"=$5,"expirationTime"=$6,"userAgent"=$7,"enabled"=TRUE,"updatedAt"=CURRENT_TIMESTAMP`,
+   crypto.randomUUID(),user.id,endpoint,p256dh,auth,body.expirationTime?Number(body.expirationTime):null,String(req.headers['user-agent']||'').slice(0,300)
+  );
+  res.json({ok:true});
+ }catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/push-unsubscribe',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  await ensureAdminPushTables(prisma);
+  const body=await readAdminJsonBody(req),endpoint=String(body.endpoint||'').trim();
+  if(!endpoint)return res.status(400).json({error:'Device endpoint is required.'});
+  await prisma.$executeRawUnsafe('DELETE FROM "AdminPushSubscription" WHERE "userId"=$1 AND "endpoint"=$2',user.id,endpoint);
+  res.json({ok:true});
+ }catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/push-test',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  if(!adminPushConfigured())return res.status(503).json({error:'Device push delivery is not configured on the server.'});
+  const result=await queueAdminPushEvent(prisma,{eventKey:'ADMIN_PUSH_TEST:'+user.id+':'+crypto.randomUUID(),title:'Repute Tech test notification',body:'Device push notifications are working for this admin device.',category:'TEST',url:'/admin-panel'},{userId:user.id});
+  if(!result.queued)return res.status(400).json({error:'No device subscription is registered for this account.'});
+  res.json({ok:true,queued:result.queued});
+ }catch(e){next(e)}});
  originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage())}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/businesses',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
@@ -1277,6 +1380,7 @@ function install(app){
   if(!business)return res.status(404).json({error:'Business not found'});
   const updated=await prisma.business.update({where:{id:business.id},data:{isOpen}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:isOpen?'ADMIN_BUSINESS_OPENED':'ADMIN_BUSINESS_CLOSED',entity:'Business',entityId:business.id,metadata:{isOpen}}});
+  if(!isOpen)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_CLOSED:'+business.id+':'+new Date().toISOString(),title:'Business marked closed',body:`${business.name} has been marked closed in the Super Admin dashboard.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Business health push queue failed:',e?.message||e));
   res.json({ok:true,isOpen:Boolean(updated.isOpen)});
 }catch(e){next(e)}});
 
@@ -1302,6 +1406,7 @@ function install(app){
     }
   }
   await prisma.auditLog.create({data:{actorUserId:user.id,action:enabled?'ADMIN_FEATURE_ENABLED':'ADMIN_FEATURE_DISABLED',entity:'Business',entityId:business.id,metadata:{feature,enabled}}});
+  if(!enabled)await queueAdminPushEvent(prisma,{eventKey:'BUSINESS_FEATURE_DISABLED:'+business.id+':'+feature+':'+new Date().toISOString().slice(0,16),title:'Business feature disabled',body:`${feature} was disabled for ${business.name}.`,category:'BUSINESS',url:'/admin-panel'}).catch(e=>console.error('Feature status push queue failed:',e?.message||e));
   res.json({ok:true,feature,enabled,flags});
 }catch(e){next(e)}});
 
@@ -1375,6 +1480,7 @@ function install(app){
   const paidAt=paymentStatus==='PAID'?(request.paymentStatus==='PAID'&&request.paidAt?request.paidAt:new Date()):null;
   const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus,paidAt}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus,paidAt:paidAt?.toISOString()||null}}});
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_PAYMENT_STATUS:'+request.id+':'+paymentStatus+':'+updated.updatedAt.toISOString(),title:'Subscription payment status updated',body:`A subscription payment status changed to ${paymentStatus}.`,category:'PAYMENT',url:'/admin-panel'}).catch(e=>console.error('Payment status push queue failed:',e?.message||e));
   res.json({ok:true,request:updated});
 }catch(e){next(e)}});
 
@@ -1388,6 +1494,7 @@ function install(app){
   if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
   const rejected=await prisma.planRequest.update({where:{id:request.id},data:{status:'REJECTED',rejectionReason:reason,rejectedAt:new Date()}});
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'REJECT_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,reason}}});
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_REQUEST_REJECTED:'+request.id,title:'Subscription request rejected',body:'A pending subscription request was rejected.',category:'SUBSCRIPTION',url:'/admin-panel'}).catch(e=>console.error('Plan rejection push queue failed:',e?.message||e));
   res.json({ok:true,request:rejected});
 }catch(e){next(e)}});
 
@@ -1481,6 +1588,7 @@ function install(app){
     await tx.auditLog.create({data:{actorUserId:user.id,action:'APPROVE_PLAN_REQUEST',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,planCode:request.planCode}}});
     return {subscription,approved};
   });
+  await queueAdminPushEvent(prisma,{eventKey:'PLAN_REQUEST_APPROVED:'+result.approved.id,title:'Subscription request approved',body:`${result.approved.planName} subscription request was approved.`,category:'SUBSCRIPTION',url:'/admin-panel'}).catch(e=>console.error('Plan approval push queue failed:',e?.message||e));
   res.json({ok:true,subscription:result.subscription,request:result.approved});
  }catch(e){next(e)}});
 

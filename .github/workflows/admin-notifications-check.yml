@@ -1,0 +1,35 @@
+name: Super Admin notifications checks
+
+on:
+  push:
+    branches: [feature/admin-device-push-notifications]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-notifications:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/repute_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --include=dev
+      - name: Check changed JavaScript syntax
+        run: |
+          node --check admin-management.js
+          node --check admin-push.js
+          node --check admin-push-sw.js
+          node --check business-account-flow.js
+          node --check customer-order-and-owner-management.js
+          node --check "server (1).js"
+          node --check scheduler.js
+      - name: Run alert and push regression tests
+        run: npm run test:notifications
+      - name: Generate Prisma client
+        run: npm run build

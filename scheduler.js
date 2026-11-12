@@ -1,4 +1,5 @@
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
+import { queueAdminPushEvent } from './admin-push.js';
 
 export function startReviewSyncScheduler({ prisma }) {
   const parsedMinutes = Number(process.env.REVIEW_SYNC_INTERVAL_MINUTES || 30);
@@ -6,12 +7,33 @@ export function startReviewSyncScheduler({ prisma }) {
   const intervalMs = minutes * 60 * 1000;
   let running = false;
 
+  const notifyPlatformHealth = async () => {
+    const now = new Date();
+    const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const trials = await prisma.subscription.findMany({
+      where: { status: 'TRIAL', trialEndsAt: { gt: now, lte: soon } },
+      select: { businessId: true, trialEndsAt: true, business: { select: { name: true } } }
+    });
+    for (const trial of trials) {
+      if (!trial.trialEndsAt) continue;
+      const day = new Date(trial.trialEndsAt).toISOString().slice(0, 10);
+      await queueAdminPushEvent(prisma, {
+        eventKey: 'TRIAL_ENDING_24H:' + trial.businessId + ':' + day,
+        title: 'Business trial ends within 24 hours',
+        body: (trial.business?.name || 'A business') + ' has a free trial ending within the next 24 hours.',
+        category: 'BUSINESS',
+        url: '/admin-panel'
+      }).catch(error => console.error('Trial alert push queue failed:', error?.message || error));
+    }
+  };
+
   const run = async () => {
     // Prevent overlapping sync jobs when a previous run takes longer than the interval.
     if (running) return { skipped: true, reason: 'sync-already-running' };
     running = true;
 
     try {
+      await notifyPlatformHealth().catch(error => console.error('Platform health push scan failed:', error?.message || error));
       const locations = await prisma.location.findMany({
         where: { googleLocationId: { not: null }, googleAccountId: { not: null } },
         include: { business: true }
@@ -55,6 +77,7 @@ export function startReviewSyncScheduler({ prisma }) {
                 }
               });
             }
+            await queueAdminPushEvent(prisma,{eventKey:'NEW_REVIEWS_SYNCED:'+location.id+':'+new Date().toISOString().slice(0,16),title:'New reviews synced',body:`${count} new review${count===1?'':'s'} were synced for ${location.name}.`,category:'REVIEWS',url:'/admin-panel'}).catch(e=>console.error('New reviews push queue failed:',e?.message||e));
           }
         } catch (err) {
           failed += 1;
@@ -66,6 +89,7 @@ export function startReviewSyncScheduler({ prisma }) {
               error: String(err?.message || err)
             }
           }).catch(() => {});
+          await queueAdminPushEvent(prisma,{eventKey:'REVIEW_SYNC_FAILED:'+location.id+':'+new Date().toISOString().slice(0,10),title:'Google review sync failed',body:`Review sync failed for ${location.name}. Open the admin alerts to investigate.`,category:'REVIEWS',url:'/admin-panel'}).catch(e=>console.error('Review sync failure push queue failed:',e?.message||e));
         }
       }
 

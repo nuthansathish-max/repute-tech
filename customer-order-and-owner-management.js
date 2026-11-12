@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash } from './auth.js';
+import { queueAdminPushEvent } from './admin-push.js';
 
 const prisma = new PrismaClient();
 const previousListen = express.application.listen;
@@ -82,6 +83,7 @@ async function registerRoutes(app){
       else await prisma.customer.update({where:{id:customer.id},data:{name:customerName,lastInteractionAt:new Date()}});
       const order=await prisma.order.create({data:{businessId:anchor.businessId,menuId:anchor.id,customerId:customer.id,orderNumber:orderNumber(),customerName,customerPhone,fulfilmentType:'IN_STORE',status:'PENDING',paymentStatus:'UNPAID',paymentMethod:'MANUAL',notes,total,items:{create:items}},include:{items:true}});
       await prisma.customerInteraction.create({data:{customerId:customer.id,type:'ORDER_PLACED',channel:'DIGITAL_MENU',metadata:{orderId:order.id,orderNumber:order.orderNumber,total}}}).catch(()=>{});
+      await queueAdminPushEvent(prisma,{eventKey:'NEW_ORDER:'+order.id,title:'New customer order',body:'A new customer order is waiting for review.',category:'ORDERS',url:'/admin-panel'}).catch(e=>console.error('New order push queue failed:',e?.message||e));
       return res.status(201).json({ok:true,order});
     }catch(e){next(e)}
   });
