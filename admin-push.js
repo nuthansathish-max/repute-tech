@@ -63,11 +63,15 @@ export function normalizeAdminPushPayload(event) {
     const parsed = new URL(rawUrl, 'https://reputetechs.in');
     if (parsed.origin === 'https://reputetechs.in') url = parsed.pathname + parsed.search;
   } catch {}
+  const severity = ['HIGH', 'MEDIUM', 'INFO'].includes(String(event.severity || '').toUpperCase())
+    ? String(event.severity).toUpperCase() : 'INFO';
   return {
     title: String(event.title || 'Repute Tech alert').slice(0, 100),
     body: String(event.body || 'An important platform update needs your attention.').slice(0, 220),
     category: String(event.category || 'PLATFORM').slice(0, 40),
+    severity,
     tag: String(event.eventKey || 'repute-tech-alert').slice(0, 180),
+    timestamp: Number.isFinite(Number(event.timestamp)) ? Number(event.timestamp) : Date.now(),
     url
   };
 }

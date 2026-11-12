@@ -6,19 +6,36 @@ self.addEventListener('push', event => {
     payload = { title: 'Repute Tech alert', body: 'An important platform update needs your attention.' };
   }
   const title = String(payload.title || 'Repute Tech alert');
+  const severity = ['HIGH', 'MEDIUM', 'INFO'].includes(String(payload.severity || '').toUpperCase())
+    ? String(payload.severity).toUpperCase() : 'INFO';
+  const category = String(payload.category || 'PLATFORM').replace(/[^a-z0-9 _-]/gi, '').slice(0, 32);
   const options = {
     body: String(payload.body || 'An important platform update needs your attention.'),
     tag: String(payload.tag || 'repute-tech-alert'),
     renotify: true,
-    data: { url: String(payload.url || '/admin-panel') },
+    timestamp: Number.isFinite(Number(payload.timestamp)) ? Number(payload.timestamp) : Date.now(),
     icon: '/favicon.ico',
-    badge: '/favicon.ico'
+    badge: '/favicon.ico',
+    dir: 'auto',
+    lang: 'en-IN',
+    vibrate: severity === 'HIGH' ? [180, 90, 180, 90, 260] : [120, 70, 120],
+    requireInteraction: severity === 'HIGH',
+    data: {
+      url: String(payload.url || '/admin-panel'),
+      category,
+      severity
+    },
+    actions: [
+      { action: 'open', title: 'View alert' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  if (event.action === 'dismiss') return;
   event.waitUntil((async () => {
     let target = '/admin-panel';
     try {
