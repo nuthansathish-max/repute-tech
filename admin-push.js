@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import crypto from 'node:crypto';
 
 const tablePromises = new WeakMap();
+const activeDispatchers = new WeakSet();
 
 export function adminPushConfigured() {
   return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -73,18 +74,32 @@ function safePayload(event) {
 
 export async function dispatchAdminPushQueue(prisma, limit = 12) {
   if (!adminPushConfigured()) return { processed: 0, configured: false };
+  if (activeDispatchers.has(prisma)) return { processed: 0, busy: true, configured: true };
+  activeDispatchers.add(prisma);
+  try {
   await ensureAdminPushTables(prisma);
+  await prisma.$executeRawUnsafe(
+    `UPDATE "AdminPushDelivery" SET "status"='PENDING',"updatedAt"=CURRENT_TIMESTAMP
+      WHERE "status"='SENDING' AND "updatedAt" < CURRENT_TIMESTAMP - INTERVAL '5 minutes'`
+  );
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT || 'mailto:root@reputetechs.in',
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );
   const rows = await prisma.$queryRawUnsafe(
-    `SELECT "id","endpoint","p256dh","auth","payload","attempts"
-       FROM "AdminPushDelivery"
-      WHERE "status" IN ('PENDING','FAILED') AND "nextAttemptAt" <= CURRENT_TIMESTAMP
-      ORDER BY "createdAt" ASC
-      LIMIT $1`,
+    `WITH due AS (
+       SELECT "id" FROM "AdminPushDelivery"
+        WHERE "status" IN ('PENDING','FAILED') AND "nextAttemptAt" <= CURRENT_TIMESTAMP
+        ORDER BY "createdAt" ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT $1
+     )
+     UPDATE "AdminPushDelivery" AS delivery
+        SET "status"='SENDING',"updatedAt"=CURRENT_TIMESTAMP
+       FROM due
+      WHERE delivery."id"=due."id"
+      RETURNING delivery."id",delivery."userId",delivery."endpoint",delivery."p256dh",delivery."auth",delivery."payload",delivery."attempts"`,
     Math.max(1, Math.min(30, Number(limit) || 12))
   );
   let processed = 0;
@@ -127,6 +142,9 @@ export async function dispatchAdminPushQueue(prisma, limit = 12) {
     processed += 1;
   }
   return { processed, configured: true };
+  } finally {
+    activeDispatchers.delete(prisma);
+  }
 }
 
 export async function queueAdminPushEvent(prisma, event, options = {}) {
@@ -136,9 +154,12 @@ export async function queueAdminPushEvent(prisma, event, options = {}) {
   const payload = safePayload({ ...event, eventKey });
   const userId = options.userId ? String(options.userId) : null;
   const subscriptions = await prisma.$queryRawUnsafe(
-    `SELECT "userId","endpoint","p256dh","auth"
-       FROM "AdminPushSubscription"
-      WHERE "enabled"=TRUE AND ($1::text IS NULL OR "userId"=$1)`,
+    `SELECT subscription."userId",subscription."endpoint",subscription."p256dh",subscription."auth"
+       FROM "AdminPushSubscription" AS subscription
+       JOIN "User" AS account ON account."id"=subscription."userId"
+      WHERE subscription."enabled"=TRUE
+        AND account."role"::text IN ('ADMIN','SUPER_ADMIN')
+        AND ($1::text IS NULL OR subscription."userId"=$1)`,
     userId
   );
   for (const sub of subscriptions) {
@@ -151,7 +172,7 @@ export async function queueAdminPushEvent(prisma, event, options = {}) {
     );
   }
   const queued = subscriptions.length;
-  if (queued) await dispatchAdminPushQueue(prisma, Math.min(queued, 12)).catch(error => {
+  if (queued) dispatchAdminPushQueue(prisma, Math.min(queued, 12)).catch(error => {
     console.error('Admin push immediate dispatch failed:', error?.message || error);
   });
   return { queued, eventKey };
