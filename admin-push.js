@@ -92,8 +92,8 @@ export async function dispatchAdminPushQueue(prisma, limit = 12) {
        SELECT "id" FROM "AdminPushDelivery"
         WHERE "status" IN ('PENDING','FAILED') AND "nextAttemptAt" <= CURRENT_TIMESTAMP
         ORDER BY "createdAt" ASC
-        FOR UPDATE SKIP LOCKED
         LIMIT $1
+        FOR UPDATE SKIP LOCKED
      )
      UPDATE "AdminPushDelivery" AS delivery
         SET "status"='SENDING',"updatedAt"=CURRENT_TIMESTAMP
