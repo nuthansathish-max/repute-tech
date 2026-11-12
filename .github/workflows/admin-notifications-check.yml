@@ -29,5 +29,7 @@ jobs:
           node --check customer-order-and-owner-management.js
           node --check "server (1).js"
           node --check scheduler.js
+      - name: Run alert and push regression tests
+        run: npm run test:notifications
       - name: Generate Prisma client
         run: npm run build
