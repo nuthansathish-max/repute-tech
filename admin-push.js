@@ -56,7 +56,7 @@ export async function ensureAdminPushTables(prisma) {
   return pending;
 }
 
-function safePayload(event) {
+export function normalizeAdminPushPayload(event) {
   const rawUrl = String(event.url || '/admin-panel');
   let url = '/admin-panel';
   try {
@@ -151,7 +151,7 @@ export async function queueAdminPushEvent(prisma, event, options = {}) {
   if (!adminPushConfigured()) return { queued: 0, skipped: 'Push server keys are not configured.' };
   await ensureAdminPushTables(prisma);
   const eventKey = String(event.eventKey || crypto.randomUUID()).slice(0, 240);
-  const payload = safePayload({ ...event, eventKey });
+  const payload = normalizeAdminPushPayload({ ...event, eventKey });
   const userId = options.userId ? String(options.userId) : null;
   const subscriptions = await prisma.$queryRawUnsafe(
     `SELECT subscription."userId",subscription."endpoint",subscription."p256dh",subscription."auth"
