@@ -1,6 +1,8 @@
 name: Super Admin notifications checks
 
 on:
+  push:
+    branches: [feature/admin-device-push-notifications]
   pull_request:
     branches: [main]
 
