@@ -9,41 +9,21 @@ export function startReviewSyncScheduler({ prisma }) {
 
   const notifyPlatformHealth = async () => {
     const now = new Date();
-    const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const [trials, unpaid] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { status: 'TRIAL', trialEndsAt: { lte: soon } },
-        select: { businessId: true, trialEndsAt: true, business: { select: { name: true } } }
-      }),
-      prisma.planRequest.findMany({
-        where: { status: 'APPROVED', paymentStatus: { not: 'PAID' } },
-        include: { business: { select: { name: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: 100
-      })
-    ]);
+    const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const trials = await prisma.subscription.findMany({
+      where: { status: 'TRIAL', trialEndsAt: { gt: now, lte: soon } },
+      select: { businessId: true, trialEndsAt: true, business: { select: { name: true } } }
+    });
     for (const trial of trials) {
       if (!trial.trialEndsAt) continue;
-      const expired = new Date(trial.trialEndsAt) < now;
       const day = new Date(trial.trialEndsAt).toISOString().slice(0, 10);
       await queueAdminPushEvent(prisma, {
-        eventKey: 'TRIAL_WARNING:' + trial.businessId + ':' + day,
-        title: expired ? 'Business trial expired' : 'Trial ending soon',
-        body: expired
-          ? (trial.business?.name || 'A business') + ' has reached the end of its free trial.'
-          : (trial.business?.name || 'A business') + ' has a free trial ending within seven days.',
+        eventKey: 'TRIAL_ENDING_24H:' + trial.businessId + ':' + day,
+        title: 'Business trial ends within 24 hours',
+        body: (trial.business?.name || 'A business') + ' has a free trial ending within the next 24 hours.',
         category: 'BUSINESS',
         url: '/admin-panel'
       }).catch(error => console.error('Trial alert push queue failed:', error?.message || error));
-    }
-    for (const request of unpaid) {
-      await queueAdminPushEvent(prisma, {
-        eventKey: 'PAYMENT_DUE:' + request.id + ':' + request.paymentStatus,
-        title: 'Subscription payment pending',
-        body: 'An approved subscription for ' + (request.business?.name || 'a business') + ' is still awaiting payment.',
-        category: 'PAYMENT',
-        url: '/admin-panel'
-      }).catch(error => console.error('Payment alert push queue failed:', error?.message || error));
     }
   };
 
