@@ -371,6 +371,8 @@ function adminPage(){
 #announcements .announcement-business-option span{overflow-wrap:anywhere}
 #announcements .announcement-business-empty{padding:22px;text-align:center;color:#7b8495;font-size:12px}
 @media(max-width:650px){#announcements .announcement-business-toolbar{grid-template-columns:minmax(0,1fr) auto}#announcements .announcement-business-toolbar span{grid-column:1/-1}#announcements .announcement-business-options{grid-template-columns:1fr;max-height:250px}}
+#announcements .announcement-business-option span small{display:block;margin-top:3px;color:#7b8495;font-size:10px;font-weight:500}
+#announcements #announcementAudience{min-height:42px}
 </style></head><body><div class="app">
  <aside class="side">
   <div class="brand">repute<span>techs.in</span></div><div class="role">SUPER ADMIN · PLATFORM OWNER</div>
