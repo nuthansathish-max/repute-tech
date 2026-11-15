@@ -33,14 +33,14 @@ body{margin:0;background:radial-gradient(ellipse at 90% 0%,#e9eddf 0,transparent
 .filter{border:1px solid #e1e4d8;background:#fffefa;color:#66745f;border-radius:999px;padding:10px 15px;font-weight:800;white-space:nowrap;cursor:pointer;touch-action:manipulation}
 .active{background:#71866c;color:#fff;border-color:#52694f;box-shadow:0 5px 12px rgba(82,105,79,.16)}
 .grid{display:grid;gap:11px}
-.card{background:#fffefa;border:1px solid #e6e8de;border-radius:19px;padding:15px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;box-shadow:0 6px 20px rgba(71,86,62,.045)}
+.card{position:relative;background:#fffefa;border:1px solid #e6e8de;border-radius:19px;padding:15px 140px 15px 15px;display:flex;justify-content:flex-start;align-items:center;gap:12px;min-height:104px;box-shadow:0 6px 20px rgba(71,86,62,.045)}
 .item-media{display:flex;gap:12px;align-items:flex-start;min-width:0;width:100%}
 .item-image{width:72px;height:72px;object-fit:cover;border-radius:14px;background:#e8eee4;display:block}
 .tag{display:inline-block;background:#e8eee4;color:#52694f;border-radius:99px;padding:5px 8px;font-size:10px;font-weight:800}
 .name{font-weight:850;margin:5px 0;color:#292b25}
 .desc{font-size:12px;color:#77796f}
 .price{font-weight:900;margin-top:7px;color:#303b2e}
-.acts{display:flex;align-items:center;justify-self:end;gap:7px;flex-shrink:0}
+.acts{position:absolute;right:15px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-shrink:0}
 .btn{width:42px;height:42px;border:1px solid #dce5d6;border-radius:12px;background:#edf2e9;color:#52694f;font-size:20px;font-weight:900;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .bar{position:fixed;bottom:0;left:0;right:0;padding:10px 14px;background:rgba(255,254,250,.96);backdrop-filter:blur(14px);border-top:1px solid #e5e7dc;z-index:5}
 .cart{width:min(900px,100%);margin:auto;border:1px solid #52694f;border-radius:16px;background:linear-gradient(135deg,#71866c,#52694f);color:#fff;padding:15px;font-weight:850;cursor:pointer;touch-action:manipulation;box-shadow:0 9px 22px rgba(82,105,79,.2)}
