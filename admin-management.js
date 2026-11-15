@@ -2117,7 +2117,7 @@ function install(app){
   const found=await prisma.$queryRawUnsafe('SELECT "status" FROM "AdminAnnouncement" WHERE "id"=$1',req.params.id);if(!found.length)return res.status(404).json({error:'Announcement not found.'});
   if(!['DRAFT','SCHEDULED'].includes(found[0].status))return res.status(409).json({error:'This announcement cannot be published again.'});
   await prisma.$executeRawUnsafe('UPDATE "AdminAnnouncement" SET "status"=\'PUBLISHED\',"publishAt"=CURRENT_TIMESTAMP,"publishedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',req.params.id);
-  await publishDueAnnouncements(prisma);await prisma.auditLog.create({data:{actorUserId:user.id,action:'ANNOUNCEMENT_PUBLISHED',entity:'AdminAnnouncement',entityId:req.params.id}});res.json({ok:true});
+  const delivery=await publishDueAnnouncements(prisma);await prisma.auditLog.create({data:{actorUserId:user.id,action:'ANNOUNCEMENT_PUBLISHED',entity:'AdminAnnouncement',entityId:req.params.id,metadata:delivery}});res.json({ok:true,delivery});
  }catch(e){next(e)}});
  originalDelete.call(app,'/api/admin/announcements/:id',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;await ensureAnnouncementTable(prisma);
