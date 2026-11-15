@@ -23,6 +23,8 @@ jobs:
       - name: Check changed JavaScript syntax
         run: |
           node --check admin-management.js
+          node --check admin-announcements.js
+          node --check announcement-service.js
           node --check admin-push.js
           node --check admin-push-sw.js
           node --check business-account-flow.js
