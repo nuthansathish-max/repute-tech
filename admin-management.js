@@ -319,6 +319,45 @@ function adminPage(){
  #notifications .section.card{padding:20px}
  #notifications #alertsRows article{padding:18px!important}
 }
+
+/* Announcements dashboard: consistent desktop and mobile layout */
+#announcements>.card{padding:20px;border:1px solid #e2e7f0;border-radius:14px;box-shadow:0 4px 18px rgba(22,34,55,.045)}
+#announcements>.card>.section-title{align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+#announcements>.card>.section-title h2{font-size:19px;font-weight:800;letter-spacing:-.025em;color:#182238}
+#announcements>.card>.section-title>span{margin-left:auto;font-size:11px}
+#announcements>.card>p.sub{font-size:12px;line-height:1.6;margin:0 0 18px}
+#announcements>.card>.grid2{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+#announcements>.card>.grid2>.card{padding:16px;border-radius:12px;border-color:#e6eaf2;background:linear-gradient(180deg,#fff,#fbfcff);min-width:0}
+#announcements .label{font-size:10px;letter-spacing:.08em}
+#announcements .metric{font-size:28px;margin-top:9px}
+#announcements>.card>.card{padding:20px;border-radius:13px;border-color:#e2e7f0;box-shadow:0 2px 10px rgba(22,34,55,.035)}
+#announcements>.card>.card .section-title{gap:12px;flex-wrap:wrap;margin-bottom:16px}
+#announcements>.card>.card .section-title h2{font-size:16px;font-weight:750}
+#announcements label{display:flex;flex-direction:column;gap:8px;min-width:0;color:#344054;font-size:12px;font-weight:650;line-height:1.4}
+#announcements input:not([type=hidden]),#announcements select,#announcements textarea{display:block;width:100%;max-width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid #d8dfeb;border-radius:9px;background:#fff;color:#202b40;font:13px Inter,system-ui,sans-serif;box-shadow:0 1px 2px rgba(16,24,40,.035)}
+#announcements textarea{min-height:116px;resize:vertical;line-height:1.55}
+#announcements input:focus,#announcements select:focus,#announcements textarea:focus{outline:none;border-color:#8173e8;box-shadow:0 0 0 3px rgba(99,80,220,.12)}
+#announcements #announcementBusinessWrap{padding:12px;border:1px solid #e5e8f0;border-radius:10px;background:#fafbff}
+#announcements #announcementBusinessIds{min-height:125px}
+#announcements #announcementSave,#announcements #announcementPublish{min-height:40px;padding:0 16px;border-radius:9px;font-size:12px}
+#announcements #announcementMessage{font-size:12px;line-height:1.5}
+#announcements #announcementRows{display:flex;flex-direction:column;gap:0}
+#announcements #announcementRows>.row{grid-template-columns:minmax(180px,1.5fr) minmax(90px,.65fr) minmax(120px,.9fr) minmax(150px,1fr)!important;gap:14px;min-width:0;padding:15px 8px;align-items:start;white-space:normal}
+#announcements #announcementRows>.row>div{min-width:0;overflow-wrap:anywhere;line-height:1.5}
+#announcements #announcementRows .sub{font-size:11px;line-height:1.5}
+#announcements #announcementRows>.empty{padding:28px 14px;text-align:center;border:1px dashed #d9dfeb;border-radius:10px;background:#fafbfe;color:#778197;font-size:12px}
+@media(max-width:1000px){#announcements>.card>.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}#announcements>.card{padding:16px}}
+@media(max-width:650px){
+#announcements>.card{padding:12px;border-radius:12px}
+#announcements>.card>.section-title{align-items:flex-start}
+#announcements>.card>.section-title>span{margin-left:0}
+#announcements>.card>.grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#announcements>.card>.grid2>.card{padding:12px}
+#announcements>.card>.card{padding:14px}
+#announcements>.card>.card .grid2{grid-template-columns:1fr}
+#announcements #announcementRows>.row{grid-template-columns:1fr 1fr!important;gap:8px 12px;padding:13px 4px}
+#announcements #announcementRows>.row>div:first-child,#announcements #announcementRows>.row>div:last-child{grid-column:1/-1}
+}
 </style></head><body><div class="app">
  <aside class="side">
   <div class="brand">repute<span>techs.in</span></div><div class="role">SUPER ADMIN · PLATFORM OWNER</div>
