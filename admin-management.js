@@ -9,6 +9,8 @@ import { ensureAnnouncementTable, publishDueAnnouncements } from './announcement
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
 const originalPost=express.application.post;
+const originalPatch=express.application.patch;
+const originalDelete=express.application.delete;
 let installed=false;
 const ADMIN_FEATURE_KEYS=['GOOGLE','WHATSAPP','AI','REVIEWS','ORDERS','MENU','QR','BILLING'];
 // Do not block module loading on a database schema check. The admin routes must
