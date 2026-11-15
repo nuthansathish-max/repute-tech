@@ -1,8 +1,27 @@
 import crypto from 'node:crypto';
+
 export async function ensureAnnouncementTable(prisma){
  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminAnnouncement" ("id" TEXT PRIMARY KEY,"title" TEXT NOT NULL,"message" TEXT NOT NULL,"audience" TEXT NOT NULL DEFAULT 'ALL',"businessIds" JSONB NOT NULL DEFAULT '[]'::jsonb,"status" TEXT NOT NULL DEFAULT 'DRAFT',"publishAt" TIMESTAMP(3),"expiresAt" TIMESTAMP(3),"publishedAt" TIMESTAMP(3),"createdByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminAnnouncement_status_publishAt_idx" ON "AdminAnnouncement"("status","publishAt")`);
 }
+
+function audienceBusinessWhere(audience,businessIds,now){
+ const soon=new Date(now.getTime()+7*24*60*60*1000);
+ switch(audience){
+  case 'ALL': return {};
+  case 'SELECTED': return {id:{in:businessIds}};
+  case 'TRIAL_ACTIVE': return {subscription:{is:{status:'TRIAL',trialEndsAt:{gt:now}}}};
+  case 'TRIAL_ENDING_SOON': return {subscription:{is:{status:'TRIAL',trialEndsAt:{gte:now,lte:soon}}}};
+  case 'TRIAL_EXPIRED': return {subscription:{is:{status:'TRIAL',trialEndsAt:{lte:now}}}};
+  case 'SUBSCRIPTION_ACTIVE': return {subscription:{is:{status:'ACTIVE',OR:[{currentPeriodEnd:null},{currentPeriodEnd:{gt:now}}]}}};
+  case 'SUBSCRIPTION_ENDING_SOON': return {subscription:{is:{status:'ACTIVE',currentPeriodEnd:{gte:now,lte:soon}}}};
+  case 'SUBSCRIPTION_EXPIRED': return {subscription:{is:{OR:[{status:'EXPIRED'},{status:'ACTIVE',currentPeriodEnd:{lte:now}}]}}};
+  case 'NO_SUBSCRIPTION': return {subscription:{is:null}};
+  case 'CUSTOM_PLAN': return {planRequests:{some:{isCustom:true,status:'PUBLISHED'}}};
+  default: return {id:{in:[]}};
+ }
+}
+
 export async function publishDueAnnouncements(prisma){
  await ensureAnnouncementTable(prisma);
  const due=await prisma.$queryRawUnsafe(`SELECT "id" FROM "AdminAnnouncement" WHERE "status" IN ('SCHEDULED','PUBLISHED') AND ("publishAt" IS NULL OR "publishAt"<=CURRENT_TIMESTAMP) AND ("expiresAt" IS NULL OR "expiresAt">CURRENT_TIMESTAMP) ORDER BY "publishAt" ASC LIMIT 50`);
@@ -10,11 +29,15 @@ export async function publishDueAnnouncements(prisma){
   const rows=await tx.$queryRawUnsafe(`SELECT * FROM "AdminAnnouncement" WHERE "id"=$1 FOR UPDATE`,item.id),a=rows[0];
   if(!a||!['SCHEDULED','PUBLISHED'].includes(a.status)||(a.expiresAt&&new Date(a.expiresAt)<=new Date()))return;
   const ids=Array.isArray(a.businessIds)?a.businessIds:[];
-  const businesses=await tx.business.findMany({where:a.audience==='ALL'?{}:{id:{in:ids}},select:{id:true,members:{where:{role:'OWNER',user:{role:'OWNER'}},select:{userId:true}}}});
+  const businesses=await tx.business.findMany({
+   where:audienceBusinessWhere(a.audience,ids,new Date()),
+   select:{id:true,members:{where:{role:'OWNER'},select:{userId:true}}}
+  });
   const recipients=[];for(const b of businesses)for(const m of b.members)recipients.push({userId:m.userId,businessId:b.id});
   const type='ANNOUNCEMENT:'+a.id;
   if(recipients.length){
-   const existing=await tx.notification.findMany({where:{type,userId:{in:[...new Set(recipients.map(x=>x.userId))]}},select:{userId:true,businessId:true}});
+   const userIds=[...new Set(recipients.map(x=>x.userId))];
+   const existing=await tx.notification.findMany({where:{type,userId:{in:userIds}},select:{userId:true,businessId:true}});
    const seen=new Set(existing.map(x=>x.userId+':'+(x.businessId||'')));
    const data=recipients.filter(x=>!seen.has(x.userId+':'+x.businessId)).map(x=>({id:crypto.randomUUID(),userId:x.userId,businessId:x.businessId,type,title:a.title,message:a.message}));
    if(data.length)await tx.notification.createMany({data});
