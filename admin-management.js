@@ -1344,7 +1344,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   }
  });
  $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);$('userSearch').addEventListener('input',renderUsers);$('userRole').addEventListener('change',renderUsers);$('userBusiness').addEventListener('change',renderUsers);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
- <script src="/admin-announcements.js"></script></script></body></html>`;
+ </script><script src="/admin-announcements.js"></script></body></html>`;
 }
 function install(app){
  if(installed)return;installed=true;
