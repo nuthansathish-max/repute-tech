@@ -17,10 +17,10 @@ async function load(slug){
   return {qr,menus,items};
 }
 
-function page(data,slug){
+function page(data,slug,selectedMenuId){
   const business=data.qr.business;
   const items=JSON.stringify(data.items).replace(/</g,'\\u003c');
-  const menus=JSON.stringify(data.menus.map(m=>m.name));
+  const menus=JSON.stringify(data.menus.map(m=>({id:m.id,name:m.name})));
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(business.name)} · Order</title><style>
 *{box-sizing:border-box}
 body{margin:0;background:radial-gradient(ellipse at 90% 0%,#e9eddf 0,transparent 36%),#f6f3e9;color:#292b25;font-family:"DM Sans",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
@@ -81,13 +81,13 @@ body{margin:0;background:radial-gradient(ellipse at 90% 0%,#e9eddf 0,transparent
 @media(max-width:420px){.success-wrap{padding:12px 10px 28px}.success-card{padding:18px}.success h1{font-size:25px}}
 </style></head><body><main class="app"><header class="hero"><small>reputetechs.in · Digital ordering</small><h1>${esc(business.name)}</h1><p>Where elegance meets excellence, and every moment feels extraordinary.</p></header><div id="filters" class="filters"></div><section id="grid" class="grid"></section></main><div class="bar"><button id="cart" class="cart" type="button">View cart · <span id="summary">0 items · ₹0.00</span></button></div><div id="sheet" class="sheet"><section class="modal"><div style="display:flex;justify-content:space-between"><h2>Your order</h2><button id="close" class="close" type="button">Close</button></div><div id="rows"></div><h3>Total: ₹<span id="total">0.00</span></h3><input id="name" class="field" placeholder="Your name"><input id="phone" class="field" placeholder="Phone number" required inputmode="tel"><textarea id="notes" class="field" rows="3" placeholder="Seat no / Table no / Instructions"></textarea><button id="submit" class="submit" type="button">Place order</button><div id="msg" class="desc"></div></section></div><div id="success" class="success"><div class="success-wrap"><section class="success-card"><div class="success-icon">✓</div><h1>Order placed successfully</h1><p class="success-sub">Thank you, <span id="successName"></span>. Your order has been received.</p><div class="success-order"><small>ORDER NUMBER</small><strong id="successNumber">—</strong></div><div class="success-total"><span>Total</span><span>₹<span id="successTotal">0.00</span></span></div><div id="successItems" class="success-items"></div><div class="status-box"><div class="status-title">Order status</div><div class="status-line"><div class="status-dot"></div><div><strong>Order received</strong><span>Your order is now pending with the business.</span></div></div></div><div class="payment-box"><strong>Payment</strong><span>Pay at store · Unpaid</span></div><div id="successNotes" class="payment-box" style="display:none"></div><div class="success-actions"><button id="orderMore" class="primary-action" type="button">Order more items</button><button id="done" class="secondary-action" type="button">Done</button></div></section></div></div><script>
 const ITEMS=${items},MENUS=${menus},SLUG=${JSON.stringify(slug)},cart=new Map();
-let active='All';
+let active=${JSON.stringify(selectedMenuId||'All')};
 const $=id=>document.getElementById(id),money=n=>Number(n).toFixed(2);
 function filters(){
-  $('filters').innerHTML=['All',...MENUS].map(x=>'<button type="button" class="filter '+(x===active?'active':'')+'" data-menu="'+encodeURIComponent(x)+'">'+x+'</button>').join('');
+  $('filters').innerHTML=[{id:'All',name:'All menus'},...MENUS].map(x=>'<button type="button" class="filter '+(x.id===active?'active':'')+'" data-menu="'+encodeURIComponent(x.id)+'">'+x.name+'</button>').join('');
 }
 function render(){
-  const list=active==='All'?ITEMS:ITEMS.filter(x=>x.menuName===active);
+  const list=active==='All'?ITEMS:ITEMS.filter(x=>x.menuId===active);
   $('grid').innerHTML=list.length?list.map(i=>{const q=cart.get(i.id)||0;return '<article class="card"><div class="item-media">'+(i.imageUrl?'<img class="item-image" src="'+i.imageUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'" alt="'+i.name.replace(/"/g,'&quot;')+'" loading="lazy">':'')+'<div><span class="tag">'+i.menuName+'</span><div class="name">'+i.name+'</div>'+(i.description?'<div class="desc">'+i.description+'</div>':'')+'<div class="price">₹'+money(i.price)+'</div></div><div class="acts"><button type="button" class="btn" data-item="'+encodeURIComponent(i.id)+'" data-delta="-1" aria-label="Remove one">−</button><b>'+q+'</b><button type="button" class="btn" data-item="'+encodeURIComponent(i.id)+'" data-delta="1" aria-label="Add one">+</button></div></article>'}).join(''):'<div class="card">No available items.</div>';
   let c=0,t=0;for(const[id,q]of cart){const i=ITEMS.find(x=>x.id===id);if(i){c+=q;t+=i.price*q;}}
   $('summary').textContent=c+' item'+(c===1?'':'s')+' · ₹'+money(t);
@@ -119,7 +119,7 @@ filters();render();
 function install(app){
   if(installed||installing)return;
   installing=true;
-  app.route('/q/:slug/order').get(async(req,res,next)=>{try{const data=await load(req.params.slug);if(!data)return res.status(404).send('Order menu not found');if(!data.items.length)return res.status(404).send('No published menu items available');res.type('html').send(page(data,req.params.slug));}catch(e){next(e)}});
+  app.route('/q/:slug/order').get(async(req,res,next)=>{try{const data=await load(req.params.slug);if(!data)return res.status(404).send('Order menu not found');if(!data.items.length)return res.status(404).send('No published menu items available');const requestedMenuId=String(req.query?.menuId||'').trim();const selectedMenu=requestedMenuId?data.menus.find(menu=>menu.id===requestedMenuId):data.menus[0];if(requestedMenuId&&!selectedMenu)return res.status(404).send('Selected menu not found');if(!selectedMenu)return res.status(404).send('No published menu available');res.type('html').send(page(data,req.params.slug,selectedMenu.id));}catch(e){next(e)}});
   // Parse the public checkout JSON at the route itself. This route is installed
   // before server (1).js adds the application's global express.json() middleware,
   // so relying only on the later global parser leaves req.body empty.
