@@ -8,6 +8,11 @@ function audienceBusinessWhere(audience,businessIds,now){
  switch(audience){
   case 'ALL': return {};
   case 'SELECTED': return {id:{in:businessIds}};
+  case 'TYPE_RESTAURANT': return {type:'RESTAURANT'};
+  case 'TYPE_HOTEL': return {type:'HOTEL'};
+  case 'TYPE_CAFE': return {type:'CAFE'};
+  case 'TYPE_SALON': return {type:'SALON'};
+  case 'TYPE_OTHER': return {type:'OTHER'};
   case 'TRIAL_ACTIVE': return {subscription:{is:{status:'TRIAL',trialEndsAt:{gt:now}}}};
   case 'TRIAL_ENDING_SOON': return {subscription:{is:{status:'TRIAL',trialEndsAt:{gte:now,lte:soon}}}};
   case 'TRIAL_EXPIRED': return {subscription:{is:{status:'TRIAL',trialEndsAt:{lte:now}}}};
