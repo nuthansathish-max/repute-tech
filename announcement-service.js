@@ -21,7 +21,7 @@ function audienceBusinessWhere(audience,businessIds,now){
 }
 export async function publishDueAnnouncements(prisma){
  await ensureAnnouncementTable(prisma);
- let notificationsCreated=0,announcementsProcessed=0;
+ let notificationsCreated=0,announcementsProcessed=0,businessesMatched=0,ownerRecipients=0;
  const due=await prisma.$queryRawUnsafe(`SELECT "id" FROM "AdminAnnouncement" WHERE "status" IN ('SCHEDULED','PUBLISHED') AND ("publishAt" IS NULL OR "publishAt"<=CURRENT_TIMESTAMP) AND ("expiresAt" IS NULL OR "expiresAt">CURRENT_TIMESTAMP) ORDER BY "publishAt" ASC LIMIT 50`);
  for(const item of due){
   const created=await prisma.$transaction(async tx=>{
@@ -29,7 +29,7 @@ export async function publishDueAnnouncements(prisma){
    if(!a||!['SCHEDULED','PUBLISHED'].includes(a.status)||(a.expiresAt&&new Date(a.expiresAt)<=new Date()))return 0;
    const ids=Array.isArray(a.businessIds)?a.businessIds:[];
    const businesses=await tx.business.findMany({where:audienceBusinessWhere(a.audience,ids,new Date()),select:{id:true,members:{where:{role:'OWNER'},select:{userId:true}}}});
-   const recipients=[];for(const b of businesses)for(const m of b.members)recipients.push({userId:m.userId,businessId:b.id});
+   businessesMatched+=businesses.length;const recipients=[];for(const b of businesses)for(const m of b.members)recipients.push({userId:m.userId,businessId:b.id});ownerRecipients+=recipients.length;
    const type='ANNOUNCEMENT:'+a.id;
    let createdCount=0;
    if(recipients.length){
@@ -45,5 +45,5 @@ export async function publishDueAnnouncements(prisma){
   notificationsCreated+=created;announcementsProcessed++;
  }
  await prisma.$executeRawUnsafe(`UPDATE "AdminAnnouncement" SET "status"='EXPIRED',"updatedAt"=CURRENT_TIMESTAMP WHERE "status" IN ('PUBLISHED','SCHEDULED') AND "expiresAt" IS NOT NULL AND "expiresAt"<=CURRENT_TIMESTAMP`);
- return {announcementsProcessed,notificationsCreated};
+ return {announcementsProcessed,businessesMatched,ownerRecipients,notificationsCreated};
 }
