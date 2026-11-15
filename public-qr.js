@@ -9,9 +9,9 @@ function esc(value) {
 
 function publicHubHtml({ business, menus, slug }) {
   const firstMenu = menus[0];
-  const firstOrderHref = firstMenu ? `/q/${encodeURIComponent(slug)}/order/${encodeURIComponent(firstMenu.id)}` : `/q/${encodeURIComponent(slug)}/order`;
+  const firstOrderHref = firstMenu ? `/q/${encodeURIComponent(slug)}/order?menuId=${encodeURIComponent(firstMenu.id)}` : `/q/${encodeURIComponent(slug)}/order`;
   const menuHtml = menus.length ? menus.map(menu => {
-    const menuOrderHref = `/q/${encodeURIComponent(slug)}/order/${encodeURIComponent(menu.id)}`;
+    const menuOrderHref = `/q/${encodeURIComponent(slug)}/order?menuId=${encodeURIComponent(menu.id)}`;
     return `<section class="menu"><div class="menuHead"><div><div class="eyebrow dark">MENU</div><h2>${esc(menu.name)}</h2></div><a class="smallBuy" href="${menuOrderHref}">Order this menu</a></div>${(menu.items||[]).length ? menu.items.map(item => `<div class="item"><div class="itemInfo"><strong>${esc(item.name)}</strong>${item.description?`<p>${esc(item.description)}</p>`:''}</div>${item.price!==null&&item.price!==undefined&&item.price!==''?`<b class="price">₹${esc(item.price)}</b>`:''}</div>`).join('') : '<p class="muted">No items available yet.</p>'}</section>`;
   }).join('') : '<section class="empty">No published menus are available yet.</section>';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f3e9"><title>${esc(business.name)} — Discover &amp; Order</title><style>
