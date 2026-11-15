@@ -16,6 +16,7 @@ import { whatsappConfigured, verifyMetaWebhook, verifyMetaSignature, sendText, s
 import { businessPermissionMiddleware } from './business-permissions.js';
 import { isPlanFeatureEnabled } from './feature-entitlements.js';
 import { queueAdminPushEvent } from './admin-push.js';
+import { publishDueAnnouncements } from './announcement-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
@@ -159,7 +160,7 @@ app.get('/api/businesses/:businessId/analytics',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 // Notifications
-app.get('/api/notifications',auth,async(req,res,next)=>{try{res.json(await prisma.notification.findMany({where:{userId:req.user.id},orderBy:{createdAt:'desc'},take:50}));}catch(e){next(e)}});
+app.get('/api/notifications',auth,async(req,res,next)=>{try{await publishDueAnnouncements(prisma);res.json(await prisma.notification.findMany({where:{userId:req.user.id},orderBy:{createdAt:'desc'},take:50}));}catch(e){next(e)}});
 app.post('/api/notifications/:id/read',auth,async(req,res,next)=>{try{const n=await prisma.notification.findFirst({where:{id:req.params.id,userId:req.user.id}});if(!n)return res.status(404).json({error:'Notification not found'});res.json(await prisma.notification.update({where:{id:n.id},data:{readAt:new Date()}}));}catch(e){next(e)}});
 
 // Admin monitoring
