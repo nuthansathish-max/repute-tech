@@ -1476,6 +1476,13 @@ function install(app){
   const b=await prisma.business.findUnique({where:{id:req.params.businessId},include:{subscription:true,locations:true,members:{include:{user:{select:{id:true,name:true,email:true,role:true,createdAt:true}}}}}});
   if(!b)return res.status(404).json({error:'Business not found'});
   const members=b.members.map(m=>({id:m.id,role:m.role,user:m.user}));
+  let savedBusinessAddress=null;
+  try{
+   const addressRows=await prisma.$queryRawUnsafe('SELECT address FROM "BusinessDetails" WHERE business_id = $1',b.id);
+   savedBusinessAddress=addressRows?.[0]?.address||null;
+  }catch(e){
+   console.error('Admin business address lookup failed:',e?.message||e);
+  }
   const flagRows=await prisma.$queryRawUnsafe('SELECT "adminFeatureFlags" FROM "Business" WHERE "id" = $1',b.id);
   let featureFlags=flagRows?.[0]?.adminFeatureFlags||{};
   if(typeof featureFlags==='string'){try{featureFlags=JSON.parse(featureFlags)}catch{featureFlags={}}}
@@ -1526,7 +1533,7 @@ function install(app){
   res.json({
    id:b.id,name:b.name,type:b.type,slug:b.slug,logoUrl:b.logoUrl,
    phone:b.phone,website:b.website,isOpen:b.isOpen,createdAt:b.createdAt,
-   address:b.locations?.[0]?.address||null,
+   address:savedBusinessAddress||b.locations?.[0]?.address||null,
    subscription:b.subscription,members,
    revenue,
    customerCount,
