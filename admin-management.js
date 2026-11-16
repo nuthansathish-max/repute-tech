@@ -541,7 +541,8 @@ function adminPage(){
      <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
      <div class="notice">Only mark a bill paid after money has actually reached Repute Tech. This ledger is for software subscriptions only. Customer orders and business-owner POS payments are excluded.</div>
      <div class="toolbar" style="margin-top:12px"><input class="input" id="paySearch" placeholder="Search business, owner, plan or reference"><select class="select" id="payFilter"><option value="ALL">All subscription requests</option><option value="PENDING">Pending / unpaid</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select><button class="smallbtn" id="payRefresh">Refresh ledger</button><button class="smallbtn" id="payExport">Export CSV</button></div>
-     <div class="table"><div class="row head" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div>Business / Owner</div><div>Plan / Billing</div><div>Payment date / Method</div><div>Amount</div><div>Status</div><div>Reference</div><div>Action</div></div><div id="payLedgerRows"><div class="empty">Loading subscription ledger…</div></div></div>
+     <div class="table"><div class="row head" style="grid-template-columns:1.3fr .9fr .9fr 82px 95px 105px 210px;min-width:1180px"><div>Business / Owner</div><div>Plan / Billing</div><div>Payment date / Method</div><div>Amount</div><div>Request</div><div>Payment</div><div>Actions</div></div><div id="payLedgerRows"><div class="empty">Loading subscription ledger…</div></div></div>
+     <div id="payBusinessInspector" class="card hidden" style="margin-top:12px;border-color:#b8aaf5"><div class="section-title"><div><h2 id="payInspectorTitle">Business subscription details</h2><span id="payInspectorSubtitle">Selected subscription request</span></div><button class="smallbtn" id="payInspectorClose">Close</button></div><div id="payInspectorBody"></div></div>
     </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
@@ -1422,15 +1423,63 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payReceived').textContent=money(d.totalReceived||0);
   $('payOutstanding').textContent=money(d.outstanding||0);
   $('payMonth').textContent=money(d.thisMonthReceived||0);
+  const title=$('payQueueSummary');if(title)title.textContent=(d.pendingApprovals||0)+' subscription request(s) awaiting approval';
   renderPayoutLedger();
  }
  function renderPayoutLedger(){
   const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL';
-  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod].join(' ').toLowerCase().includes(q));
-  $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+esc(x.reference||'—')+'</div><div>'+(x.paymentStatus==='PAID'?'<span class="sub">Recorded</span>':'<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record payment</button>')+'</div></div>').join(''):'<div class="empty">No matching subscription payment records.</div>';
+  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requestStatus].join(' ').toLowerCase().includes(q));
+  $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>{
+   const requestState=String(x.requestStatus||'').toUpperCase(),paymentState=String(x.paymentStatus||'PENDING').toUpperCase();
+   const actions=['<button class="smallbtn" data-action="payout-view-details" data-business-id="'+esc(x.businessId)+'" data-request-id="'+esc(x.id)+'">Details</button>','<button class="smallbtn" data-action="payout-open-business" data-business-id="'+esc(x.businessId)+'">Open Business</button>'];
+   if(requestState==='PENDING')actions.push('<button class="smallbtn primary" data-action="payout-approve" data-request-id="'+esc(x.id)+'">Approve</button>','<button class="smallbtn admin-reject" data-action="payout-reject" data-request-id="'+esc(x.id)+'">Reject</button>');
+   else if(requestState==='APPROVED'&&paymentState!=='PAID'){
+    actions.push('<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record payment</button>');
+    actions.push('<select class="select" style="max-width:112px;padding:6px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="">Payment status…</option><option value="PENDING">Pending</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select>');
+   }else if(requestState==='APPROVED'&&paymentState==='PAID')actions.push('<span class="sub">Payment recorded</span>');
+   else actions.push('<span class="sub">No further action</span>');
+   return '<div class="row" style="grid-template-columns:1.3fr .9fr .9fr 82px 95px 105px 210px;min-width:1180px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(requestState)+'</div><div>'+statusPill(paymentState)+'</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+actions.join('')+'</div></div>';
+  }).join(''):'<div class="empty">No matching subscription requests or payment records.</div>';
+ }
+ async function approvePayoutRequest(id,button){
+  const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row||row.requestStatus!=='PENDING')return;
+  if(!confirm('Approve the '+row.planName+' subscription request for '+row.businessName+'? Approval activates the subscription period but does not mark the bill as paid.'))return;
+  button.disabled=true;button.textContent='Approving…';
+  try{await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/approve',{method:'POST',body:JSON.stringify({})});alert('Subscription approved. Payment remains '+(row.paymentStatus||'PENDING')+'.');await loadPayoutLedger();await loadUnpaidBills();await loadBusinesses();}
+  catch(e){alert('Unable to approve subscription: '+e.message);button.disabled=false;button.textContent='Approve'}
+ }
+ async function rejectPayoutRequest(id,button){
+  const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row||row.requestStatus!=='PENDING')return;
+  const reason=prompt('Reason for rejecting '+row.businessName+' subscription request:');if(reason===null)return;if(!reason.trim())return alert('Please enter a rejection reason.');
+  button.disabled=true;button.textContent='Rejecting…';
+  try{await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/reject',{method:'POST',body:JSON.stringify({reason:reason.trim()})});alert('Subscription request rejected.');await loadPayoutLedger();await loadBusinesses();}
+  catch(e){alert('Unable to reject subscription: '+e.message);button.disabled=false;button.textContent='Reject'}
+ }
+ async function updatePayoutPaymentStatus(id,status,select){
+  const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row||row.requestStatus!=='APPROVED'||row.paymentStatus==='PAID'){if(select)select.value='';return}
+  if(!confirm('Change payment status for '+row.businessName+' to '+status+'? This does not record money received.')){select.value='';return}
+  select.disabled=true;
+  try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:status})});await loadPayoutLedger();await loadUnpaidBills();}
+  catch(e){alert('Unable to update payment status: '+e.message);select.value='';}
+  finally{select.disabled=false}
+ }
+ async function showPayoutBusinessDetails(businessId,requestId){
+  const host=$('payBusinessInspector'),body=$('payInspectorBody');if(!host||!body)return;
+  host.classList.remove('hidden');body.innerHTML='<div class="empty">Loading business and subscription details…</div>';
+  const row=(window.__paymentLedger||[]).find(x=>x.id===requestId);
+  $('payInspectorTitle').textContent=row?.businessName||'Business subscription details';
+  $('payInspectorSubtitle').textContent='Subscription request · '+(row?.requestStatus||'—')+' · Payment '+(row?.paymentStatus||'—');
+  host.scrollIntoView({behavior:'smooth',block:'nearest'});
+  try{
+   const b=await api('/admin/businesses/'+encodeURIComponent(businessId));
+   const sub=b.subscription||{},owner=(b.members||[]).find(m=>m.role==='OWNER')?.user||{};
+   const history=(b.planRequests||[]).slice().sort((a,c)=>new Date(c.createdAt||0)-new Date(a.createdAt||0));
+   body.innerHTML='<div class="detail" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:9px"><div class="kv"><b>Business</b>'+esc(b.name||row?.businessName||'—')+'</div><div class="kv"><b>Owner</b>'+esc(owner.name||row?.ownerName||'—')+'<div class="sub">'+esc(owner.email||row?.ownerEmail||'')+'</div></div><div class="kv"><b>Current subscription</b>'+esc(sub.plan||'No active plan')+' · '+esc(sub.status||'—')+'</div><div class="kv"><b>Current period ends</b>'+date(sub.currentPeriodEnd)+'</div><div class="kv"><b>Requested plan</b>'+esc(row?.planName||'—')+' · '+esc(row?.billingInterval||'')+'</div><div class="kv"><b>Requested amount</b>'+money(row?.price||0)+'</div><div class="kv"><b>Request status</b>'+esc(row?.requestStatus||'—')+'</div><div class="kv"><b>Payment status</b>'+esc(row?.paymentStatus||'—')+'</div></div><div class="section-title" style="margin-top:12px"><h3>Subscription request history</h3><span>'+history.length+' record(s)</span></div><div class="table">'+(history.length?history.map(h=>'<div class="row" style="grid-template-columns:1.4fr .8fr .8fr 1fr;min-width:560px"><div>'+esc(h.planName||h.planCode||'Plan')+'<div class="sub">'+date(h.createdAt)+'</div></div><div>'+esc(h.billingInterval||'')+'</div><div>'+money(h.price||0)+'</div><div>'+statusPill(h.status)+' '+statusPill(h.paymentStatus)+'</div></div>').join(''):'<div class="empty">No subscription request history.</div>')+'</div>';
+  }catch(e){body.innerHTML='<div class="empty">Unable to load business details: '+esc(e.message)+'</div>'}
  }
  async function recordSubscriptionPayment(id,button){
   const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
+  if(row.requestStatus!=='APPROVED')return alert('Approve this subscription request before recording its payment.');
   if(row.paymentStatus==='PAID')return alert('This subscription request is already marked paid. Duplicate confirmation is blocked.');
   const amountText=prompt('Enter the amount actually received (₹):',String(row.price||''));
   if(amountText===null)return;
@@ -1456,10 +1505,19 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='reputetechs-subscription-payment-ledger.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
- document.addEventListener('click',e=>{const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}});
+ document.addEventListener('click',e=>{
+  const payment=e.target.closest('[data-action="record-subscription-payment"]');if(payment){e.preventDefault();recordSubscriptionPayment(payment.dataset.requestId,payment);return}
+  const approve=e.target.closest('[data-action="payout-approve"]');if(approve){e.preventDefault();approvePayoutRequest(approve.dataset.requestId,approve);return}
+  const reject=e.target.closest('[data-action="payout-reject"]');if(reject){e.preventDefault();rejectPayoutRequest(reject.dataset.requestId,reject);return}
+  const details=e.target.closest('[data-action="payout-view-details"]');if(details){e.preventDefault();showPayoutBusinessDetails(details.dataset.businessId,details.dataset.requestId);return}
+  const open=e.target.closest('[data-action="payout-open-business"]');if(open){e.preventDefault();openBusiness(open.dataset.businessId);return}
+  if(e.target?.id==='payInspectorClose'){$('payBusinessInspector')?.classList.add('hidden');return}
+ });
  document.addEventListener('change',e=>{
   const paymentSelect=e.target.closest('[data-action="payment-status"]');
   if(paymentSelect){changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
+  const payoutSelect=e.target.closest('[data-action="payout-payment-status"]');
+  if(payoutSelect&&payoutSelect.value){updatePayoutPaymentStatus(payoutSelect.dataset.requestId,payoutSelect.value,payoutSelect)}
  });
  $('refreshBtn').addEventListener('click',()=>refreshCurrent());
  $('exportBtn').addEventListener('click',()=>{
@@ -1747,16 +1805,17 @@ function install(app){
 
  originalGet.call(app,'/api/admin/subscription-payment-ledger',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const requests=await prisma.planRequest.findMany({where:{status:'APPROVED'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
+  const requests=await prisma.planRequest.findMany({include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
   const ids=requests.map(x=>x.id);
   const logs=ids.length?await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:{in:ids},action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED'},orderBy:{createdAt:'desc'}}):[];
   const latest=new Map();for(const log of logs){if(!latest.has(log.entityId))latest.set(log.entityId,log.metadata||{})}
-  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,ownerName:owner?.name||x.ownerName||null,ownerEmail:owner?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
+  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||x.ownerName||null,ownerEmail:owner?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),requestStatus:x.status,rejectionReason:x.rejectionReason||null,approvedAt:x.approvedAt||null,paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':(x.paymentStatus||'PENDING'),paidAt:x.paidAt,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
   const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-  const totalReceived=records.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
-  const thisMonthReceived=records.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
-  const outstanding=records.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
-  res.json({records,totalReceived,thisMonthReceived,outstanding});
+  const paid=records.filter(x=>x.requestStatus==='APPROVED'&&x.paymentStatus==='PAID');
+  const totalReceived=paid.reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const thisMonthReceived=paid.filter(x=>x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const outstanding=records.filter(x=>x.requestStatus==='APPROVED'&&x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
+  res.json({records,totalReceived,thisMonthReceived,outstanding,pendingApprovals:records.filter(x=>x.requestStatus==='PENDING').length});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
