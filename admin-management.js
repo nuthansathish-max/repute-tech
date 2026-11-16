@@ -540,8 +540,8 @@ function adminPage(){
     <div class="section card">
      <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
      <div class="notice">Only mark a bill paid after money has actually reached Repute Tech. This ledger is for software subscriptions only. Customer orders and business-owner POS payments are excluded.</div>
-     <div class="toolbar" style="margin-top:12px"><input class="input" id="paySearch" placeholder="Search business, owner, plan or reference"><select class="select" id="payFilter"><option value="ALL">All subscription requests</option><option value="PENDING">Pending / unpaid</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select><button class="smallbtn" id="payRefresh">Refresh ledger</button><button class="smallbtn" id="payExport">Export CSV</button></div>
-     <div class="table"><div class="row head" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div>Business / Owner</div><div>Plan / Billing</div><div>Payment date / Method</div><div>Amount</div><div>Status</div><div>Reference</div><div>Action</div></div><div id="payLedgerRows"><div class="empty">Loading subscription ledger…</div></div></div>
+     <div class="toolbar" style="margin-top:12px"><input class="input" id="paySearch" placeholder="Search business, owner, plan or reference"><select class="select" id="payRequestFilter"><option value="ALL">All request statuses</option><option value="PENDING">Awaiting approval</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select><select class="select" id="payFilter"><option value="ALL">All payment statuses</option><option value="PENDING">Pending / unpaid</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select><button class="smallbtn" id="payRefresh">Refresh ledger</button><button class="smallbtn" id="payExport">Export CSV</button></div>
+     <div class="table"><div class="row head" style="grid-template-columns:1.25fr .9fr .8fr .9fr 85px 95px 105px 210px;min-width:1320px"><div>Business / Owner</div><div>Plan / Billing</div><div>Request status</div><div>Payment date / Method</div><div>Amount</div><div>Payment</div><div>Reference</div><div>Actions</div></div><div id="payLedgerRows"><div class="empty">Loading subscription requests…</div></div></div>
     </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
@@ -1401,6 +1401,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(paidBtn){e.preventDefault();markSubscriptionPaid(paidBtn.dataset.requestId,paidBtn);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
+  const openCustomQueue=e.target.closest('[data-action="open-custom-plan-queue"]');
+  if(openCustomQueue){e.preventDefault();show('subscriptions').then(()=>{loadCustomPlanRequests().then(()=>$('cprRows')?.scrollIntoView({behavior:'smooth',block:'start'}))});return}
   const cprFilter=e.target.closest('.cpr-filter-card');
   if(cprFilter){e.preventDefault();e.stopPropagation();window.__cprFilter=cprFilter.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();return;}
   const cprRow=e.target.closest('.cpr-row');
@@ -1425,9 +1427,19 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   renderPayoutLedger();
  }
  function renderPayoutLedger(){
-  const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL';
-  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod].join(' ').toLowerCase().includes(q));
-  $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+esc(x.reference||'—')+'</div><div>'+(x.paymentStatus==='PAID'?'<span class="sub">Recorded</span>':'<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record payment</button>')+'</div></div>').join(''):'<div class="empty">No matching subscription payment records.</div>';
+  const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL',requestFilter=$('payRequestFilter')?.value||'ALL';
+  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&(requestFilter==='ALL'||x.requestStatus===requestFilter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requesterEmail].join(' ').toLowerCase().includes(q));
+  $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>{
+   const requestStatus=String(x.requestStatus||'PENDING').toUpperCase(),paymentStatus=String(x.paymentStatus||'PENDING').toUpperCase();
+   let actions='<button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
+   if(requestStatus==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue">Open Custom Request</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
+   else if(requestStatus==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
+   else if(requestStatus==='APPROVED'){
+    if(paymentStatus!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button> <select class="select" style="max-width:105px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(paymentStatus==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(paymentStatus==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(paymentStatus==='EXPIRED'?'selected':'')+'>Expired</option></select> '+actions;
+    else actions='<span class="sub">Recorded</span> '+actions;
+   }
+   return '<div class="row" style="grid-template-columns:1.25fr .9fr .8fr .9fr 85px 95px 105px 210px;min-width:1320px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(paymentStatus)+'</div><div>'+esc(x.reference||'—')+'</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+actions+'</div></div>';
+  }).join(''):'<div class="empty">No matching subscription requests.</div>';
  }
  async function recordSubscriptionPayment(id,button){
   const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
@@ -1449,6 +1461,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  }
  $('paySearch')?.addEventListener('input',renderPayoutLedger);
  $('payFilter')?.addEventListener('change',renderPayoutLedger);
+ $('payRequestFilter')?.addEventListener('change',renderPayoutLedger);
  $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payExport')?.addEventListener('click',()=>{
   const records=window.__paymentLedger||[],headers=['Business','Owner','Email','Plan','Billing interval','Amount received','Payment status','Paid at','Method','Reference','Notes','Request ID'];
@@ -1457,7 +1470,15 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='reputetechs-subscription-payment-ledger.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
  document.addEventListener('click',e=>{const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}});
+ async function changePayoutPaymentStatus(id,select){
+  if(!id||!select)return;const status=select.value;select.disabled=true;
+  try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:status})});alert('Subscription payment status updated.');await loadPayoutLedger();}
+  catch(e){alert('Unable to update payment status: '+e.message);await loadPayoutLedger();}
+  finally{select.disabled=false}
+ }
  document.addEventListener('change',e=>{
+  const payoutSelect=e.target.closest('[data-action="payout-payment-status"]');
+  if(payoutSelect){changePayoutPaymentStatus(payoutSelect.dataset.requestId,payoutSelect);return}
   const paymentSelect=e.target.closest('[data-action="payment-status"]');
   if(paymentSelect){changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
  });
@@ -1747,15 +1768,17 @@ function install(app){
 
  originalGet.call(app,'/api/admin/subscription-payment-ledger',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  const requests=await prisma.planRequest.findMany({where:{status:'APPROVED'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
+  await ensureCustomPlanRequestColumns();
+  const requests=await prisma.planRequest.findMany({include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
   const ids=requests.map(x=>x.id);
   const logs=ids.length?await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:{in:ids},action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED'},orderBy:{createdAt:'desc'}}):[];
   const latest=new Map();for(const log of logs){if(!latest.has(log.entityId))latest.set(log.entityId,log.metadata||{})}
-  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,ownerName:owner?.name||x.ownerName||null,ownerEmail:owner?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
+  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||x.ownerName||x.user?.name||null,ownerEmail:owner?.email||x.user?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),isCustom:Boolean(x.isCustom),customDetails:x.customDetails||'',requestStatus:x.status,paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,approvedAt:x.approvedAt,rejectedAt:x.rejectedAt,rejectionReason:x.rejectionReason,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
+  const approved=records.filter(x=>x.requestStatus==='APPROVED');
   const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-  const totalReceived=records.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
-  const thisMonthReceived=records.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
-  const outstanding=records.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
+  const totalReceived=approved.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const thisMonthReceived=approved.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const outstanding=approved.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
   res.json({records,totalReceived,thisMonthReceived,outstanding});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
