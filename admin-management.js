@@ -532,20 +532,21 @@ function adminPage(){
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
    <section id="payouts" class="hidden">
     <div class="grid4">
-     <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">No Razorpay, Cashfree or Stripe integration</div></div>
-     <div class="card metric-card"><div class="label">Payouts</div><div class="metric" style="font-size:19px">Not enabled</div><div class="sub">No automated payout workflow</div></div>
-     <div class="card metric-card"><div class="label">Payment Handling</div><div class="metric" style="font-size:19px">Manual</div><div class="sub">Payments are confirmed by an admin</div></div>
-     <div class="card metric-card"><div class="label">Gateway Exceptions</div><div class="metric" style="font-size:19px">Not applicable</div><div class="sub">No gateway transactions to monitor</div></div>
+     <div class="card metric-card"><div class="label">Subscription Payments Received</div><div class="metric" id="payReceived">—</div><div class="sub">Verified PAID subscription requests only</div></div>
+     <div class="card metric-card"><div class="label">Outstanding Subscription Bills</div><div class="metric" id="payOutstanding">—</div><div class="sub">Approved requests not yet paid</div></div>
+     <div class="card metric-card"><div class="label">Paid This Month</div><div class="metric" id="payMonth">—</div><div class="sub">Based on recorded payment dates</div></div>
+     <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">Manual payments only · no gateway integration</div></div>
     </div>
     <div class="section card">
-     <div class="section-title"><h2>Current Payment Operations</h2><span class="pill">MANUAL PROCESS</span></div>
-     <div class="notice">Repute Tech is currently using manual payment confirmation. Admins record subscription payments after money is received. No online payment gateway, automated settlement, or payout provider is connected.</div>
-     <div class="grid2" style="margin-top:12px">
-      <div class="card"><div class="label">Subscription Payments</div><div class="name" style="margin-top:8px">Manual confirmation</div><div class="sub">Use the existing Subscriptions & Plans workflow to review requests and update payment status after confirming receipt.</div></div>
-      <div class="card"><div class="label">Business Order Payments</div><div class="name" style="margin-top:8px">Existing business workflow</div><div class="sub">Business owners continue managing customer order payment records in their own dashboard. This Admin page does not initiate or settle those payments.</div></div>
-     </div>
+     <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
+     <div class="notice">Only mark a bill paid after money has actually reached Repute Tech. This ledger is for software subscriptions only. Customer orders and business-owner POS payments are excluded.</div>
+     <div class="toolbar" style="margin-top:12px"><input class="input" id="paySearch" placeholder="Search business, owner, plan or reference"><select class="select" id="payFilter"><option value="ALL">All subscription requests</option><option value="PENDING">Pending / unpaid</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select><button class="smallbtn" id="payRefresh">Refresh ledger</button><button class="smallbtn" id="payExport">Export CSV</button></div>
+     <div class="table"><div class="row head" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div>Business / Owner</div><div>Plan / Billing</div><div>Payment date / Method</div><div>Amount</div><div>Status</div><div>Reference</div><div>Action</div></div><div id="payLedgerRows"><div class="empty">Loading subscription ledger…</div></div></div>
     </div>
-    <div class="section notice">This page is informational only. It does not connect a gateway, move money, create payouts, change payment statuses, or modify any existing payment or order records.</div>
+    <div class="section grid2">
+     <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
+     <div class="card"><div class="section-title"><h2>Gateway & payout status</h2><span class="pill warn">DISABLED</span></div><div class="name">No online gateway or automated payout is connected.</div><div class="sub">Razorpay, Cashfree, Stripe, settlement tracking and money transfers remain disabled. No gateway or payout figures are fabricated.</div></div>
+    </div>
    </section>
 
    <section id="notifications" class="hidden">
@@ -1361,6 +1362,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
     if(view==='subscriptions'||view==='billing')await loadPlans();if(view==='subscriptions')await loadFeaturePlanDefaults();
     if(view==='subscriptions')await loadCustomPlanRequests();
     if(view==='subscriptions')await loadUnpaidBills();
+    if(view==='payouts')await loadPayoutLedger();
     if(view==='orders'||view==='revenue')await loadOrders();
     if(view==='reviews')await loadReviews();
     if(view==='ai')await loadAiUsage();
@@ -1413,6 +1415,48 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
   if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn,rejectBtn.dataset.businessId);return}
  });
+ async function loadPayoutLedger(){
+  const d=await api('/admin/subscription-payment-ledger');
+  const records=d.records||[];
+  window.__paymentLedger=records;
+  $('payReceived').textContent=money(d.totalReceived||0);
+  $('payOutstanding').textContent=money(d.outstanding||0);
+  $('payMonth').textContent=money(d.thisMonthReceived||0);
+  renderPayoutLedger();
+ }
+ function renderPayoutLedger(){
+  const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL';
+  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod].join(' ').toLowerCase().includes(q));
+  $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>'<div class="row" style="grid-template-columns:1.35fr 1fr 1fr 90px 100px 110px 110px;min-width:1000px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(x.paymentStatus)+'</div><div>'+esc(x.reference||'—')+'</div><div>'+(x.paymentStatus==='PAID'?'<span class="sub">Recorded</span>':'<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record payment</button>')+'</div></div>').join(''):'<div class="empty">No matching subscription payment records.</div>';
+ }
+ async function recordSubscriptionPayment(id,button){
+  const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
+  if(row.paymentStatus==='PAID')return alert('This subscription request is already marked paid. Duplicate confirmation is blocked.');
+  const amountText=prompt('Enter the amount actually received (₹):',String(row.price||''));
+  if(amountText===null)return;
+  const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0)return alert('Enter a valid amount greater than zero.');
+  const method=prompt('Payment method: UPI, Bank Transfer, Cash or Other','UPI');if(method===null)return;
+  if(!method.trim())return alert('Payment method is required.');
+  const reference=prompt('Transaction / UTR / reference number (optional):','');if(reference===null)return;
+  const notes=prompt('Internal payment note (optional):','');if(notes===null)return;
+  if(!confirm('Confirm ₹'+amount.toLocaleString('en-IN')+' received for '+row.businessName+'? This will mark the subscription payment as PAID.'))return;
+  if(button){button.disabled=true;button.textContent='Saving…'}
+  try{
+   await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:'PAID',paymentDetails:{amountReceived:amount,paymentMethod:method.trim(),reference:reference.trim(),notes:notes.trim()}})});
+   alert('Payment recorded with admin audit details.');
+   await loadPayoutLedger();await loadUnpaidBills();await loadOrders();
+  }catch(e){alert('Unable to record payment: '+e.message);if(button){button.disabled=false;button.textContent='Record payment'}}
+ }
+ $('paySearch')?.addEventListener('input',renderPayoutLedger);
+ $('payFilter')?.addEventListener('change',renderPayoutLedger);
+ $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
+ $('payExport')?.addEventListener('click',()=>{
+  const records=window.__paymentLedger||[],headers=['Business','Owner','Email','Plan','Billing interval','Amount received','Payment status','Paid at','Method','Reference','Notes','Request ID'];
+  const data=records.map(x=>[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.billingInterval,x.amountReceived??x.price,x.paymentStatus,x.paidAt,x.paymentMethod,x.reference,x.notes,x.id]);
+  const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='reputetechs-subscription-payment-ledger.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}});
  document.addEventListener('change',e=>{
   const paymentSelect=e.target.closest('[data-action="payment-status"]');
   if(paymentSelect){changePlanPaymentStatus(paymentSelect.dataset.requestId,paymentSelect);return}
@@ -1701,6 +1745,19 @@ function install(app){
   res.json({ok:true});
 }catch(e){next(e)}});
 
+ originalGet.call(app,'/api/admin/subscription-payment-ledger',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const requests=await prisma.planRequest.findMany({where:{status:'APPROVED'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{createdAt:'desc'}});
+  const ids=requests.map(x=>x.id);
+  const logs=ids.length?await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:{in:ids},action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED'},orderBy:{createdAt:'desc'}}):[];
+  const latest=new Map();for(const log of logs){if(!latest.has(log.entityId))latest.set(log.entityId,log.metadata||{})}
+  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,ownerName:owner?.name||x.ownerName||null,ownerEmail:owner?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
+  const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const totalReceived=records.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const thisMonthReceived=records.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
+  const outstanding=records.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
+  res.json({records,totalReceived,thisMonthReceived,outstanding});
+ }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await ensureCustomPlanRequestColumns();
@@ -1711,9 +1768,22 @@ function install(app){
   if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
+  const details=body?.paymentDetails&&typeof body.paymentDetails==='object'?body.paymentDetails:null;
+  if(details&&paymentStatus!=='PAID')return res.status(400).json({error:'Payment details can only be submitted when marking a bill PAID'});
+  if(details&&request.paymentStatus==='PAID')return res.status(409).json({error:'This subscription payment is already recorded; duplicate confirmation blocked'});
+  const amountReceived=details?Number(details.amountReceived):null;
+  if(details&&(!Number.isFinite(amountReceived)||amountReceived<=0))return res.status(400).json({error:'Enter a valid amount received'});
+  const paymentMethod=details?String(details.paymentMethod||'').trim().slice(0,40):null;
+  if(details&&!paymentMethod)return res.status(400).json({error:'Payment method is required'});
+  const reference=details?String(details.reference||'').trim().slice(0,120):null;
+  const notes=details?String(details.notes||'').trim().slice(0,1000):null;
   const paidAt=paymentStatus==='PAID'?(request.paymentStatus==='PAID'&&request.paidAt?request.paidAt:new Date()):null;
-  const updated=await prisma.planRequest.update({where:{id:request.id},data:{paymentStatus,paidAt}});
-  await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus,paidAt:paidAt?.toISOString()||null}}});
+  const updated=await prisma.$transaction(async tx=>{
+   const changed=await tx.planRequest.update({where:{id:request.id},data:{paymentStatus,paidAt}});
+   await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_PLAN_PAYMENT_STATUS_CHANGED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,paymentStatus,paidAt:paidAt?.toISOString()||null}}});
+   if(details)await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,amountReceived,paymentMethod,reference,notes,paidAt:paidAt.toISOString(),planCode:request.planCode,planName:request.planName,billingInterval:request.billingInterval}}});
+   return changed;
+  });
   await queueAdminPushEvent(prisma,{eventKey:'PLAN_PAYMENT_STATUS:'+request.id+':'+paymentStatus+':'+updated.updatedAt.toISOString(),title:'Subscription payment status updated',body:`A subscription payment status changed to ${paymentStatus}.`,category:'PAYMENT',url:'/admin-panel'}).catch(e=>console.error('Payment status push queue failed:',e?.message||e));
   res.json({ok:true,request:updated});
 }catch(e){next(e)}});
