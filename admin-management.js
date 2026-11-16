@@ -530,7 +530,23 @@ function adminPage(){
 
    <section id="orders" class="hidden"><div class="grid4"><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="orders-total"><div class="label">Total Orders</div><div class="metric" id="orderCount">—</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="orders-pending"><div class="label">Pending</div><div class="metric" id="orderPending">—</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="orders-paid"><div class="label">Paid</div><div class="metric" id="orderPaid">—</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="orders-value"><div class="label">Order Value</div><div class="metric" id="orderValue">—</div></div></div><div class="section notice">Platform order governance is read-only here. Business owners continue to manage individual orders from their existing dashboard.</div></section>
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
-   <section id="payouts" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Payouts</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Gateway</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Settled</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exceptions</div><div class="metric">—</div></div></div><div class="section notice">Payout gateway data is not currently exposed by a verified admin endpoint.</div></section>
+   <section id="payouts" class="hidden">
+    <div class="grid4">
+     <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">No Razorpay, Cashfree or Stripe integration</div></div>
+     <div class="card metric-card"><div class="label">Payouts</div><div class="metric" style="font-size:19px">Not enabled</div><div class="sub">No automated payout workflow</div></div>
+     <div class="card metric-card"><div class="label">Payment Handling</div><div class="metric" style="font-size:19px">Manual</div><div class="sub">Payments are confirmed by an admin</div></div>
+     <div class="card metric-card"><div class="label">Gateway Exceptions</div><div class="metric" style="font-size:19px">Not applicable</div><div class="sub">No gateway transactions to monitor</div></div>
+    </div>
+    <div class="section card">
+     <div class="section-title"><h2>Current Payment Operations</h2><span class="pill">MANUAL PROCESS</span></div>
+     <div class="notice">Repute Tech is currently using manual payment confirmation. Admins record subscription payments after money is received. No online payment gateway, automated settlement, or payout provider is connected.</div>
+     <div class="grid2" style="margin-top:12px">
+      <div class="card"><div class="label">Subscription Payments</div><div class="name" style="margin-top:8px">Manual confirmation</div><div class="sub">Use the existing Subscriptions & Plans workflow to review requests and update payment status after confirming receipt.</div></div>
+      <div class="card"><div class="label">Business Order Payments</div><div class="name" style="margin-top:8px">Existing business workflow</div><div class="sub">Business owners continue managing customer order payment records in their own dashboard. This Admin page does not initiate or settle those payments.</div></div>
+     </div>
+    </div>
+    <div class="section notice">This page is informational only. It does not connect a gateway, move money, create payouts, change payment statuses, or modify any existing payment or order records.</div>
+   </section>
 
    <section id="notifications" class="hidden">
     <div class="grid4">
