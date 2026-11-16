@@ -196,6 +196,35 @@ function adminPage(){
 #featureflags .admin-feature-toggle.ff-switch.on:before{transform:translateX(15px)}
 #featureflags .toolbar .input,#featureflags .toolbar .select{border-color:#dfe5ef;background:#fff}
 @media(max-width:760px){#featureflags #ffPlanMatrix{grid-template-columns:1fr!important}#featureflags>.grid4{gap:8px}#featureflags>.grid4>.card{padding:11px}#featureflags .section.card{padding:11px}#featureflags #ffRows{overflow:auto}#featureflags #ffRows .row{min-width:900px}#featureflags #ffPlanMatrix .sub{min-height:0}}
+/* Payout ledger responsive cards and single Manage action */
+#payouts .payout-table{overflow:visible}
+#payouts .payout-head,#payouts .payout-row{display:grid;grid-template-columns:minmax(170px,1.35fr) minmax(110px,.9fr) minmax(105px,.8fr) minmax(120px,.9fr) 85px 95px 105px 100px;gap:10px;align-items:center;min-width:0;padding:11px 12px}
+#payouts .payout-head{background:#f6f8fc;border-bottom:1px solid #e4e8f0}
+#payouts .payout-row{border-bottom:1px solid #edf0f5}
+#payouts .payout-row>div{min-width:0;overflow-wrap:anywhere}
+#payouts .payout-manage-btn{min-width:84px;min-height:34px;font-weight:750}
+#payouts .payout-modal-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(12,18,32,.58);display:flex;align-items:center;justify-content:center;padding:16px}
+#payouts .payout-modal{width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;border:1px solid #e4e7ef;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(10,15,30,.28)}
+#payouts .payout-modal-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+#payouts .payout-modal-title h3{margin:0;color:#202b40;font-size:17px}
+#payouts .payout-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+#payouts .payout-modal-field{padding:10px;border:1px solid #e9edf4;border-radius:10px;background:#fafbfe;min-width:0}
+#payouts .payout-modal-field small{display:block;color:#778197;font-size:10px;margin-bottom:4px}
+#payouts .payout-modal-field strong{display:block;color:#263249;font-size:12px;overflow-wrap:anywhere}
+#payouts .payout-modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;padding-top:13px;border-top:1px solid #edf0f5}
+#payouts .payout-modal-actions .smallbtn{min-height:38px;padding:0 13px}
+@media(max-width:700px){
+ #payouts .payout-head{display:none!important}
+ #payouts .payout-row{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:9px 12px;min-width:0!important;padding:13px!important;border:1px solid #e5e9f1;border-radius:12px;margin:9px 0;background:#fff;white-space:normal!important}
+ #payouts .payout-row>div{min-width:0;white-space:normal!important;overflow-wrap:anywhere}
+ #payouts .payout-business,#payouts .payout-manage{grid-column:1/-1}
+ #payouts .payout-cell:before{content:attr(data-label);display:block;color:#8992a4;font-size:9px;font-weight:800;letter-spacing:.035em;text-transform:uppercase;margin-bottom:4px}
+ #payouts .payout-business:before{display:none}
+ #payouts .payout-manage:before{display:none}
+ #payouts .payout-manage-btn{width:100%;min-height:40px}
+ #payouts .payout-modal{padding:14px;border-radius:14px}
+ #payouts .payout-modal-grid{grid-template-columns:1fr 1fr}
+}
 @media(max-width:700px){.health-table{overflow:visible!important}.health-table>.row.head{display:none!important}.health-table #healthRows>.row{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;min-width:0!important;gap:10px;padding:12px!important;white-space:normal!important}.health-table #healthRows>.row>div{min-width:0;overflow-wrap:anywhere;white-space:normal}.health-table #healthRows>.row>div:first-child,.health-table #healthRows>.row>div:nth-child(5),.health-table #healthRows>.row>div:last-child{grid-column:1/-1}.health-table #healthRows .pill{white-space:normal;overflow-wrap:anywhere}.health-table #healthRows .smallbtn{max-width:100%}} 
  
 
@@ -541,7 +570,7 @@ function adminPage(){
      <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
      <div class="notice">Only mark a bill paid after money has actually reached Repute Tech. This ledger is for software subscriptions only. Customer orders and business-owner POS payments are excluded.</div>
      <div class="toolbar" style="margin-top:12px"><input class="input" id="paySearch" placeholder="Search business, owner, plan or reference"><select class="select" id="payRequestFilter"><option value="ALL">All request statuses</option><option value="PENDING">Awaiting approval</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select><select class="select" id="payFilter"><option value="ALL">All payment statuses</option><option value="PENDING">Pending / unpaid</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="EXPIRED">Expired</option></select><button class="smallbtn" id="payRefresh">Refresh ledger</button><button class="smallbtn" id="payExport">Export CSV</button></div>
-     <div class="table"><div class="row head" style="grid-template-columns:1.25fr .9fr .8fr .9fr 85px 95px 105px 210px;min-width:1320px"><div>Business / Owner</div><div>Plan / Billing</div><div>Request status</div><div>Payment date / Method</div><div>Amount</div><div>Payment</div><div>Reference</div><div>Actions</div></div><div id="payLedgerRows"><div class="empty">Loading subscription requests…</div></div></div>
+     <div class="table payout-table"><div class="row head payout-head"><div>Business / Owner</div><div>Plan / Billing</div><div>Request status</div><div>Payment date / Method</div><div>Amount</div><div>Payment</div><div>Reference</div><div>Manage</div></div><div id="payLedgerRows"><div class="empty">Loading subscription requests…</div></div></div>
     </div>
     <div class="section grid2">
      <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
@@ -1417,6 +1446,22 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const rejectBtn=e.target.closest('[data-action="reject-subscription"]');
   if(rejectBtn){e.preventDefault();rejectPlanRequest(rejectBtn.dataset.requestId,rejectBtn,rejectBtn.dataset.businessId);return}
  });
+ function closePayoutManager(){document.querySelector('#payouts .payout-modal-backdrop')?.remove()}
+ function openPayoutManager(id){
+  const x=(window.__paymentLedger||[]).find(r=>r.id===id);if(!x)return;
+  closePayoutManager();
+  const req=String(x.requestStatus||'PENDING').toUpperCase(),pay=String(x.paymentStatus||'PENDING').toUpperCase();
+  let actions='';
+  if(req==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue">Open Custom Plan Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button>';
+  else if(req==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject Request</button>';
+  else if(req==='APPROVED'&&pay!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button><select class="select" style="max-width:150px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(pay==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(pay==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(pay==='EXPIRED'?'selected':'')+'>Expired</option></select>';
+  else if(req==='APPROVED'&&pay==='PAID')actions='<span class="sub">Payment recorded</span>';
+  actions+='<button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
+  const fields=[['Business',x.businessName],['Owner',x.ownerName],['Owner email',x.ownerEmail],['Plan',x.planName||x.planCode],['Billing period',x.billingInterval],['Request status',req],['Payment status',pay],['Amount',money(x.amountReceived??x.price)],['Requested on',date(x.createdAt)],['Payment date',date(x.paidAt)],['Payment method',x.paymentMethod||'—'],['Reference',x.reference||'—']];
+  const backdrop=document.createElement('div');backdrop.className='payout-modal-backdrop';backdrop.innerHTML='<div class="payout-modal" role="dialog" aria-modal="true" aria-label="Subscription request details"><div class="payout-modal-title"><div><h3>Subscription Details</h3><div class="sub">Review the request and choose an action</div></div><button class="smallbtn" data-action="close-payout-manager" aria-label="Close">Close</button></div><div class="payout-modal-grid">'+fields.map(([k,v])=>'<div class="payout-modal-field"><small>'+esc(k)+'</small><strong>'+esc(v??'—')+'</strong></div>').join('')+'</div>'+(x.customDetails?'<div class="payout-modal-field" style="margin-top:9px"><small>Custom plan requirements</small><strong>'+esc(x.customDetails)+'</strong></div>':'')+'<div class="payout-modal-actions">'+actions+'</div></div>';
+  backdrop.addEventListener('click',e=>{if(e.target===backdrop)closePayoutManager()});
+  $('payouts').appendChild(backdrop);
+ }
  async function loadPayoutLedger(){
   const d=await api('/admin/subscription-payment-ledger');
   const records=d.records||[];
@@ -1431,14 +1476,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&(requestFilter==='ALL'||x.requestStatus===requestFilter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requesterEmail].join(' ').toLowerCase().includes(q));
   $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>{
    const requestStatus=String(x.requestStatus||'PENDING').toUpperCase(),paymentStatus=String(x.paymentStatus||'PENDING').toUpperCase();
-   let actions='<button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
-   if(requestStatus==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue">Open Custom Request</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
-   else if(requestStatus==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
-   else if(requestStatus==='APPROVED'){
-    if(paymentStatus!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button> <select class="select" style="max-width:105px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(paymentStatus==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(paymentStatus==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(paymentStatus==='EXPIRED'?'selected':'')+'>Expired</option></select> '+actions;
-    else actions='<span class="sub">Recorded</span> '+actions;
-   }
-   return '<div class="row" style="grid-template-columns:1.25fr .9fr .8fr .9fr 85px 95px 105px 210px;min-width:1320px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div>'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div>'+money(x.amountReceived??x.price)+'</div><div>'+statusPill(paymentStatus)+'</div><div>'+esc(x.reference||'—')+'</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+actions+'</div></div>';
+   return '<div class="row payout-row"><div class="payout-cell payout-business" data-label="Business / Owner"><div class="name">'+esc(x.businessName||'Business')+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div class="payout-cell" data-label="Plan / Billing">'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div class="payout-cell" data-label="Request status">'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div class="payout-cell" data-label="Payment date / Method">'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div class="payout-cell" data-label="Amount">'+money(x.amountReceived??x.price)+'</div><div class="payout-cell" data-label="Payment">'+statusPill(paymentStatus)+'</div><div class="payout-cell" data-label="Reference">'+esc(x.reference||'—')+'</div><div class="payout-cell payout-manage" data-label="Actions"><button class="smallbtn primary payout-manage-btn" data-action="manage-payout-request" data-request-id="'+esc(x.id)+'">Manage</button></div></div>';
   }).join(''):'<div class="empty">No matching subscription requests.</div>';
  }
  async function recordSubscriptionPayment(id,button){
@@ -1469,7 +1507,13 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='reputetechs-subscription-payment-ledger.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
- document.addEventListener('click',e=>{const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}});
+ document.addEventListener('click',e=>{
+  const manage=e.target.closest('[data-action="manage-payout-request"]');if(manage){e.preventDefault();openPayoutManager(manage.dataset.requestId);return}
+  const close=e.target.closest('[data-action="close-payout-manager"]');if(close){e.preventDefault();closePayoutManager();return}
+  const modalAction=e.target.closest('#payouts .payout-modal [data-action]');
+  if(modalAction&&modalAction.dataset.action!=='close-payout-manager'&&modalAction.dataset.action!=='manage-payout-request'){closePayoutManager()}
+  const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}
+ });
  async function changePayoutPaymentStatus(id,select){
   if(!id||!select)return;const status=select.value;select.disabled=true;
   try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:status})});alert('Subscription payment status updated.');await loadPayoutLedger();}
