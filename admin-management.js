@@ -1401,6 +1401,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(paidBtn){e.preventDefault();markSubscriptionPaid(paidBtn.dataset.requestId,paidBtn);return}
   const approveBtn=e.target.closest('[data-action="approve-subscription"]');
   if(approveBtn){e.preventDefault();approvePlanRequest(approveBtn.dataset.requestId,approveBtn);return}
+  const openCustomQueue=e.target.closest('[data-action="open-custom-plan-queue"]');
+  if(openCustomQueue){e.preventDefault();show('subscriptions').then(()=>{loadCustomPlanRequests().then(()=>$('cprRows')?.scrollIntoView({behavior:'smooth',block:'start'}))});return}
   const cprFilter=e.target.closest('.cpr-filter-card');
   if(cprFilter){e.preventDefault();e.stopPropagation();window.__cprFilter=cprFilter.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();return;}
   const cprRow=e.target.closest('.cpr-row');
@@ -1430,7 +1432,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>{
    const requestStatus=String(x.requestStatus||'PENDING').toUpperCase(),paymentStatus=String(x.paymentStatus||'PENDING').toUpperCase();
    let actions='<button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
-   if(requestStatus==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
+   if(requestStatus==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue">Open Custom Request</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
+   else if(requestStatus==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve</button> <button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button> '+actions;
    else if(requestStatus==='APPROVED'){
     if(paymentStatus!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button> <select class="select" style="max-width:105px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(paymentStatus==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(paymentStatus==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(paymentStatus==='EXPIRED'?'selected':'')+'>Expired</option></select> '+actions;
     else actions='<span class="sub">Recorded</span> '+actions;
