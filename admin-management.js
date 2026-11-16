@@ -963,6 +963,7 @@ async function rejectPlanRequest(id,button,businessId){
    await api('/admin/pending-plan-requests/'+encodeURIComponent(id)+'/reject',{method:'POST',body:JSON.stringify({reason:reason.trim()})});
    alert('Subscription request rejected.');
    await loadBusinesses();
+   if($('payouts')&&!$('payouts').classList.contains('hidden'))await loadPayoutLedger();
    if(businessId)await openBusiness(businessId);
   }catch(e){alert('Unable to reject subscription: '+e.message);if(button){button.disabled=false;button.textContent='Reject'}}
  }
@@ -1088,6 +1089,7 @@ async function approvePlanRequest(id,button){
   alert('Subscription approved successfully.');
   await openMetricPanel('pending');
   await loadBusinesses();
+  if($('payouts')&&!$('payouts').classList.contains('hidden'))await loadPayoutLedger();
  }catch(e){
   alert('Unable to approve subscription: '+e.message);
   if(button){button.disabled=false;button.textContent=old||'Approve';}
