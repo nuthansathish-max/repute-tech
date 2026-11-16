@@ -213,6 +213,23 @@ function adminPage(){
 #payouts .payout-modal-field strong{display:block;color:#263249;font-size:12px;overflow-wrap:anywhere}
 #payouts .payout-modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;padding-top:13px;border-top:1px solid #edf0f5}
 #payouts .payout-modal-actions .smallbtn{min-height:38px;padding:0 13px}
+/* Subscription details action button appearance only */
+#payouts .payout-modal-actions .payout-action-approve{
+ background:linear-gradient(135deg,#6552e8 0%,#4934c9 100%)!important;
+ color:#fff!important;border:1px solid #5140d2!important;border-radius:10px!important;
+ font-weight:750!important;box-shadow:0 4px 11px rgba(83,65,207,.22)!important;
+}
+#payouts .payout-modal-actions .payout-action-reject{
+ background:#fff5f5!important;color:#c13d4b!important;border:1px solid #f0c5ca!important;
+ border-radius:10px!important;font-weight:700!important;box-shadow:none!important;
+}
+#payouts .payout-modal-actions .payout-action-business{
+ background:#f3f6fb!important;color:#34445f!important;border:1px solid #d9e1ee!important;
+ border-radius:10px!important;font-weight:700!important;box-shadow:none!important;
+}
+#payouts .payout-modal-actions .payout-action-approve:hover{filter:brightness(1.06)}
+#payouts .payout-modal-actions .payout-action-reject:hover{background:#ffebed!important;border-color:#e7aab2!important}
+#payouts .payout-modal-actions .payout-action-business:hover{background:#e9eef8!important;border-color:#c6d2e5!important}
 @media(max-width:700px){
  #payouts .payout-head{display:none!important}
  #payouts .payout-row{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:9px 12px;min-width:0!important;padding:13px!important;border:1px solid #e5e9f1;border-radius:12px;margin:9px 0;background:#fff;white-space:normal!important}
@@ -1070,7 +1087,7 @@ async function openMetricPanel(kind){
  try{
   if(kind==='trials'){
    const d=await api('/admin/trials');
-   body.innerHTML=d.trials.length?'<div class="table"><div class="row head" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div>Business</div><div>Owner</div><div>Plan</div><div>Trial Ends</div><div>Days Left</div><div>Action</div></div>'+d.trials.map(x=>'<div class="row" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.trialEndsAt)+'</div><div><span class="pill '+(x.daysRemaining>2?'good':'warn')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span></div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>'+(x.ownerEmail?'<a class="smallbtn" href="mailto:'+esc(x.ownerEmail)+'" style="margin-left:4px">Email</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No businesses are currently on a 7-day trial.</div>';
+   body.innerHTML=d.trials.length?'<div class="table"><div class="row head" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div>Business</div><div>Owner</div><div>Plan</div><div>Trial Ends</div><div>Days Left</div><div>Action</div></div>'+d.trials.map(x=>'<div class="row" style="grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 120px;min-width:900px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+' · '+(x.isOpen?'OPEN':'CLOSED')+'</div></div><div>'+esc(x.ownerName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+esc(x.plan||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+date(x.trialEndsAt)+'</div><div><span class="pill '+(x.daysRemaining>2?'good':'warn')+'">'+x.daysRemaining+' day'+(x.daysRemaining===1?'':'s')+' left</span></div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'" class="payout-action-business">View Business</button>'+(x.ownerEmail?'<a class="smallbtn" href="mailto:'+esc(x.ownerEmail)+'" style="margin-left:4px">Email</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No businesses are currently on a 7-day trial.</div>';
   }else if(kind==='pending'){
    const d=await api('/admin/pending-plan-requests');
    body.innerHTML=d.requests.length?'<div class="table"><div class="row head" style="grid-template-columns:1.4fr 1fr 1fr 90px 90px 190px;min-width:980px"><div>Business</div><div>Owner</div><div>Requested Plan</div><div>Price</div><div>Requested</div><div>Actions</div></div>'+d.requests.map(x=>'<div class="row" style="grid-template-columns:1.4fr 1fr 1fr 90px 90px 190px;min-width:980px"><div><div class="name">'+esc(x.businessName)+'</div><div class="sub">'+esc(x.businessType||'')+'</div></div><div>'+esc(x.ownerName||x.requesterName||'No owner')+'<div class="sub">'+esc(x.ownerEmail||x.requesterEmail||'')+'</div></div><div>'+esc(x.planName||x.planCode||'—')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div>'+money(x.price)+'</div><div>'+date(x.createdAt)+'</div><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button><button class="smallbtn" data-action="approve-subscription" data-request-id="'+esc(x.id)+'" style="margin-left:4px">Approve</button>'+(x.contact?'<a class="smallbtn" href="tel:'+esc(x.contact)+'" style="margin-left:4px">🤙 Call</a>':'')+'</div></div>').join('')+'</div>':'<div class="empty">No pending plan requests.</div>';
@@ -1454,8 +1471,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   closePayoutManager();
   const req=String(x.requestStatus||'PENDING').toUpperCase(),pay=String(x.paymentStatus||'PENDING').toUpperCase();
   let actions='';
-  if(req==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue">Open Custom Plan Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button>';
-  else if(req==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject Request</button>';
+  if(req==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary" data-action="open-custom-plan-queue" class="payout-action-approve">Open Custom Plan Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'" class="payout-action-reject">Reject</button>';
+  else if(req==='PENDING')actions='<button class="smallbtn primary" data-action="approve-subscription" data-request-id="'+esc(x.id)+'" class="payout-action-approve">Approve Request</button><button class="smallbtn" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'" class="payout-action-reject">Reject Request</button>';
   else if(req==='APPROVED'&&pay!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button><select class="select" style="max-width:150px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(pay==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(pay==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(pay==='EXPIRED'?'selected':'')+'>Expired</option></select>';
   else if(req==='APPROVED'&&pay==='PAID')actions='<span class="sub">Payment recorded</span>';
   actions+='<button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
