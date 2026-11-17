@@ -581,6 +581,7 @@ function adminPage(){
      <div class="card metric-card"><div class="label">Subscription Payments Received</div><div class="metric" id="payReceived">—</div><div class="sub">Verified PAID subscription requests only</div></div>
      <div class="card metric-card"><div class="label">Outstanding Subscription Bills</div><div class="metric" id="payOutstanding">—</div><div class="sub">Approved requests not yet paid</div></div>
      <div class="card metric-card"><div class="label">Paid This Month</div><div class="metric" id="payMonth">—</div><div class="sub">Based on recorded payment dates</div></div>
+     <div class="card metric-card"><div class="label">Refunds Recorded</div><div class="metric" id="payRefunded">—</div><div class="sub">Manual subscription refunds recorded</div></div>
      <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">Manual payments only · no gateway integration</div></div>
     </div>
     <div class="section card">
@@ -1485,9 +1486,9 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(req==='PENDING'&&x.isCustom)actions='<button class="smallbtn primary payout-action-approve" data-action="open-custom-plan-queue">Open Custom Plan Request</button><button class="smallbtn payout-action-reject" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject</button>';
   else if(req==='PENDING')actions='<button class="smallbtn primary payout-action-approve" data-action="approve-subscription" data-request-id="'+esc(x.id)+'">Approve Request</button><button class="smallbtn payout-action-reject" data-action="reject-subscription" data-request-id="'+esc(x.id)+'" data-business-id="'+esc(x.businessId)+'">Reject Request</button>';
   else if(req==='APPROVED'&&pay!=='PAID')actions='<button class="smallbtn primary" data-action="record-subscription-payment" data-request-id="'+esc(x.id)+'">Record Payment</button><select class="select" style="max-width:150px" data-action="payout-payment-status" data-request-id="'+esc(x.id)+'"><option value="PENDING" '+(pay==='PENDING'?'selected':'')+'>Pending</option><option value="FAILED" '+(pay==='FAILED'?'selected':'')+'>Failed</option><option value="EXPIRED" '+(pay==='EXPIRED'?'selected':'')+'>Expired</option></select>';
-  else if(req==='APPROVED'&&pay==='PAID')actions='<span class="sub">Payment recorded</span>';
+  else if(req==='APPROVED'&&pay==='PAID')actions='<span class="sub">Payment recorded</span><button class="smallbtn" data-action="record-subscription-refund" data-request-id="'+esc(x.id)+'" '+(Number(x.refundBalance??(x.amountReceived??x.price))<=0?'disabled':'')+'>Record Refund</button>';
   actions+='<button class="smallbtn payout-action-business" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
-  const fields=[['Business',x.businessName],['Owner',x.ownerName],['Owner email',x.ownerEmail],['Plan',x.planName||x.planCode],['Billing period',x.billingInterval],['Request status',req],['Payment status',pay],['Amount',money(x.amountReceived??x.price)],['Requested on',date(x.createdAt)],['Payment date',date(x.paidAt)],['Payment method',x.paymentMethod||'—'],['Reference',x.reference||'—']];
+  const fields=[['Business',x.businessName],['Owner',x.ownerName],['Owner email',x.ownerEmail],['Plan',x.planName||x.planCode],['Billing period',x.billingInterval],['Request status',req],['Payment status',pay],['Amount',money(x.amountReceived??x.price)],['Requested on',date(x.createdAt)],['Payment date',date(x.paidAt)],['Payment method',x.paymentMethod||'—'],['Reference',x.reference||'—'],['Refunded so far',money(x.refundedAmount||0)],['Remaining refundable balance',money(x.refundBalance??(x.amountReceived??x.price))]];
   const backdrop=document.createElement('div');backdrop.className='payout-modal-backdrop';backdrop.innerHTML='<div class="payout-modal" role="dialog" aria-modal="true" aria-label="Subscription request details"><div class="payout-modal-title"><div><h3>Subscription Details</h3><div class="sub">Review the request and choose an action</div></div><button class="smallbtn" data-action="close-payout-manager" aria-label="Close">Close</button></div><div class="payout-modal-grid">'+fields.map(([k,v])=>'<div class="payout-modal-field"><small>'+esc(k)+'</small><strong>'+esc(v??'—')+'</strong></div>').join('')+'</div>'+(x.customDetails?'<div class="payout-modal-field" style="margin-top:9px"><small>Custom plan requirements</small><strong>'+esc(x.customDetails)+'</strong></div>':'')+'<div class="payout-modal-actions">'+actions+'</div></div>';
   backdrop.addEventListener('click',e=>{if(e.target===backdrop)closePayoutManager()});
   $('payouts').appendChild(backdrop);
@@ -1499,6 +1500,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payReceived').textContent=money(d.totalReceived||0);
   $('payOutstanding').textContent=money(d.outstanding||0);
   $('payMonth').textContent=money(d.thisMonthReceived||0);
+  $('payRefunded').textContent=money(d.totalRefunded||0);
   renderPayoutLedger();
   renderPayoutReconciliation(d.reconciliation||{});
  }
@@ -1518,6 +1520,28 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
    const requestStatus=String(x.requestStatus||'PENDING').toUpperCase(),paymentStatus=String(x.paymentStatus||'PENDING').toUpperCase();
    return '<div class="row payout-row"><div class="payout-cell payout-business" data-label="Business / Owner"><div class="name">'+esc(x.businessName||'Business')+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div class="payout-cell" data-label="Plan / Billing">'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div class="payout-cell" data-label="Request status">'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div class="payout-cell" data-label="Payment date / Method">'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div class="payout-cell" data-label="Amount">'+money(x.amountReceived??x.price)+'</div><div class="payout-cell" data-label="Payment">'+statusPill(paymentStatus)+'</div><div class="payout-cell" data-label="Reference">'+esc(x.reference||'—')+'</div><div class="payout-cell payout-manage" data-label="Actions"><button class="smallbtn primary payout-manage-btn" data-action="manage-payout-request" data-request-id="'+esc(x.id)+'">Manage</button></div></div>';
   }).join(''):'<div class="empty">No matching subscription requests.</div>';
+ }
+ async function recordSubscriptionRefund(id,button){
+  const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
+  if(row.paymentStatus!=='PAID')return alert('Only recorded PAID subscription payments can be refunded.');
+  const remaining=Number(row.refundBalance??(row.amountReceived??row.price));
+  if(!Number.isFinite(remaining)||remaining<=0)return alert('No refundable balance remains for this payment.');
+  const amountText=prompt('Enter the refund amount already returned to the business owner (₹). Remaining refundable balance: '+remaining.toLocaleString('en-IN'),String(remaining));
+  if(amountText===null)return;
+  const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0||amount>remaining+0.001)return alert('Enter a valid refund amount up to the remaining refundable balance.');
+  const method=prompt('Refund method: UPI, Bank Transfer, Cash or Other','UPI');if(method===null)return;
+  if(!method.trim())return alert('Refund method is required.');
+  const reference=prompt('Refund transaction / UTR / reference (optional):','');if(reference===null)return;
+  const reason=prompt('Reason for refund (required):','');if(reason===null)return;
+  if(!reason.trim())return alert('Refund reason is required.');
+  if(!confirm('Confirm that ₹'+amount.toLocaleString('en-IN')+' has already been returned to '+row.businessName+'? This only records the refund; it does not transfer money.'))return;
+  if(button){button.disabled=true;button.textContent='Saving…'}
+  try{
+   await api('/admin/plan-requests/'+encodeURIComponent(id)+'/refunds',{method:'POST',body:JSON.stringify({amount,method:method.trim(),reference:reference.trim(),reason:reason.trim()})});
+   alert('Refund recorded in the subscription audit history.');
+   await loadPayoutLedger();
+   if(window.__paymentLedger?.some(x=>x.id===id))openPayoutManager(id);
+  }catch(e){alert('Unable to record refund: '+e.message);if(button){button.disabled=false;button.textContent='Record Refund'}}
  }
  async function recordSubscriptionPayment(id,button){
   const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
@@ -1553,6 +1577,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const close=e.target.closest('[data-action="close-payout-manager"]');if(close){e.preventDefault();closePayoutManager();return}
   const modalAction=e.target.closest('#payouts .payout-modal [data-action]');
   if(modalAction&&modalAction.dataset.action!=='close-payout-manager'&&modalAction.dataset.action!=='manage-payout-request'){closePayoutManager()}
+  const refund=e.target.closest('[data-action="record-subscription-refund"]');if(refund){e.preventDefault();recordSubscriptionRefund(refund.dataset.requestId,refund);return}
   const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}
  });
  async function changePayoutPaymentStatus(id,select){
