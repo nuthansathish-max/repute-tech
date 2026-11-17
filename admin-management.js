@@ -591,12 +591,12 @@ function adminPage(){
    <section id="invoices" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Invoices</div><div class="metric">—</div><div class="sub">No invoice ledger endpoint</div></div><div class="card metric-card"><div class="label">GST</div><div class="metric">READY</div></div><div class="card metric-card"><div class="label">Tax Rules</div><div class="metric">—</div></div><div class="card metric-card"><div class="label">Exports</div><div class="metric">UI</div></div></div><div class="section notice">Invoice/GST calculations are not connected to the current admin API, so this page does not invent financial values.</div></section>
    <section id="payouts" class="hidden">
     <div class="grid4">
-     <div class="card metric-card"><div class="label">Subscription Payments Received</div><div class="metric" id="payReceived">—</div><div class="sub">Verified PAID subscription requests only</div></div>
-     <div class="card metric-card"><div class="label">Outstanding Subscription Bills</div><div class="metric" id="payOutstanding">—</div><div class="sub">Approved requests not yet paid</div></div>
-     <div class="card metric-card"><div class="label">Paid This Month</div><div class="metric" id="payMonth">—</div><div class="sub">Based on recorded payment dates</div></div>
-     <div class="card metric-card"><div class="label">Refunds Recorded</div><div class="metric" id="payRefunded">—</div><div class="sub">Manual subscription refunds recorded</div></div>
+     <div class="card metric-card clickable" role="button" tabindex="0" data-payout-card="received" aria-label="Show all recorded subscription payments"><div class="label">Subscription Payments Received</div><div class="metric" id="payReceived">—</div><div class="sub">Verified PAID subscription requests · View records</div></div>
+     <div class="card metric-card clickable" role="button" tabindex="0" data-payout-card="outstanding" aria-label="Show approved unpaid subscription bills"><div class="label">Outstanding Subscription Bills</div><div class="metric" id="payOutstanding">—</div><div class="sub">Approved requests not yet paid · View bills</div></div>
+     <div class="card metric-card clickable" role="button" tabindex="0" data-payout-card="paid-month" aria-label="Show subscription payments received this month"><div class="label">Paid This Month</div><div class="metric" id="payMonth">—</div><div class="sub">Based on recorded payment dates · View records</div></div>
+     <div class="card metric-card clickable" role="button" tabindex="0" data-payout-card="refunded" aria-label="Show all subscription refunds"><div class="label">Refunds Recorded</div><div class="metric" id="payRefunded">—</div><div class="sub">Manual subscription refunds · View history</div></div>
      <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">Manual payments only · no gateway integration</div></div>
-     <div class="card metric-card"><div class="label">Refunds This Month</div><div class="metric" id="payRefundedMonth">—</div><div class="sub">Subscription refunds recorded in the current calendar month</div></div>
+     <div class="card metric-card clickable" role="button" tabindex="0" data-payout-card="refund-month" aria-label="Show subscription refunds recorded this month"><div class="label">Refunds This Month</div><div class="metric" id="payRefundedMonth">—</div><div class="sub">Current calendar month · View refunds</div></div>
     </div>
     <div class="section card">
      <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
@@ -1532,7 +1532,21 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  }
  function renderPayoutLedger(){
   const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL',requestFilter=$('payRequestFilter')?.value||'ALL';
-  const filtered=records.filter(x=>(filter==='ALL'||x.paymentStatus===filter)&&(requestFilter==='ALL'||x.requestStatus===requestFilter)&&[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requesterEmail].join(' ').toLowerCase().includes(q));
+  const cardFilter=window.__payoutCardFilter||'';
+  const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1),nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
+  const inCurrentMonth=value=>{const d=value?new Date(value):null;return !!d&&!Number.isNaN(d.getTime())&&d>=monthStart&&d<nextMonth};
+  const hasRefund=x=>Number(x.refundedAmount||0)>0||(Array.isArray(x.refunds)&&x.refunds.some(ref=>Number(ref.amount)>0));
+  const hasRefundThisMonth=x=>Array.isArray(x.refunds)&&x.refunds.some(ref=>Number(ref.amount)>0&&inCurrentMonth(ref.createdAt));
+  const filtered=records.filter(x=>{
+   const textMatch=[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requesterEmail].join(' ').toLowerCase().includes(q);
+   if(!textMatch)return false;
+   if(cardFilter==='received')return x.paymentStatus==='PAID';
+   if(cardFilter==='outstanding')return x.requestStatus==='APPROVED'&&x.paymentStatus!=='PAID';
+   if(cardFilter==='paid-month')return x.paymentStatus==='PAID'&&inCurrentMonth(x.paidAt);
+   if(cardFilter==='refunded')return hasRefund(x);
+   if(cardFilter==='refund-month')return hasRefundThisMonth(x);
+   return (filter==='ALL'||x.paymentStatus===filter)&&(requestFilter==='ALL'||x.requestStatus===requestFilter);
+  });
   $('payLedgerRows').innerHTML=filtered.length?filtered.map(x=>{
    const requestStatus=String(x.requestStatus||'PENDING').toUpperCase(),paymentStatus=String(x.paymentStatus||'PENDING').toUpperCase();
    return '<div class="row payout-row"><div class="payout-cell payout-business" data-label="Business / Owner"><div class="name">'+esc(x.businessName||'Business')+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div class="payout-cell" data-label="Plan / Billing">'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div class="payout-cell" data-label="Request status">'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div class="payout-cell" data-label="Payment date / Method">'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div class="payout-cell" data-label="Amount">'+money(x.amountReceived??x.price)+(Number(x.refundedAmount||0)>0?'<div class="sub">Refunded '+money(x.refundedAmount)+'</div>':'')+'</div><div class="payout-cell" data-label="Payment">'+statusPill(paymentStatus)+'</div><div class="payout-cell" data-label="Reference">'+esc(x.reference||'—')+'</div><div class="payout-cell payout-manage" data-label="Actions"><button class="smallbtn primary payout-manage-btn" data-action="manage-payout-request" data-request-id="'+esc(x.id)+'">Manage</button></div></div>';
@@ -1585,9 +1599,14 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
    await loadPayoutLedger();await loadUnpaidBills();await loadOrders();
   }catch(e){alert('Unable to record payment: '+e.message);if(button){button.disabled=false;button.textContent='Record payment'}}
  }
- $('paySearch')?.addEventListener('input',renderPayoutLedger);
- $('payFilter')?.addEventListener('change',renderPayoutLedger);
- $('payRequestFilter')?.addEventListener('change',renderPayoutLedger);
+ document.addEventListener('keydown',e=>{
+  const card=e.target.closest?.('[data-payout-card]');
+  if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();applyPayoutCardFilter(card)}
+ });
+ $('paySearch')?.addEventListener('input',()=>{window.__payoutCardFilter='';document.querySelectorAll('[data-payout-card]').forEach(el=>el.classList.remove('is-metric-selected'));renderPayoutLedger()});
+ const clearPayoutCardFilter=()=>{window.__payoutCardFilter='';document.querySelectorAll('[data-payout-card]').forEach(el=>el.classList.remove('is-metric-selected'));renderPayoutLedger()};
+ $('payFilter')?.addEventListener('change',clearPayoutCardFilter);
+ $('payRequestFilter')?.addEventListener('change',clearPayoutCardFilter);
  $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payReconcileRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payExport')?.addEventListener('click',()=>{
@@ -1596,7 +1615,18 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='reputetechs-subscription-payment-ledger.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
+ function applyPayoutCardFilter(card){
+  const key=card?.dataset?.payoutCard;if(!key)return;
+  window.__payoutCardFilter=key;
+  $('paySearch').value='';
+  $('payFilter').value='ALL';
+  $('payRequestFilter').value='ALL';
+  renderPayoutLedger();
+  document.querySelectorAll('[data-payout-card]').forEach(el=>el.classList.toggle('is-metric-selected',el===card));
+  $('payLedgerRows').scrollIntoView({behavior:'smooth',block:'start'});
+ }
  document.addEventListener('click',e=>{
+  const summary=e.target.closest('[data-payout-card]');if(summary){applyPayoutCardFilter(summary);return}
   const manage=e.target.closest('[data-action="manage-payout-request"]');if(manage){e.preventDefault();openPayoutManager(manage.dataset.requestId);return}
   const close=e.target.closest('[data-action="close-payout-manager"]');if(close){e.preventDefault();closePayoutManager();return}
   const modalAction=e.target.closest('#payouts .payout-modal [data-action]');
