@@ -1864,7 +1864,40 @@ function install(app){
   const totalReceived=approved.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const thisMonthReceived=approved.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const outstanding=approved.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
-  res.json({records,totalReceived,thisMonthReceived,outstanding});
+  const reconciliationIssues=[];
+  let overdueCount=0,overdueAmount=0,failedCount=0,expiredCount=0,missingDetailsCount=0,amountMismatchCount=0;
+  for(const record of records){
+   const ageDays=Math.max(0,Math.floor((now.getTime()-new Date(record.createdAt).getTime())/86400000));
+   const meta=latest.get(record.id)||{};
+   const base={businessName:record.businessName,ownerEmail:record.ownerEmail,planName:record.planName||record.planCode,amount:Number(record.amountReceived??record.price??0),expectedAmount:Number(record.price||0),paymentStatus:record.paymentStatus,requestStatus:record.requestStatus,ageLabel:ageDays+' day'+(ageDays===1?'':'s')};
+   if(record.requestStatus==='APPROVED'&&record.paymentStatus!=='PAID'&&ageDays>=7){
+    overdueCount++;overdueAmount+=Number(record.price||0);
+    reconciliationIssues.push({...base,issue:'Bill overdue for 7+ days',severity:'WARN'});
+   }
+   if(record.paymentStatus==='FAILED'){
+    failedCount++;reconciliationIssues.push({...base,issue:'Payment marked failed — follow up required',severity:'HIGH'});
+   }
+   if(record.paymentStatus==='EXPIRED'){
+    expiredCount++;reconciliationIssues.push({...base,issue:'Payment expired — renewal or retry may be needed',severity:'WARN'});
+   }
+   if(record.paymentStatus==='PAID'){
+    const hasAuditDetails=Object.keys(meta).length>0;
+    if(!hasAuditDetails||meta.amountReceived==null||!meta.paymentMethod){
+     missingDetailsCount++;
+     reconciliationIssues.push({...base,issue:'Payment details missing (may be an older record)',severity:'WARN',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+    }
+    if(meta.amountReceived!=null&&Math.abs(Number(meta.amountReceived)-Number(record.price||0))>0.01){
+     amountMismatchCount++;
+     reconciliationIssues.push({...base,amount:Number(meta.amountReceived),issue:'Recorded amount differs from plan price',severity:'HIGH',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+    }
+    if(!record.paidAt){
+     reconciliationIssues.push({...base,issue:'Paid status has no payment date',severity:'WARN',ageLabel:'Date missing'});
+    }
+   }
+  }
+  reconciliationIssues.sort((a,b)=>(a.severity==='HIGH'?0:1)-(b.severity==='HIGH'?0:1));
+  const reconciliation={overdueCount,overdueAmount,failedCount,expiredCount,missingDetailsCount,amountMismatchCount,issues:reconciliationIssues.slice(0,100)};
+  res.json({records,totalReceived,thisMonthReceived,outstanding,reconciliation});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
