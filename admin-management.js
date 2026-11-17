@@ -1881,17 +1881,20 @@ function install(app){
     expiredCount++;reconciliationIssues.push({...base,issue:'Payment expired — renewal or retry may be needed',severity:'WARN'});
    }
    if(record.paymentStatus==='PAID'){
+    const reasons=[];
     const hasAuditDetails=Object.keys(meta).length>0;
     if(!hasAuditDetails||meta.amountReceived==null||!meta.paymentMethod){
      missingDetailsCount++;
-     reconciliationIssues.push({...base,issue:'Payment details missing (may be an older record)',severity:'WARN',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+     reasons.push('Historical payment method / reference details were not captured');
     }
     if(meta.amountReceived!=null&&Math.abs(Number(meta.amountReceived)-Number(record.price||0))>0.01){
      amountMismatchCount++;
-     reconciliationIssues.push({...base,amount:Number(meta.amountReceived),issue:'Recorded amount differs from plan price',severity:'HIGH',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+     reasons.push('Recorded amount differs from plan price');
     }
-    if(!record.paidAt){
-     reconciliationIssues.push({...base,issue:'Paid status has no payment date',severity:'WARN',ageLabel:'Date missing'});
+    if(!record.paidAt)reasons.push('Payment date unavailable');
+    if(reasons.length){
+     const mismatch=reasons.some(reason=>reason==='Recorded amount differs from plan price');
+     reconciliationIssues.push({...base,amount:meta.amountReceived??record.amountReceived??record.price,issue:reasons.join(' · '),severity:mismatch?'HIGH':'WARN',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Historical date unavailable'});
     }
    }
   }
