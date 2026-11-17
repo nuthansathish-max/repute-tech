@@ -1882,13 +1882,16 @@ function install(app){
   const requests=await prisma.planRequest.findMany({include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
   const ids=requests.map(x=>x.id);
   const logs=ids.length?await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:{in:ids},action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED'},orderBy:{createdAt:'desc'}}):[];
+  const refundLogs=ids.length?await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:{in:ids},action:'ADMIN_SUBSCRIPTION_REFUND_RECORDED'},orderBy:{createdAt:'desc'}}):[];
   const latest=new Map();for(const log of logs){if(!latest.has(log.entityId))latest.set(log.entityId,log.metadata||{})}
-  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{};return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||x.ownerName||x.user?.name||null,ownerEmail:owner?.email||x.user?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),isCustom:Boolean(x.isCustom),customDetails:x.customDetails||'',requestStatus:x.status,paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,approvedAt:x.approvedAt,rejectedAt:x.rejectedAt,rejectionReason:x.rejectionReason,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price}:x);
+  const refundsByRequest=new Map();for(const log of refundLogs){const list=refundsByRequest.get(log.entityId)||[];list.push({amount:Number(log.metadata?.amount||0),method:log.metadata?.method||'',reference:log.metadata?.reference||'',reason:log.metadata?.reason||'',createdAt:log.createdAt});refundsByRequest.set(log.entityId,list)}
+  const records=requests.map(x=>{const owner=x.business.members[0]?.user,meta=latest.get(x.id)||{},refunds=refundsByRequest.get(x.id)||[],refundedAmount=refunds.reduce((sum,item)=>sum+item.amount,0),paidAmount=Number(meta.amountReceived??x.price??0);return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||x.ownerName||x.user?.name||null,ownerEmail:owner?.email||x.user?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,billingInterval:x.billingInterval,price:Number(x.price||0),isCustom:Boolean(x.isCustom),customDetails:x.customDetails||'',requestStatus:x.status,paymentStatus:x.paymentStatus==='MANUAL'?'PENDING':x.paymentStatus,paidAt:x.paidAt,approvedAt:x.approvedAt,rejectedAt:x.rejectedAt,rejectionReason:x.rejectionReason,amountReceived:meta.amountReceived??null,paymentMethod:meta.paymentMethod||null,reference:meta.reference||null,notes:meta.notes||null,refunds,refundedAmount,refundBalance:Math.max(0,paidAmount-refundedAmount),createdAt:x.createdAt}}).map(x=>x.paymentStatus==='PAID'&&!x.amountReceived?{...x,amountReceived:x.price,refundBalance:Math.max(0,x.price-x.refundedAmount)}:x);
   const approved=records.filter(x=>x.requestStatus==='APPROVED');
   const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1);
   const totalReceived=approved.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const thisMonthReceived=approved.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const outstanding=approved.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
+  const totalRefunded=records.reduce((sum,x)=>sum+Number(x.refundedAmount||0),0);
   const reconciliationIssues=[];
   let overdueCount=0,overdueAmount=0,failedCount=0,expiredCount=0,missingDetailsCount=0,amountMismatchCount=0;
   for(const record of records){
@@ -1925,8 +1928,34 @@ function install(app){
   }
   reconciliationIssues.sort((a,b)=>(a.severity==='HIGH'?0:1)-(b.severity==='HIGH'?0:1));
   const reconciliation={overdueCount,overdueAmount,failedCount,expiredCount,missingDetailsCount,amountMismatchCount,issues:reconciliationIssues.slice(0,100)};
-  res.json({records,totalReceived,thisMonthReceived,outstanding,reconciliation});
+  res.json({records,totalReceived,thisMonthReceived,outstanding,totalRefunded,reconciliation});
  }catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/plan-requests/:requestId/refunds',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;
+  const body=await readAdminJsonBody(req);
+  const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
+  if(!request)return res.status(404).json({error:'Plan request not found'});
+  if(request.status!=='APPROVED'||request.paymentStatus!=='PAID')return res.status(400).json({error:'Only approved, paid subscription payments can be refunded'});
+  const amount=Number(body?.amount);
+  if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'Enter a valid refund amount greater than zero'});
+  const method=String(body?.method||'').trim().slice(0,40);
+  const reference=String(body?.reference||'').trim().slice(0,120);
+  const reason=String(body?.reason||'').trim().slice(0,500);
+  if(!method)return res.status(400).json({error:'Refund method is required'});
+  if(!reason)return res.status(400).json({error:'Refund reason is required'});
+  const paymentLogs=await prisma.auditLog.findMany({where:{entity:'PlanRequest',entityId:request.id,action:'ADMIN_SUBSCRIPTION_PAYMENT_RECORDED'},orderBy:{createdAt:'desc'},take:1});
+  const originalAmount=Number(paymentLogs[0]?.metadata?.amountReceived??request.price??0);
+  const result=await prisma.$transaction(async tx=>{
+   const existing=await tx.auditLog.findMany({where:{entity:'PlanRequest',entityId:request.id,action:'ADMIN_SUBSCRIPTION_REFUND_RECORDED'}});
+   const alreadyRefunded=existing.reduce((sum,log)=>sum+Number(log.metadata?.amount||0),0);
+   const remaining=Math.max(0,originalAmount-alreadyRefunded);
+   if(amount>remaining+0.001)throw new Error('Refund exceeds remaining refundable balance of ₹'+remaining.toFixed(2));
+   const created=await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_SUBSCRIPTION_REFUND_RECORDED',entity:'PlanRequest',entityId:request.id,metadata:{businessId:request.businessId,amount,method,reference,reason,originalAmount,remainingAfter:Math.max(0,remaining-amount)}}});
+   return {id:created.id,amount,method,reference,reason,createdAt:created.createdAt,refundedAmount:alreadyRefunded+amount,refundBalance:Math.max(0,remaining-amount)};
+  });
+  res.json({ok:true,refund:result});
+ }catch(e){if(String(e?.message||'').startsWith('Refund exceeds remaining'))return res.status(400).json({error:e.message});next(e)}});
+
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await ensureCustomPlanRequestColumns();
