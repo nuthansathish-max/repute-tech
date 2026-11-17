@@ -1535,7 +1535,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const cardFilter=window.__payoutCardFilter||'';
   const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1),nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
   const inCurrentMonth=value=>{const d=value?new Date(value):null;return !!d&&!Number.isNaN(d.getTime())&&d>=monthStart&&d<nextMonth};
-  const hasRefund=x=>Array.isArray(x.refunds)&&x.refunds.some(ref=>Number(ref.amount)>0);
+  const hasRefund=x=>Number(x.refundedAmount||0)>0||(Array.isArray(x.refunds)&&x.refunds.some(ref=>Number(ref.amount)>0));
   const hasRefundThisMonth=x=>Array.isArray(x.refunds)&&x.refunds.some(ref=>Number(ref.amount)>0&&inCurrentMonth(ref.createdAt));
   const filtered=records.filter(x=>{
    const textMatch=[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.reference,x.paymentMethod,x.requesterEmail].join(' ').toLowerCase().includes(q);
@@ -1604,8 +1604,9 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();applyPayoutCardFilter(card)}
  });
  $('paySearch')?.addEventListener('input',()=>{window.__payoutCardFilter='';document.querySelectorAll('[data-payout-card]').forEach(el=>el.classList.remove('is-metric-selected'));renderPayoutLedger()});
- $('payFilter')?.addEventListener('change',renderPayoutLedger);
- $('payRequestFilter')?.addEventListener('change',renderPayoutLedger);
+ const clearPayoutCardFilter=()=>{window.__payoutCardFilter='';document.querySelectorAll('[data-payout-card]').forEach(el=>el.classList.remove('is-metric-selected'));renderPayoutLedger()};
+ $('payFilter')?.addEventListener('change',clearPayoutCardFilter);
+ $('payRequestFilter')?.addEventListener('change',clearPayoutCardFilter);
  $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payReconcileRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payExport')?.addEventListener('click',()=>{
