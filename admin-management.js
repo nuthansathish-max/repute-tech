@@ -593,6 +593,17 @@ function adminPage(){
      <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
      <div class="card"><div class="section-title"><h2>Gateway & payout status</h2><span class="pill warn">DISABLED</span></div><div class="name">No online gateway or automated payout is connected.</div><div class="sub">Razorpay, Cashfree, Stripe, settlement tracking and money transfers remain disabled. No gateway or payout figures are fabricated.</div></div>
     </div>
+    <div class="section card" id="payoutReconciliation">
+     <div class="section-title"><div><h2>Payment reconciliation</h2><span>Checks subscription ledger entries against their recorded payment audit details</span></div><button class="smallbtn" id="payReconcileRefresh">Refresh checks</button></div>
+     <div class="grid4" style="margin-top:10px">
+      <div class="card"><div class="label">Overdue Bills (7+ days)</div><div class="metric" id="payOverdueCount">—</div><div class="sub" id="payOverdueAmount">Amount: —</div></div>
+      <div class="card"><div class="label">Failed / Expired</div><div class="metric" id="payFailedExpired">—</div><div class="sub">Payments needing follow-up</div></div>
+      <div class="card"><div class="label">Missing Payment Details</div><div class="metric" id="payMissingDetails">—</div><div class="sub">Includes older records without audit metadata</div></div>
+      <div class="card"><div class="label">Amount Mismatches</div><div class="metric" id="payAmountMismatch">—</div><div class="sub">Recorded amount differs from plan price</div></div>
+     </div>
+     <div class="section-title" style="margin-top:14px"><h3>Items to review</h3><span class="sub">No automatic payment status changes are made</span></div>
+     <div id="payReconciliationRows"><div class="empty">Loading reconciliation checks…</div></div>
+    </div>
    </section>
 
    <section id="notifications" class="hidden">
@@ -1489,6 +1500,16 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payOutstanding').textContent=money(d.outstanding||0);
   $('payMonth').textContent=money(d.thisMonthReceived||0);
   renderPayoutLedger();
+  renderPayoutReconciliation(d.reconciliation||{});
+ }
+ function renderPayoutReconciliation(data){
+  const issues=Array.isArray(data.issues)?data.issues:[];
+  $('payOverdueCount').textContent=String(data.overdueCount||0);
+  $('payOverdueAmount').textContent='Amount: '+money(data.overdueAmount||0);
+  $('payFailedExpired').textContent=String((data.failedCount||0)+(data.expiredCount||0));
+  $('payMissingDetails').textContent=String(data.missingDetailsCount||0);
+  $('payAmountMismatch').textContent=String(data.amountMismatchCount||0);
+  $('payReconciliationRows').innerHTML=issues.length?'<div class="table-wrap"><div class="row head" style="display:grid;grid-template-columns:1.3fr 1fr 1.2fr 1fr;gap:10px;padding:10px"><div>Business</div><div>Issue</div><div>Plan / Amount</div><div>Age / Status</div></div>'+issues.map(x=>'<div class="row" style="display:grid;grid-template-columns:1.3fr 1fr 1.2fr 1fr;gap:10px;padding:10px;border-top:1px solid #edf0f5;align-items:center"><div><strong>'+esc(x.businessName||'Business')+'</strong><div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+statusPill(x.severity||'WARN')+'<div class="sub">'+esc(x.issue)+'</div></div><div>'+esc(x.planName||'—')+'<div class="sub">'+money(x.amount??0)+' · expected '+money(x.expectedAmount??0)+'</div></div><div>'+esc(x.ageLabel||'—')+'<div class="sub">'+esc(x.paymentStatus||x.requestStatus||'')+'</div></div></div>').join('')+'</div>':'<div class="empty">No reconciliation issues found in the current subscription ledger.</div>';
  }
  function renderPayoutLedger(){
   const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL',requestFilter=$('payRequestFilter')?.value||'ALL';
@@ -1520,6 +1541,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  $('payFilter')?.addEventListener('change',renderPayoutLedger);
  $('payRequestFilter')?.addEventListener('change',renderPayoutLedger);
  $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
+ $('payReconcileRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payExport')?.addEventListener('click',()=>{
   const records=window.__paymentLedger||[],headers=['Business','Owner','Email','Plan','Billing interval','Amount received','Payment status','Paid at','Method','Reference','Notes','Request ID'];
   const data=records.map(x=>[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.billingInterval,x.amountReceived??x.price,x.paymentStatus,x.paidAt,x.paymentMethod,x.reference,x.notes,x.id]);
@@ -1842,7 +1864,40 @@ function install(app){
   const totalReceived=approved.filter(x=>x.paymentStatus==='PAID').reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const thisMonthReceived=approved.filter(x=>x.paymentStatus==='PAID'&&x.paidAt&&new Date(x.paidAt)>=monthStart).reduce((sum,x)=>sum+Number(x.amountReceived??x.price??0),0);
   const outstanding=approved.filter(x=>x.paymentStatus!=='PAID').reduce((sum,x)=>sum+Number(x.price||0),0);
-  res.json({records,totalReceived,thisMonthReceived,outstanding});
+  const reconciliationIssues=[];
+  let overdueCount=0,overdueAmount=0,failedCount=0,expiredCount=0,missingDetailsCount=0,amountMismatchCount=0;
+  for(const record of records){
+   const ageDays=Math.max(0,Math.floor((now.getTime()-new Date(record.createdAt).getTime())/86400000));
+   const meta=latest.get(record.id)||{};
+   const base={businessName:record.businessName,ownerEmail:record.ownerEmail,planName:record.planName||record.planCode,amount:Number(record.amountReceived??record.price??0),expectedAmount:Number(record.price||0),paymentStatus:record.paymentStatus,requestStatus:record.requestStatus,ageLabel:ageDays+' day'+(ageDays===1?'':'s')};
+   if(record.requestStatus==='APPROVED'&&record.paymentStatus!=='PAID'&&ageDays>=7){
+    overdueCount++;overdueAmount+=Number(record.price||0);
+    reconciliationIssues.push({...base,issue:'Bill overdue for 7+ days',severity:'WARN'});
+   }
+   if(record.paymentStatus==='FAILED'){
+    failedCount++;reconciliationIssues.push({...base,issue:'Payment marked failed — follow up required',severity:'HIGH'});
+   }
+   if(record.paymentStatus==='EXPIRED'){
+    expiredCount++;reconciliationIssues.push({...base,issue:'Payment expired — renewal or retry may be needed',severity:'WARN'});
+   }
+   if(record.paymentStatus==='PAID'){
+    const hasAuditDetails=Object.keys(meta).length>0;
+    if(!hasAuditDetails||meta.amountReceived==null||!meta.paymentMethod){
+     missingDetailsCount++;
+     reconciliationIssues.push({...base,issue:'Payment details missing (may be an older record)',severity:'WARN',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+    }
+    if(meta.amountReceived!=null&&Math.abs(Number(meta.amountReceived)-Number(record.price||0))>0.01){
+     amountMismatchCount++;
+     reconciliationIssues.push({...base,amount:Number(meta.amountReceived),issue:'Recorded amount differs from plan price',severity:'HIGH',ageLabel:record.paidAt?'Paid '+new Date(record.paidAt).toLocaleDateString('en-IN'):'Paid date unavailable'});
+    }
+    if(!record.paidAt){
+     reconciliationIssues.push({...base,issue:'Paid status has no payment date',severity:'WARN',ageLabel:'Date missing'});
+    }
+   }
+  }
+  reconciliationIssues.sort((a,b)=>(a.severity==='HIGH'?0:1)-(b.severity==='HIGH'?0:1));
+  const reconciliation={overdueCount,overdueAmount,failedCount,expiredCount,missingDetailsCount,amountMismatchCount,issues:reconciliationIssues.slice(0,100)};
+  res.json({records,totalReceived,thisMonthReceived,outstanding,reconciliation});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
