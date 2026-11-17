@@ -596,6 +596,7 @@ function adminPage(){
      <div class="card metric-card"><div class="label">Paid This Month</div><div class="metric" id="payMonth">—</div><div class="sub">Based on recorded payment dates</div></div>
      <div class="card metric-card"><div class="label">Refunds Recorded</div><div class="metric" id="payRefunded">—</div><div class="sub">Manual subscription refunds recorded</div></div>
      <div class="card metric-card"><div class="label">Online Gateways</div><div class="metric" style="font-size:19px">Not connected</div><div class="sub">Manual payments only · no gateway integration</div></div>
+     <div class="card metric-card"><div class="label">Refunds This Month</div><div class="metric" id="payRefundedMonth">—</div><div class="sub">Subscription refunds recorded in the current calendar month</div></div>
     </div>
     <div class="section card">
      <div class="section-title"><div><h2>Manual Subscription Payment Management</h2><span>Record money received by Repute Tech from business owners</span></div><span class="pill">ADMIN CONTROL</span></div>
@@ -1515,6 +1516,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payOutstanding').textContent=money(d.outstanding||0);
   $('payMonth').textContent=money(d.thisMonthReceived||0);
   $('payRefunded').textContent=money(d.totalRefunded||0);
+  const now=new Date(),monthRefunds=records.reduce((total,record)=>total+(Array.isArray(record.refunds)?record.refunds.reduce((sum,refund)=>{const created=refund.createdAt?new Date(refund.createdAt):null;return sum+(created&&!Number.isNaN(created.getTime())&&created.getFullYear()===now.getFullYear()&&created.getMonth()===now.getMonth()?Number(refund.amount)||0:0)},0):0),0);
+  $('payRefundedMonth').textContent=money(monthRefunds);
   renderPayoutLedger();
   renderPayoutReconciliation(d.reconciliation||{});
  }
