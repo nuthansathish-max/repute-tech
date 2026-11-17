@@ -204,13 +204,26 @@ function adminPage(){
 #payouts .payout-row>div{min-width:0;overflow-wrap:anywhere}
 #payouts .payout-manage-btn{min-width:84px;min-height:34px;font-weight:750}
 #payouts .payout-modal-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(12,18,32,.58);display:flex;align-items:center;justify-content:center;padding:16px}
-#payouts .payout-modal{width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;border:1px solid #e4e7ef;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(10,15,30,.28)}
+#payouts .payout-modal{width:min(760px,100%);max-height:88vh;overflow:auto;background:#fff;border:1px solid #e4e7ef;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(10,15,30,.28)}
 #payouts .payout-modal-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
 #payouts .payout-modal-title h3{margin:0;color:#202b40;font-size:17px}
 #payouts .payout-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 #payouts .payout-modal-field{padding:10px;border:1px solid #e9edf4;border-radius:10px;background:#fafbfe;min-width:0}
 #payouts .payout-modal-field small{display:block;color:#778197;font-size:10px;margin-bottom:4px}
 #payouts .payout-modal-field strong{display:block;color:#263249;font-size:12px;overflow-wrap:anywhere}
+#payouts .payout-refund-panel{margin-top:16px;padding:18px;border:1px solid #dfe4f2;border-radius:12px;background:#f8f9fd}
+#payouts .payout-refund-panel[hidden]{display:none}
+#payouts .payout-refund-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:16px}
+#payouts .payout-refund-heading h4{margin:0 0 4px;color:#202b40;font-size:15px}
+#payouts .payout-refund-balance{padding:9px 12px;background:#fff;border:1px solid #e5e9f2;border-radius:8px;color:#59657a;white-space:nowrap}
+#payouts .payout-refund-balance strong{color:#202b40;margin-left:5px}
+#payouts .payout-refund-form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#payouts .payout-refund-form>label{display:flex;flex-direction:column;gap:7px;color:#354158;font-size:12px;font-weight:700}
+#payouts .payout-refund-form input:not([type=checkbox]),#payouts .payout-refund-form select{width:100%;min-height:40px;padding:9px 11px;border:1px solid #d9dfeb;border-radius:8px;background:#fff;color:#253149;font:inherit;font-weight:500}
+#payouts .payout-refund-form .payout-refund-reason,#payouts .payout-refund-form .payout-refund-confirm,#payouts .payout-refund-actions{grid-column:1/-1}
+#payouts .payout-refund-form .payout-refund-confirm{display:flex;flex-direction:row;align-items:center;gap:9px;padding:11px 12px;border:1px solid #e3e7ef;border-radius:8px;background:#fff;font-weight:500}
+#payouts .payout-refund-confirm input{width:16px;height:16px}
+#payouts .payout-refund-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:4px}
 #payouts .payout-modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;padding-top:13px;border-top:1px solid #edf0f5}
 #payouts .payout-modal-actions .smallbtn{min-height:38px;padding:0 13px}
 /* Subscription details action button appearance only */
@@ -1490,7 +1503,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   actions+='<button class="smallbtn payout-action-business" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View Business</button>';
   const fields=[['Business',x.businessName],['Owner',x.ownerName],['Owner email',x.ownerEmail],['Plan',x.planName||x.planCode],['Billing period',x.billingInterval],['Request status',req],['Payment status',pay],['Amount',money(x.amountReceived??x.price)],['Requested on',date(x.createdAt)],['Payment date',date(x.paidAt)],['Payment method',x.paymentMethod||'—'],['Reference',x.reference||'—'],['Refunded so far',money(x.refundedAmount||0)],['Remaining refundable balance',money(x.refundBalance??(x.amountReceived??x.price))]];
   const refundHistory=(x.refunds||[]).length?'<div class="payout-modal-field" style="margin-top:10px"><small>Refund history</small>'+x.refunds.map(r=>'<div class="sub" style="padding:5px 0;border-top:1px solid #edf0f5"><strong>'+money(r.amount)+'</strong> · '+esc(r.method||'—')+' · '+date(r.createdAt)+'<div>'+esc(r.reason||'')+(r.reference?' · Ref: '+esc(r.reference):'')+'</div></div>').join('')+'</div>':'<div class="payout-modal-field" style="margin-top:10px"><small>Refund history</small><strong>No refunds recorded</strong></div>';
-  const backdrop=document.createElement('div');backdrop.className='payout-modal-backdrop';backdrop.innerHTML='<div class="payout-modal" role="dialog" aria-modal="true" aria-label="Subscription request details"><div class="payout-modal-title"><div><h3>Subscription Details</h3><div class="sub">Review the request and choose an action</div></div><button class="smallbtn" data-action="close-payout-manager" aria-label="Close">Close</button></div><div class="payout-modal-grid">'+fields.map(([k,v])=>'<div class="payout-modal-field"><small>'+esc(k)+'</small><strong>'+esc(v??'—')+'</strong></div>').join('')+'</div>'+(x.customDetails?'<div class="payout-modal-field" style="margin-top:9px"><small>Custom plan requirements</small><strong>'+esc(x.customDetails)+'</strong></div>':'')+refundHistory+'<div class="payout-modal-actions">'+actions+'</div></div>';
+  const backdrop=document.createElement('div');backdrop.className='payout-modal-backdrop';backdrop.innerHTML='<div class="payout-modal" role="dialog" aria-modal="true" aria-label="Subscription request details"><div class="payout-modal-title"><div><h3>Subscription Details</h3><div class="sub">Review the request and choose an action</div></div><button class="smallbtn" data-action="close-payout-manager" aria-label="Close">Close</button></div><div class="payout-modal-grid">'+fields.map(([k,v])=>'<div class="payout-modal-field"><small>'+esc(k)+'</small><strong>'+esc(v??'—')+'</strong></div>').join('')+'</div>'+(x.customDetails?'<div class="payout-modal-field" style="margin-top:9px"><small>Custom plan requirements</small><strong>'+esc(x.customDetails)+'</strong></div>':'')+refundHistory+'<div class="payout-refund-panel" data-refund-form-panel hidden><div class="payout-refund-heading"><div><h4>Record Subscription Refund</h4><div class="sub">Enter the details of money already returned to the business owner</div></div><div class="payout-refund-balance">Remaining refundable: <strong data-refund-remaining></strong></div></div><form class="payout-refund-form"><label>Refund amount (₹)<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Refund method<select name="method" required><option value="">Select method</option><option value="UPI">UPI</option><option value="BANK_TRANSFER">Bank Transfer</option><option value="CASH">Cash</option><option value="OTHER">Other</option></select></label><label>Transaction / UTR reference <span class="sub">(Optional)</span><input name="reference" type="text" maxlength="160" placeholder="Enter transaction reference"></label><label class="payout-refund-reason">Reason for refund<input name="reason" type="text" maxlength="500" required placeholder="Enter the reason for this refund"></label><label class="payout-refund-confirm"><input name="confirmReturned" type="checkbox" required><span>I confirm this amount has already been returned to the business owner.</span></label><div class="payout-refund-actions"><button type="button" class="smallbtn" data-action="cancel-subscription-refund">Cancel</button><button type="submit" class="smallbtn primary">Record Refund</button></div></form></div><div class="payout-modal-actions">'+actions+'</div></div>';
   backdrop.addEventListener('click',e=>{if(e.target===backdrop)closePayoutManager()});
   $('payouts').appendChild(backdrop);
  }
@@ -1522,27 +1535,34 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
    return '<div class="row payout-row"><div class="payout-cell payout-business" data-label="Business / Owner"><div class="name">'+esc(x.businessName||'Business')+'</div><div class="sub">'+esc(x.ownerName||'')+' · '+esc(x.ownerEmail||'')+'</div></div><div class="payout-cell" data-label="Plan / Billing">'+esc(x.planName||x.planCode)+(x.isCustom?' · Custom':'')+'<div class="sub">'+esc(x.billingInterval||'')+'</div></div><div class="payout-cell" data-label="Request status">'+statusPill(requestStatus)+'<div class="sub">'+date(x.createdAt)+'</div></div><div class="payout-cell" data-label="Payment date / Method">'+date(x.paidAt)+'<div class="sub">'+esc(x.paymentMethod||'—')+'</div></div><div class="payout-cell" data-label="Amount">'+money(x.amountReceived??x.price)+(Number(x.refundedAmount||0)>0?'<div class="sub">Refunded '+money(x.refundedAmount)+'</div>':'')+'</div><div class="payout-cell" data-label="Payment">'+statusPill(paymentStatus)+'</div><div class="payout-cell" data-label="Reference">'+esc(x.reference||'—')+'</div><div class="payout-cell payout-manage" data-label="Actions"><button class="smallbtn primary payout-manage-btn" data-action="manage-payout-request" data-request-id="'+esc(x.id)+'">Manage</button></div></div>';
   }).join(''):'<div class="empty">No matching subscription requests.</div>';
  }
- async function recordSubscriptionRefund(id,button){
+ function openSubscriptionRefundForm(id){
   const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
-  if(row.paymentStatus!=='PAID')return alert('Only recorded PAID subscription payments can be refunded.');
+  if(String(row.paymentStatus||'').toUpperCase()!=='PAID')return alert('Only recorded PAID subscription payments can be refunded.');
   const remaining=Number(row.refundBalance??(row.amountReceived??row.price));
   if(!Number.isFinite(remaining)||remaining<=0)return alert('No refundable balance remains for this payment.');
-  const amountText=prompt('Enter the refund amount already returned to the business owner (₹). Remaining refundable balance: '+remaining.toLocaleString('en-IN'),String(remaining));
-  if(amountText===null)return;
-  const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0||amount>remaining+0.001)return alert('Enter a valid refund amount up to the remaining refundable balance.');
-  const method=prompt('Refund method: UPI, Bank Transfer, Cash or Other','UPI');if(method===null)return;
-  if(!method.trim())return alert('Refund method is required.');
-  const reference=prompt('Refund transaction / UTR / reference (optional):','');if(reference===null)return;
-  const reason=prompt('Reason for refund (required):','');if(reason===null)return;
-  if(!reason.trim())return alert('Refund reason is required.');
-  if(!confirm('Confirm that ₹'+amount.toLocaleString('en-IN')+' has already been returned to '+row.businessName+'? This only records the refund; it does not transfer money.'))return;
-  if(button){button.disabled=true;button.textContent='Saving…'}
+  const panel=document.querySelector('#payouts .payout-refund-panel');if(!panel)return;
+  const form=panel.querySelector('form');form.dataset.requestId=id;
+  form.querySelector('[name="amount"]').max=String(remaining);
+  form.querySelector('[name="amount"]').value=String(remaining);
+  panel.querySelector('[data-refund-remaining]').textContent=money(remaining);
+  panel.hidden=false;panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+ }
+ async function submitSubscriptionRefund(form){
+  const id=form.dataset.requestId,row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
+  const remaining=Number(row.refundBalance??(row.amountReceived??row.price));
+  const amount=Number(form.elements.amount.value),method=form.elements.method.value,reference=form.elements.reference.value.trim(),reason=form.elements.reason.value.trim();
+  if(String(row.paymentStatus||'').toUpperCase()!=='PAID')return alert('Only recorded PAID subscription payments can be refunded.');
+  if(!Number.isFinite(amount)||amount<=0||amount>remaining+0.001)return alert('Enter a valid refund amount up to the remaining refundable balance.');
+  if(!method)return alert('Select a refund method.');
+  if(!reason)return alert('Refund reason is required.');
+  if(!form.elements.confirmReturned.checked)return alert('Confirm that the money has already been returned before recording this refund.');
+  const button=form.querySelector('[type="submit"]');button.disabled=true;button.textContent='Saving…';
   try{
-   await api('/admin/plan-requests/'+encodeURIComponent(id)+'/refunds',{method:'POST',body:JSON.stringify({amount,method:method.trim(),reference:reference.trim(),reason:reason.trim()})});
+   await api('/admin/plan-requests/'+encodeURIComponent(id)+'/refunds',{method:'POST',body:JSON.stringify({amount,method,reference,reason})});
    alert('Refund recorded in the subscription audit history.');
    await loadPayoutLedger();
    if(window.__paymentLedger?.some(x=>x.id===id))openPayoutManager(id);
-  }catch(e){alert('Unable to record refund: '+e.message);if(button){button.disabled=false;button.textContent='Record Refund'}}
+  }catch(e){alert('Unable to record refund: '+e.message);button.disabled=false;button.textContent='Record Refund'}
  }
  async function recordSubscriptionPayment(id,button){
   const row=(window.__paymentLedger||[]).find(x=>x.id===id);if(!row)return;
@@ -1577,10 +1597,12 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   const manage=e.target.closest('[data-action="manage-payout-request"]');if(manage){e.preventDefault();openPayoutManager(manage.dataset.requestId);return}
   const close=e.target.closest('[data-action="close-payout-manager"]');if(close){e.preventDefault();closePayoutManager();return}
   const modalAction=e.target.closest('#payouts .payout-modal [data-action]');
-  if(modalAction&&modalAction.dataset.action!=='close-payout-manager'&&modalAction.dataset.action!=='manage-payout-request'){closePayoutManager()}
-  const refund=e.target.closest('[data-action="record-subscription-refund"]');if(refund){e.preventDefault();recordSubscriptionRefund(refund.dataset.requestId,refund);return}
+  if(modalAction&&modalAction.dataset.action!=='close-payout-manager'&&modalAction.dataset.action!=='manage-payout-request'&&modalAction.dataset.action!=='record-subscription-refund'&&modalAction.dataset.action!=='cancel-subscription-refund'){closePayoutManager()}
+  const refund=e.target.closest('[data-action="record-subscription-refund"]');if(refund){e.preventDefault();openSubscriptionRefundForm(refund.dataset.requestId);return}
+  const cancelRefund=e.target.closest('[data-action="cancel-subscription-refund"]');if(cancelRefund){e.preventDefault();const panel=cancelRefund.closest('[data-refund-form-panel]');if(panel)panel.hidden=true;return}
   const b=e.target.closest('[data-action="record-subscription-payment"]');if(b){e.preventDefault();recordSubscriptionPayment(b.dataset.requestId,b)}
  });
+ document.addEventListener('submit',e=>{const form=e.target.closest('#payouts .payout-refund-form');if(!form)return;e.preventDefault();submitSubscriptionRefund(form)});
  async function changePayoutPaymentStatus(id,select){
   if(!id||!select)return;const status=select.value;select.disabled=true;
   try{await api('/admin/plan-requests/'+encodeURIComponent(id)+'/payment-status',{method:'POST',body:JSON.stringify({paymentStatus:status})});alert('Subscription payment status updated.');await loadPayoutLedger();}
