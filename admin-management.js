@@ -593,6 +593,17 @@ function adminPage(){
      <div class="card"><div class="section-title"><h2>Payment audit trail</h2><span>Append-only admin records</span></div><div class="sub">Each payment confirmation stores the confirming admin, timestamp, amount received, method, transaction reference and notes in the platform audit log. Corrections do not erase previous audit entries.</div></div>
      <div class="card"><div class="section-title"><h2>Gateway & payout status</h2><span class="pill warn">DISABLED</span></div><div class="name">No online gateway or automated payout is connected.</div><div class="sub">Razorpay, Cashfree, Stripe, settlement tracking and money transfers remain disabled. No gateway or payout figures are fabricated.</div></div>
     </div>
+    <div class="section card" id="payoutReconciliation">
+     <div class="section-title"><div><h2>Payment reconciliation</h2><span>Checks subscription ledger entries against their recorded payment audit details</span></div><button class="smallbtn" id="payReconcileRefresh">Refresh checks</button></div>
+     <div class="grid4" style="margin-top:10px">
+      <div class="card"><div class="label">Overdue Bills (7+ days)</div><div class="metric" id="payOverdueCount">—</div><div class="sub" id="payOverdueAmount">Amount: —</div></div>
+      <div class="card"><div class="label">Failed / Expired</div><div class="metric" id="payFailedExpired">—</div><div class="sub">Payments needing follow-up</div></div>
+      <div class="card"><div class="label">Missing Payment Details</div><div class="metric" id="payMissingDetails">—</div><div class="sub">Includes older records without audit metadata</div></div>
+      <div class="card"><div class="label">Amount Mismatches</div><div class="metric" id="payAmountMismatch">—</div><div class="sub">Recorded amount differs from plan price</div></div>
+     </div>
+     <div class="section-title" style="margin-top:14px"><h3>Items to review</h3><span class="sub">No automatic payment status changes are made</span></div>
+     <div id="payReconciliationRows"><div class="empty">Loading reconciliation checks…</div></div>
+    </div>
    </section>
 
    <section id="notifications" class="hidden">
@@ -1489,6 +1500,16 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('payOutstanding').textContent=money(d.outstanding||0);
   $('payMonth').textContent=money(d.thisMonthReceived||0);
   renderPayoutLedger();
+  renderPayoutReconciliation(d.reconciliation||{});
+ }
+ function renderPayoutReconciliation(data){
+  const issues=Array.isArray(data.issues)?data.issues:[];
+  $('payOverdueCount').textContent=String(data.overdueCount||0);
+  $('payOverdueAmount').textContent='Amount: '+money(data.overdueAmount||0);
+  $('payFailedExpired').textContent=String((data.failedCount||0)+(data.expiredCount||0));
+  $('payMissingDetails').textContent=String(data.missingDetailsCount||0);
+  $('payAmountMismatch').textContent=String(data.amountMismatchCount||0);
+  $('payReconciliationRows').innerHTML=issues.length?'<div class="table-wrap"><div class="row head" style="display:grid;grid-template-columns:1.3fr 1fr 1.2fr 1fr;gap:10px;padding:10px"><div>Business</div><div>Issue</div><div>Plan / Amount</div><div>Age / Status</div></div>'+issues.map(x=>'<div class="row" style="display:grid;grid-template-columns:1.3fr 1fr 1.2fr 1fr;gap:10px;padding:10px;border-top:1px solid #edf0f5;align-items:center"><div><strong>'+esc(x.businessName||'Business')+'</strong><div class="sub">'+esc(x.ownerEmail||'')+'</div></div><div>'+statusPill(x.severity||'WARN')+'<div class="sub">'+esc(x.issue)+'</div></div><div>'+esc(x.planName||'—')+'<div class="sub">'+money(x.amount??0)+' · expected '+money(x.expectedAmount??0)+'</div></div><div>'+esc(x.ageLabel||'—')+'<div class="sub">'+esc(x.paymentStatus||x.requestStatus||'')+'</div></div></div>').join('')+'</div>':'<div class="empty">No reconciliation issues found in the current subscription ledger.</div>';
  }
  function renderPayoutLedger(){
   const records=window.__paymentLedger||[],q=($('paySearch')?.value||'').toLowerCase(),filter=$('payFilter')?.value||'ALL',requestFilter=$('payRequestFilter')?.value||'ALL';
@@ -1520,6 +1541,7 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
  $('payFilter')?.addEventListener('change',renderPayoutLedger);
  $('payRequestFilter')?.addEventListener('change',renderPayoutLedger);
  $('payRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
+ $('payReconcileRefresh')?.addEventListener('click',()=>loadPayoutLedger().catch(e=>alert(e.message)));
  $('payExport')?.addEventListener('click',()=>{
   const records=window.__paymentLedger||[],headers=['Business','Owner','Email','Plan','Billing interval','Amount received','Payment status','Paid at','Method','Reference','Notes','Request ID'];
   const data=records.map(x=>[x.businessName,x.ownerName,x.ownerEmail,x.planName,x.billingInterval,x.amountReceived??x.price,x.paymentStatus,x.paidAt,x.paymentMethod,x.reference,x.notes,x.id]);
