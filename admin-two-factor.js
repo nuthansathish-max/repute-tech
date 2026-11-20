@@ -15,9 +15,11 @@ export async function ensureAdminTwoFactorTables() {
     "secretEnc" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT FALSE,
     "recoveryHashes" JSONB NOT NULL DEFAULT '[]'::jsonb,
+    "lastUsedStep" BIGINT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastUsedStep" BIGINT');
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminTwoFactorChallenge" (
     "tokenHash" TEXT PRIMARY KEY,
     "userId" TEXT NOT NULL,
@@ -77,14 +79,19 @@ function totp(secret, timestamp = Date.now()) {
   const binary = digest.readUInt32BE(offset) & 0x7fffffff;
   return String(binary % 1000000).padStart(6, '0');
 }
-export function verifyAdminTotp(secret, code) {
+function matchingAdminTotpStep(secret, code) {
   const candidate = String(code || '').replace(/\s/g, '');
-  if (!/^\d{6}$/.test(candidate)) return false;
+  if (!/^\d{6}$/.test(candidate)) return null;
   const now = Date.now();
-  return [-1, 0, 1].some(step => {
-    const expected = totp(secret, now + step * 30000);
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(candidate));
-  });
+  for (const step of [-1, 0, 1]) {
+    const counter = Math.floor(now / 30000) + step;
+    const expected = totp(secret, counter * 30000);
+    if (crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(candidate))) return counter;
+  }
+  return null;
+}
+export function verifyAdminTotp(secret, code) {
+  return matchingAdminTotpStep(secret, code) !== null;
 }
 function recoveryHash(code) { return tokenHash('admin-2fa-recovery:' + String(code).toUpperCase()); }
 function recoveryList(value) {
