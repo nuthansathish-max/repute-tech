@@ -242,7 +242,7 @@ function install(app) {
       const secret = base32Encode(crypto.randomBytes(20));
       await prisma.$executeRawUnsafe(
         `INSERT INTO "AdminTwoFactor" ("userId","secretEnc","enabled","recoveryHashes") VALUES ($1,$2,FALSE,'[]'::jsonb)
-         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"updatedAt"=CURRENT_TIMESTAMP`,
+         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"lastUsedStep"=NULL,"updatedAt"=CURRENT_TIMESTAMP`,
         user.id, encrypt(secret)
       );
       const label = encodeURIComponent('reputetechs.in:' + user.email);
@@ -259,10 +259,11 @@ function install(app) {
       const rows = await prisma.$queryRawUnsafe('SELECT "secretEnc","enabled" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1', user.id);
       if (!rows?.[0] || rows[0].enabled) return res.status(400).json({ error: 'Start a new authenticator setup first.' });
       const secret = decrypt(rows[0].secretEnc);
-      if (!verifyAdminTotp(secret, req.body?.code)) return res.status(400).json({ error: 'That code is not valid. Check your authenticator app and try again.' });
+      const matchedStep = matchingAdminTotpStep(secret, req.body?.code);
+      if (matchedStep === null) return res.status(400).json({ error: 'That code is not valid. Check your authenticator app and try again.' });
       const recoveryCodes = newRecoveryCodes();
       const hashes = recoveryCodes.map(recoveryHash);
-      await prisma.$executeRawUnsafe('UPDATE "AdminTwoFactor" SET "enabled"=TRUE,"recoveryHashes"=$1::jsonb,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$2', JSON.stringify(hashes), user.id);
+      await prisma.$executeRawUnsafe('UPDATE "AdminTwoFactor" SET "enabled"=TRUE,"recoveryHashes"=$1::jsonb,"lastUsedStep"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$3', JSON.stringify(hashes), BigInt(matchedStep), user.id);
       // Revoke sessions created before 2FA was enabled so an old admin cookie cannot bypass the new login check.
       await prisma.session.deleteMany({ where: { userId: user.id } });
       await prisma.auditLog.create({ data: { actorUserId: user.id, action: 'ADMIN_2FA_ENABLED', entity: 'User', entityId: user.id } }).catch(() => {});
