@@ -462,7 +462,7 @@ function adminPage(){
   <button class="nav" onclick="location.href='/admin-two-factor'"><span class="ico">🔐</span><span class="txt">Two-Factor Authentication</span></button>
   <button class="nav" data-view="billing"><span class="ico">▣</span><span class="txt">Billing Tiers</span></button>
   <button class="nav" data-view="rbac"><span class="ico">♙</span><span class="txt">Admin Accounts & RBAC</span></button>
-  <button class="nav" data-view="dangerous"><span class="ico">⚠</span><span class="txt">Dangerous Actions</span></button>
+  <button class="nav" onclick="location.href='/admin-dangerous-actions'"><span class="ico">⚠</span><span class="txt">Dangerous Actions</span></button>
   <button class="nav" data-view="notifications"><span class="ico">♢</span><span class="txt">Notifications & Alerts</span></button>
   <button class="nav" data-view="kill"><span class="ico">!</span><span class="txt">Emergency Kill Switch</span></button>
   <div style="margin-top:12px"><button class="nav" onclick="location.href='/'"><span class="ico">↗</span><span class="txt">Business Dashboard</span></button></div>
