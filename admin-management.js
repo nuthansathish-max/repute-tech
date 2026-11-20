@@ -1900,37 +1900,7 @@ function install(app){
   res.json({ok:true,feature,enabled,flags});
 }catch(e){next(e)}});
 
- originalPost.call(app,'/api/admin/businesses/:businessId/delete',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
-  const body=await readAdminJsonBody(req);
-  if(body?.confirmation!=='DELETE')return res.status(400).json({error:'Deletion confirmation is required'});
-  const businessId=req.params.businessId;
-  const business=await prisma.business.findUnique({where:{id:businessId},include:{members:true}});
-  if(!business)return res.status(404).json({error:'Business not found'});
-  await prisma.$transaction(async tx=>{
-    await tx.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_BUSINESS_DELETED',entity:'Business',entityId:business.id,metadata:{businessName:business.name,memberCount:business.members.length}}});
-    await tx.$executeRawUnsafe('DELETE FROM "CampaignMessage" WHERE "campaignId" IN (SELECT "id" FROM "Campaign" WHERE "businessId" = $1)',businessId);
-    await tx.campaign.deleteMany({where:{businessId}});
-    await tx.orderItem.deleteMany({where:{order:{businessId}}});
-    await tx.order.deleteMany({where:{businessId}});
-    await tx.menuItem.deleteMany({where:{menu:{businessId}}});
-    await tx.menu.deleteMany({where:{businessId}});
-    await tx.review.deleteMany({where:{businessId}});
-    await tx.reviewSyncLog.deleteMany({where:{businessId}});
-    await tx.qrScan.deleteMany({where:{qr:{businessId}}});
-    await tx.smartQr.deleteMany({where:{businessId}});
-    await tx.customer.deleteMany({where:{businessId}});
-    await tx.location.deleteMany({where:{businessId}});
-    await tx.googleConnection.updateMany({where:{businessId},data:{businessId:null}});
-    await tx.notification.updateMany({where:{businessId},data:{businessId:null}});
-    await tx.whatsAppConnection.deleteMany({where:{businessId}});
-    await tx.planRequest.deleteMany({where:{businessId}});
-    await tx.subscription.deleteMany({where:{businessId}});
-    await tx.businessMember.deleteMany({where:{businessId}});
-    await tx.business.delete({where:{id:businessId}});
-  });
-  res.json({ok:true});
-}catch(e){next(e)}});
+ originalPost.call(app,'/api/admin/businesses/:businessId/delete',async(_req,res)=>res.status(410).json({error:'Direct business deletion is disabled. Use the Dangerous Actions approval workflow; a second Super Admin must approve.'}));
 
  originalPost.call(app,'/api/admin/businesses/:businessId/reset-password',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
