@@ -54,6 +54,7 @@ function base32Encode(buffer) {
   for (const byte of buffer) {
     value = (value << 8) | byte; bits += 8;
     while (bits >= 5) { output += alphabet[(value >>> (bits - 5)) & 31]; bits -= 5; }
+    value &= (1 << bits) - 1;
   }
   if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
   return output;
@@ -64,7 +65,7 @@ function base32Decode(input) {
   for (const char of String(input).toUpperCase().replace(/=+$/g, '')) {
     const n = alphabet.indexOf(char); if (n < 0) throw new Error('Invalid authenticator secret');
     value = (value << 5) | n; bits += 5;
-    if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; }
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; value &= (1 << bits) - 1; }
   }
   return Buffer.from(out);
 }
@@ -86,6 +87,11 @@ export function verifyAdminTotp(secret, code) {
   });
 }
 function recoveryHash(code) { return tokenHash('admin-2fa-recovery:' + String(code).toUpperCase()); }
+function recoveryList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch {} }
+  return [];
+}
 function newRecoveryCodes() {
   return Array.from({ length: 10 }, () => {
     const raw = crypto.randomBytes(5).toString('hex').toUpperCase();
@@ -171,7 +177,7 @@ function install(app) {
       if (verifyAdminTotp(secret, code)) valid = true;
       else {
         const candidate = recoveryHash(code);
-        const hashes = Array.isArray(record.recoveryHashes) ? record.recoveryHashes : [];
+        const hashes = recoveryList(record.recoveryHashes);
         if (hashes.includes(candidate)) { valid = true; usedRecoveryHash = candidate; }
       }
       if (!valid) {
@@ -253,7 +259,7 @@ function install(app) {
       const secret = decrypt(rows[0].secretEnc);
       const code = String(req.body?.code || '').trim();
       let valid = verifyAdminTotp(secret, code), usedHash = null;
-      const hashes = Array.isArray(rows[0].recoveryHashes) ? rows[0].recoveryHashes : [];
+      const hashes = recoveryList(rows[0].recoveryHashes);
       if (!valid) { const h = recoveryHash(code); if (hashes.includes(h)) { valid = true; usedHash = h; } }
       if (!valid) return res.status(401).json({ error: 'Authenticator or recovery code is incorrect.' });
       await prisma.$executeRawUnsafe('DELETE FROM "AdminTwoFactor" WHERE "userId"=$1', user.id);
