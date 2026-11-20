@@ -658,7 +658,7 @@ function adminPage(){
      <div class="card metric-card health-kpi" data-health-filter="TRIAL" role="button" tabindex="0" title="Show trials ending soon"><div class="label">Trials Ending Soon</div><div class="metric" id="healthTrials">—</div><div class="sub">7 days or less remaining</div></div>
      <div class="card metric-card health-kpi" data-health-filter="BLOCKED" role="button" tabindex="0" title="Show businesses with blocked features"><div class="label">Blocked Features</div><div class="metric" id="healthBlocked">—</div><div class="sub">Businesses with admin-disabled features</div></div>
     </div>
-    <div class="section-title" style="margin-top:14px"><h2>Business Health & Risk Center</h2><span>Verified signals from current platform data</span></div>
+    <div class="section-title" style="margin-top:14px"><h2>Business Health & Risk Center</h2><span>Subscription, registration and latest recorded order/review signals</span></div>
     <div class="card">
       <div class="toolbar">
        <input id="healthSearch" class="input" placeholder="Search business, owner or risk">
@@ -667,8 +667,8 @@ function adminPage(){
       </div>
     </div>
     <div class="card table section health-table">
-      <div class="row head" style="grid-template-columns:1.4fr 1.1fr 1.15fr 1.25fr 1.3fr 120px;min-width:980px">
-       <div>Business</div><div>Owner</div><div>Subscription</div><div>Activity</div><div>Risk</div><div>Action</div>
+      <div class="row head" style="grid-template-columns:1.3fr 1.05fr 1.1fr 105px 1.2fr 1.3fr 100px;min-width:1120px">
+       <div>Business</div><div>Owner</div><div>Subscription & Payment</div><div>Registered</div><div>Order / Review Activity</div><div>Risk</div><div>Action</div>
       </div>
       <div id="healthRows"></div>
     </div>
@@ -1424,11 +1424,12 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   $('healthRows').innerHTML=filtered.map(x=>{
    const riskClass=x.riskLevel==='HIGH'?'bad':x.riskLevel==='MEDIUM'?'warn':'good';
    const risks=(x.risks||[]).map(r=>'<span class="pill '+riskClass+'" style="margin:2px">'+esc(r)+'</span>').join('');
-   return '<div class="row" style="grid-template-columns:1.4fr 1.1fr 1.15fr 1.25fr 1.3fr 120px;min-width:980px">'+
+   return '<div class="row" style="grid-template-columns:1.3fr 1.05fr 1.1fr 105px 1.2fr 1.3fr 100px;min-width:1120px">'+
     '<div><b>'+esc(x.businessName)+'</b><div class="sub">'+esc(x.businessType||'')+'</div></div>'+
     '<div>'+esc(x.ownerName||'—')+'<div class="sub">'+esc(x.ownerEmail||'')+'</div></div>'+
     '<div>'+esc(x.subscriptionLabel||'No subscription')+'<div class="sub">'+esc(x.paymentLabel||'')+'</div></div>'+
-    '<div>'+esc(x.activityLabel||'No activity')+'</div>'+
+    '<div>'+ (x.registeredAt?date(x.registeredAt):'—') +'</div>'+
+    '<div>'+esc(x.activityLabel||'No order/review activity recorded')+'</div>'+
     '<div>'+('<span class="pill '+riskClass+'">'+esc(x.riskLevel)+'</span>')+'<div style="margin-top:5px">'+risks+'</div></div>'+
     '<div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(x.businessId)+'">View</button></div>'+
    '</div>';
@@ -2323,18 +2324,17 @@ function install(app){
  originalGet.call(app,'/api/admin/business-health',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const now=new Date(), soon=new Date(now.getTime()+7*24*60*60*1000), stale=new Date(now.getTime()-30*24*60*60*1000);
-  const [businesses,subs,payments,orders,reviews,flagRows]=await Promise.all([
+  const [businesses,subs,payments,activityRows,flagRows]=await Promise.all([
    prisma.business.findMany({select:{id:true,name:true,type:true,isOpen:true,createdAt:true,members:{where:{role:'OWNER'},select:{userId:true,user:{select:{name:true,email:true}}}}},orderBy:{name:'asc'}}),
    prisma.subscription.findMany({select:{businessId:true,status:true,plan:true,billingInterval:true,trialEndsAt:true,currentPeriodEnd:true}}),
-   prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:{not:'PAID'}},select:{businessId:true,paymentStatus:true,price:true,billingInterval:true,planName:true}}),
-   prisma.order.findMany({select:{businessId:true,createdAt:true},orderBy:{createdAt:'desc'},take:10000}),
-   prisma.review.findMany({select:{businessId:true,createdAt:true},orderBy:{createdAt:'desc'},take:10000}),
+   prisma.planRequest.findMany({where:{status:'APPROVED',paymentStatus:{not:'PAID'}},select:{businessId:true,paymentStatus:true,price:true,billingInterval:true,planName:true,createdAt:true},orderBy:{createdAt:'desc'}}),
+   prisma.$queryRawUnsafe('SELECT "businessId", MAX("createdAt") AS "lastActivityAt" FROM (SELECT "businessId","createdAt" FROM "Order" UNION ALL SELECT "businessId","createdAt" FROM "Review") AS activity GROUP BY "businessId"'),
    prisma.$queryRawUnsafe('SELECT "id", COALESCE("adminFeatureFlags", \'{}\'::jsonb) AS flags FROM "Business"')
   ]);
   const subMap=new Map(subs.map(x=>[x.businessId,x]));
-  const payMap=new Map(payments.map(x=>[x.businessId,x]));
-  const latest=new Map();
-  for(const x of [...orders,...reviews]){if(!x.businessId)continue;const t=new Date(x.createdAt).getTime();if(!latest.has(x.businessId)||t>new Date(latest.get(x.businessId)).getTime())latest.set(x.businessId,x.createdAt);}
+  const payMap=new Map();
+  for(const x of payments){if(!payMap.has(x.businessId))payMap.set(x.businessId,x);}
+  const latest=new Map((activityRows||[]).map(x=>[x.businessId,x.lastActivityAt]));
   const flagsMap=new Map((flagRows||[]).map(x=>{let f=x.flags||{};if(typeof f==='string'){try{f=JSON.parse(f)}catch{f={}}}return [x.id,f]}));
   const rows=businesses.map(b=>{
    const sub=subMap.get(b.id), payment=payMap.get(b.id), last=latest.get(b.id);
@@ -2355,7 +2355,8 @@ function install(app){
    if(risks.some(x=>['PAYMENT DUE','TRIAL EXPIRED','NO ACTIVE SUBSCRIPTION','NO ACTIVITY','BUSINESS CLOSED'].includes(x)||x.includes('FEATURE')))riskLevel='HIGH';
    else if(risks.length)riskLevel='MEDIUM';
    const owner=b.members?.[0]?.user;
-   return {businessId:b.id,businessName:b.name||'Unnamed business',businessType:b.type||'',registeredAt:businessCreated?businessCreated.toISOString():null,ownerName:owner?.name||'',ownerEmail:owner?.email||'',riskLevel,risks,blockedFeatures:blocked,subscriptionLabel:sub?((sub.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<now?'TRIAL EXPIRED · ':String(sub.plan||'').replace(/_/g,' ')+' · ')+(sub.billingInterval||'')):'No subscription',paymentLabel:payment?('Payment '+String(payment.paymentStatus||'PENDING')):'Paid / none pending',activityLabel:last?('Last activity '+new Date(last).toLocaleDateString('en-IN')):(newlyRegistered?'Recently registered · no activity yet':'No recorded order/review activity')};
+   const paymentLabel=payment?'Unpaid approved request · '+String(payment.planName||'Plan')+' · '+String(payment.paymentStatus||'PENDING')+' · ₹'+Number(payment.price||0).toLocaleString('en-IN'):'No unpaid approved request';
+   return {businessId:b.id,businessName:b.name||'Unnamed business',businessType:b.type||'',registeredAt:businessCreated?businessCreated.toISOString():null,ownerName:owner?.name||'',ownerEmail:owner?.email||'',riskLevel,risks,blockedFeatures:blocked,subscriptionLabel:sub?((sub.status==='TRIAL'&&sub.trialEndsAt&&new Date(sub.trialEndsAt)<now?'TRIAL EXPIRED · ':String(sub.plan||'').replace(/_/g,' ')+' · ')+(sub.billingInterval||'')):'No subscription',paymentLabel,activityLabel:last?'Latest recorded order/review · '+new Date(last).toLocaleDateString('en-IN'):(newlyRegistered?'Recently registered · no order/review activity yet':'No recorded order/review activity')};
   });
   const summary={attention:rows.filter(x=>x.riskLevel!=='HEALTHY').length,paymentIssues:rows.filter(x=>x.risks.includes('PAYMENT DUE')).length,trialsEndingSoon:rows.filter(x=>x.risks.includes('TRIAL ENDING')).length,blockedFeatures:rows.filter(x=>x.blockedFeatures.length>0).length};
   res.json({summary,businesses:rows});
