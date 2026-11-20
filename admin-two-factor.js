@@ -178,27 +178,42 @@ function install(app) {
       const record = recordRows?.[0];
       if (!record?.enabled) return res.status(401).json({ error: 'Two-factor authentication is not enabled for this account. Sign in again.' });
       const code = String(req.body?.code || '').trim();
-      let valid = false, usedRecoveryHash = null;
       let secret = '';
       try { secret = decrypt(record.secretEnc); } catch { return res.status(500).json({ error: 'Authenticator configuration could not be read. Contact support.' }); }
-      if (verifyAdminTotp(secret, code)) valid = true;
-      else {
-        const candidate = recoveryHash(code);
-        const hashes = recoveryList(record.recoveryHashes);
-        if (hashes.includes(candidate)) { valid = true; usedRecoveryHash = candidate; }
-      }
-      if (!valid) {
+      const matchedStep = matchingAdminTotpStep(secret, code);
+      const candidateRecoveryHash = recoveryHash(code);
+      const isRecoveryCandidate = recoveryList(record.recoveryHashes).includes(candidateRecoveryHash);
+      if (matchedStep === null && !isRecoveryCandidate) {
         await prisma.$executeRawUnsafe('UPDATE "AdminTwoFactorChallenge" SET "attempts"="attempts"+1 WHERE "tokenHash"=$1', key);
         return res.status(401).json({ error: 'Invalid code. Check your authenticator or recovery code and try again.' });
       }
+      const consumedChallenge = await prisma.$queryRawUnsafe('DELETE FROM "AdminTwoFactorChallenge" WHERE "tokenHash"=$1 RETURNING "tokenHash"', key);
+      if (!consumedChallenge?.length) {
+        clearChallengeCookie(res);
+        return res.status(401).json({ error: 'This verification request has already been used. Please sign in again.' });
+      }
+      if (matchedStep !== null) {
+        const consumedStep = await prisma.$executeRawUnsafe(
+          'UPDATE "AdminTwoFactor" SET "lastUsedStep"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$2 AND ("lastUsedStep" IS NULL OR "lastUsedStep" < $1)',
+          BigInt(matchedStep), challenge.userId
+        );
+        if (!consumedStep) {
+          clearChallengeCookie(res);
+          return res.status(401).json({ error: 'That authenticator code has already been used. Wait for the next code and sign in again.' });
+        }
+      } else {
+        const consumedRecovery = await prisma.$executeRawUnsafe(
+          'UPDATE "AdminTwoFactor" SET "recoveryHashes"="recoveryHashes" - $1,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$2 AND "recoveryHashes" ? $1',
+          candidateRecoveryHash, challenge.userId
+        );
+        if (!consumedRecovery) {
+          clearChallengeCookie(res);
+          return res.status(401).json({ error: 'That recovery code has already been used. Please sign in again.' });
+        }
+      }
       const user = await prisma.user.findUnique({ where: { id: challenge.userId } });
       if (!user || !['ADMIN', 'SUPER_ADMIN'].includes(user.role)) return res.status(403).json({ error: 'Admin access is no longer available for this account.' });
-      if (usedRecoveryHash) {
-        const hashes = Array.isArray(record.recoveryHashes) ? record.recoveryHashes.filter(x => x !== usedRecoveryHash) : [];
-        await prisma.$executeRawUnsafe('UPDATE "AdminTwoFactor" SET "recoveryHashes"=$1::jsonb,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$2', JSON.stringify(hashes), user.id);
-      }
-      await prisma.$executeRawUnsafe('DELETE FROM "AdminTwoFactorChallenge" WHERE "tokenHash"=$1', key);
-      const sessionToken = randomToken();
+            const sessionToken = randomToken();
       await prisma.session.create({ data: { tokenHash: tokenHash(sessionToken), userId: user.id, expiresAt: new Date(Date.now() + 14 * 864e5) } });
       setSessionCookie(res, sessionToken);
       clearChallengeCookie(res);
