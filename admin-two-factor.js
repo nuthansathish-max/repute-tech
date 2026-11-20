@@ -45,7 +45,7 @@ export async function startAdminTwoFactorChallenge(userId, res) {
   );
   const parts = [`rp_admin_2fa_challenge=${token}`, 'Max-Age=300', 'Path=/', 'HttpOnly', 'SameSite=Lax'];
   if (process.env.NODE_ENV === 'production') parts.push('Secure');
-  res.setHeader('Set-Cookie', parts.join('; '));
+  res.append('Set-Cookie', parts.join('; '));
 }
 
 function base32Encode(buffer) {
@@ -133,7 +133,7 @@ async function load(){try{const d=await api('/api/admin/two-factor');me=d.curren
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 el('refresh').onclick=load;
 el('startSetup').onclick=async()=>{try{const d=await api('/api/admin/two-factor/setup',{});el('qr').src=d.qrDataUrl;el('secret').textContent=d.secret;el('setup').classList.add('show');el('setupMessage').textContent='Scan the code, then confirm with your authenticator app.'}catch(e){el('message').textContent=e.message;el('message').className='error'}};
-el('confirm').onclick=async()=>{try{const d=await api('/api/admin/two-factor/enable',{code:el('confirmCode').value});recoveryCodes=d.recoveryCodes;el('codes').innerHTML=recoveryCodes.map(x=>'<div>'+escapeHtml(x)+'</div>').join('');el('recovery').style.display='block';el('setup').classList.remove('show');el('myStatus').textContent='2FA enabled. Save your recovery codes now.';el('startSetup').style.display='none';el('disable').style.display='inline-block';el('message').textContent='Enrollment successful. Please save your recovery codes.';load();}catch(e){el('setupMessage').textContent=e.message;el('setupMessage').className='error'}};
+el('confirm').onclick=async()=>{try{const d=await api('/api/admin/two-factor/enable',{code:el('confirmCode').value});recoveryCodes=d.recoveryCodes;el('codes').innerHTML=recoveryCodes.map(x=>'<div>'+escapeHtml(x)+'</div>').join('');el('recovery').style.display='block';el('setup').classList.remove('show');el('myStatus').textContent='2FA enabled. Save your recovery codes now.';el('startSetup').style.display='none';el('disable').style.display='inline-block';el('message').textContent='Enrollment successful. Please save your recovery codes.';}catch(e){el('setupMessage').textContent=e.message;el('setupMessage').className='error'}};
 el('disable').onclick=()=>{el('disableBox').style.display='block'};
 el('confirmDisable').onclick=async()=>{try{await api('/api/admin/two-factor/disable',{password:el('disablePassword').value,code:el('disableCode').value});el('disableMessage').textContent='2FA disabled. Please sign in again.';el('disableMessage').className='notice';setTimeout(()=>location.href='/admin-login',900)}catch(e){el('disableMessage').textContent=e.message;el('disableMessage').className='error'}};
 el('copyCodes').onclick=async()=>{try{await navigator.clipboard.writeText(recoveryCodes.join('\n'));el('message').textContent='Recovery codes copied.'}catch{el('message').textContent='Copy unavailable; please save the codes manually.'}};
@@ -185,10 +185,10 @@ function install(app) {
         await prisma.$executeRawUnsafe('UPDATE "AdminTwoFactor" SET "recoveryHashes"=$1::jsonb,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$2', JSON.stringify(hashes), user.id);
       }
       await prisma.$executeRawUnsafe('DELETE FROM "AdminTwoFactorChallenge" WHERE "tokenHash"=$1', key);
-      clearChallengeCookie(res);
       const sessionToken = randomToken();
       await prisma.session.create({ data: { tokenHash: tokenHash(sessionToken), userId: user.id, expiresAt: new Date(Date.now() + 14 * 864e5) } });
       setSessionCookie(res, sessionToken);
+      clearChallengeCookie(res);
       res.set('Cache-Control', 'no-store');
       res.json({ ok: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
     } catch (e) { next(e); }
