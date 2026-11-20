@@ -28,6 +28,7 @@ await import('./authoritative-public-order.js');
 await import('./business-account-flow.js');
 await import('./admin-auth.js');
 await import('./admin-management.js');
+await import('./admin-two-factor.js');
 await import('./onboarding-guard.js');
 await import('./qr-history.js');
 await import('./public-menu-links.js');
@@ -61,6 +62,9 @@ express.application.get=function(path,...handlers){
           if(body.includes('data-page="pricing"') && !body.includes('reputeBillingNavFix')){
             body=body.replace('</body>',`<script id="reputeBillingNavFix">(function(){function add(){const side=document.querySelector('.side');if(side&&!side.querySelector('[data-page="billing"]')){const pricing=side.querySelector('[data-page="pricing"]');if(pricing){const b=pricing.cloneNode(true);b.dataset.page='billing';b.textContent='▤ Billing & POS';b.onclick=function(e){e.preventDefault();location.href='/billing-pos'};pricing.parentNode.insertBefore(b,pricing)}}const bar=document.querySelector('.mobilebar');if(bar&&!bar.querySelector('[data-page="billing"]')){const b=document.createElement('button');b.type='button';b.dataset.page='billing';b.textContent='▤ Billing';b.style.minWidth='94px';b.onclick=function(){location.href='/billing-pos'};bar.appendChild(b)}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',add);else add()})();</script></body>`);
           }
+        }
+        if(typeof body==='string' && body.includes('data-page="audit-logs"') && !body.includes('reputeTwoFactorNav')){
+          body=body.replace('</body>',`<script id="reputeTwoFactorNav">(function(){function add(){const side=document.querySelector('.side');if(!side||side.querySelector('[data-page="two-factor"]'))return;const group=document.createElement('div');group.className='group';group.textContent='SECURITY';const button=document.createElement('button');button.type='button';button.className='nav';button.dataset.page='two-factor';button.innerHTML='<span class="ico">🔐</span>Two-Factor Authentication';button.onclick=function(){location.href='/admin-two-factor'};side.append(group,button)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',add);else add()})();</script></body>`);
         }
         return send(body);
       };
