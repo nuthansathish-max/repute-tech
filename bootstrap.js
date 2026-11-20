@@ -105,6 +105,7 @@ express.application.use=function(...args){
 
 express.application.get=function(path,...handlers){
   if(handlers.length===0) return originalGet.call(this,path);
+  if(path==='/admin-2fa-login') return originalGet.call(this,path,...handlers);
   if(path==='/api/auth/config-status') return originalGet.call(this,path,async(_req,res)=>{
     res.json({ok:true,google:{clientIdConfigured:Boolean(String(process.env.GOOGLE_CLIENT_ID||'').trim()),clientSecretConfigured:Boolean(String(process.env.GOOGLE_CLIENT_SECRET||'').trim()),redirectUriConfigured:Boolean(String(process.env.GOOGLE_REDIRECT_URI||'').trim()),redirectUri:String(process.env.GOOGLE_REDIRECT_URI||'').trim()||null},databaseConfigured:Boolean(String(process.env.DATABASE_URL||'').trim()),sessionSecretConfigured:Boolean(String(process.env.SESSION_SECRET||'').trim()),nodeEnv:process.env.NODE_ENV||'development'});
   });
@@ -153,6 +154,7 @@ express.application.get=function(path,...handlers){
 };
 
 express.application.post=function(path,...handlers){
+  if(path==='/api/auth/2fa/verify-login') return originalPost.call(this,path,...handlers);
   if(path==='/api/auth/signup') return originalPost.call(this,path,async(req,res,next)=>{try{
     const schema=z.object({name:z.string().trim().min(2,'Name must be at least 2 characters').max(80),email:z.string().trim().email('Enter a valid email address'),password:z.string().min(8,'Password must be at least 8 characters').max(200)});
     const p=schema.safeParse(req.body);

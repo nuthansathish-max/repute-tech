@@ -28,6 +28,7 @@ await import('./authoritative-public-order.js');
 await import('./business-account-flow.js');
 await import('./admin-auth.js');
 await import('./admin-management.js');
+await import('./admin-two-factor.js');
 await import('./onboarding-guard.js');
 await import('./qr-history.js');
 await import('./public-menu-links.js');

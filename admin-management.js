@@ -459,6 +459,7 @@ function adminPage(){
   <button class="nav" data-view="payouts"><span class="ico">⇄</span><span class="txt">Payouts & Gateways</span></button>
   <div class="group">Security & Config</div>
   <button class="nav" data-view="audit"><span class="ico">⌑</span><span class="txt">Audit Logs</span></button>
+  <button class="nav" onclick="location.href='/admin-two-factor'"><span class="ico">🔐</span><span class="txt">Two-Factor Authentication</span></button>
   <button class="nav" data-view="billing"><span class="ico">▣</span><span class="txt">Billing Tiers</span></button>
   <button class="nav" data-view="rbac"><span class="ico">♙</span><span class="txt">Admin Accounts & RBAC</span></button>
   <button class="nav" data-view="dangerous"><span class="ico">⚠</span><span class="txt">Dangerous Actions</span></button>
