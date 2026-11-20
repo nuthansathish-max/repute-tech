@@ -106,7 +106,7 @@ function newRecoveryCodes() {
   });
 }
 async function adminSession(req) {
-  const token = getCookie(req, 'rp_admin_session');
+  const token = getCookie(req, 'rp_session');
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
