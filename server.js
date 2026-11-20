@@ -63,9 +63,6 @@ express.application.get=function(path,...handlers){
             body=body.replace('</body>',`<script id="reputeBillingNavFix">(function(){function add(){const side=document.querySelector('.side');if(side&&!side.querySelector('[data-page="billing"]')){const pricing=side.querySelector('[data-page="pricing"]');if(pricing){const b=pricing.cloneNode(true);b.dataset.page='billing';b.textContent='▤ Billing & POS';b.onclick=function(e){e.preventDefault();location.href='/billing-pos'};pricing.parentNode.insertBefore(b,pricing)}}const bar=document.querySelector('.mobilebar');if(bar&&!bar.querySelector('[data-page="billing"]')){const b=document.createElement('button');b.type='button';b.dataset.page='billing';b.textContent='▤ Billing';b.style.minWidth='94px';b.onclick=function(){location.href='/billing-pos'};bar.appendChild(b)}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',add);else add()})();</script></body>`);
           }
         }
-        if(typeof body==='string' && body.includes('data-view="audit"') && !body.includes('reputeTwoFactorNav')){
-          body=body.replace('</body>',`<script id="reputeTwoFactorNav">(function(){function add(){const side=document.querySelector('.side');if(!side||side.querySelector('[data-view="twofactor"]'))return;const group=document.createElement('div');group.className='group';group.textContent='SECURITY';const button=document.createElement('button');button.type='button';button.className='nav';button.dataset.view='twofactor';button.innerHTML='<span class="ico">🔐</span>Two-Factor Authentication';button.onclick=function(e){e.preventDefault();e.stopPropagation();location.href='/admin-two-factor'};side.append(group,button)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',add);else add()})();</script></body>`);
-        }
         return send(body);
       };
       return handler(req,res,next);
