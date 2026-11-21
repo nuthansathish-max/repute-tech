@@ -10,7 +10,7 @@ const originalPost = express.application.post;
 let installed = false;
 
 async function currentAdmin(req, res) {
-  const token = getCookie(req, 'rp_admin_session');
+  const token = getCookie(req, 'rp_admin_session') || getCookie(req, 'rp_session');
   if (!token) { res.status(401).json({ error: 'Admin sign-in required.' }); return null; }
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) { res.status(401).json({ error: 'Admin session expired. Sign in again.' }); return null; }
