@@ -320,9 +320,9 @@ function install(app) {
       const secret = decrypt(rows[0].secretEnc);
       const codeValue = req.body?.code;
       const submittedCode = String(codeValue ?? '');
-      const normalizedCode = submittedCode.replace(/\\s/g, '');
+      const normalizedCode = submittedCode.replace(/\s/g, '');
       const codeLength = submittedCode.trim().length;
-      const digitsOnly = /^\\d{6}$/.test(normalizedCode);
+      const digitsOnly = /^\d{6}$/.test(normalizedCode);
       const actualFingerprint = crypto.createHash('sha256').update(secret).digest('hex');
       const expectedFingerprint = String(rows[0].setupSecretFingerprint || '');
       const fingerprintMatches = Boolean(expectedFingerprint) &&
