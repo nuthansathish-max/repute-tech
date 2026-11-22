@@ -16,10 +16,22 @@ export async function ensureAdminTwoFactorTables() {
     "enabled" BOOLEAN NOT NULL DEFAULT FALSE,
     "recoveryHashes" JSONB NOT NULL DEFAULT '[]'::jsonb,
     "lastUsedStep" BIGINT,
+    "setupSecretFingerprint" TEXT,
+    "lastAttemptAt" TIMESTAMP(3),
+    "lastAttemptCodeLength" INTEGER,
+    "lastAttemptDigitsOnly" BOOLEAN,
+    "lastAttemptSecretFingerprintMatches" BOOLEAN,
+    "lastAttemptTotpMatched" BOOLEAN,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
   await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastUsedStep" BIGINT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "setupSecretFingerprint" TEXT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptAt" TIMESTAMP(3)');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptCodeLength" INTEGER');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptDigitsOnly" BOOLEAN');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptSecretFingerprintMatches" BOOLEAN');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptTotpMatched" BOOLEAN');
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminTwoFactorChallenge" (
     "tokenHash" TEXT PRIMARY KEY,
     "userId" TEXT NOT NULL,
@@ -242,7 +254,7 @@ function install(app) {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
       const rows = await prisma.$queryRawUnsafe(
-        'SELECT "secretEnc","enabled","lastUsedStep" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1',
+        'SELECT "secretEnc","enabled","lastUsedStep","lastAttemptAt","lastAttemptCodeLength","lastAttemptDigitsOnly","lastAttemptSecretFingerprintMatches","lastAttemptTotpMatched" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1',
         user.id
       );
       const databaseRows = await prisma.$queryRawUnsafe('SELECT CURRENT_TIMESTAMP AS "databaseTime"');
@@ -270,7 +282,12 @@ function install(app) {
         secretDecryptable,
         secretBase32Valid,
         secretDecodedBytes,
-        lastUsedStep: rows?.[0]?.lastUsedStep == null ? null : String(rows[0].lastUsedStep)
+        lastUsedStep: rows?.[0]?.lastUsedStep == null ? null : String(rows[0].lastUsedStep),
+        lastAttemptAtUtc: rows?.[0]?.lastAttemptAt ? new Date(rows[0].lastAttemptAt).toISOString() : null,
+        lastAttemptCodeLength: rows?.[0]?.lastAttemptCodeLength ?? null,
+        lastAttemptDigitsOnly: rows?.[0]?.lastAttemptDigitsOnly ?? null,
+        lastAttemptSecretFingerprintMatches: rows?.[0]?.lastAttemptSecretFingerprintMatches ?? null,
+        lastAttemptTotpMatched: rows?.[0]?.lastAttemptTotpMatched ?? null
       });
     } catch (e) { next(e); }
   });
@@ -281,10 +298,11 @@ function install(app) {
       const existing = await prisma.$queryRawUnsafe('SELECT "enabled" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1', user.id);
       if (existing?.[0]?.enabled) return res.status(409).json({ error: '2FA is already enabled for your account.' });
       const secret = base32Encode(crypto.randomBytes(20));
+      const secretFingerprint = crypto.createHash('sha256').update(secret).digest('hex');
       await prisma.$executeRawUnsafe(
-        `INSERT INTO "AdminTwoFactor" ("userId","secretEnc","enabled","recoveryHashes") VALUES ($1,$2,FALSE,'[]'::jsonb)
-         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"lastUsedStep"=NULL,"updatedAt"=CURRENT_TIMESTAMP`,
-        user.id, encrypt(secret)
+        `INSERT INTO "AdminTwoFactor" ("userId","secretEnc","enabled","recoveryHashes","setupSecretFingerprint") VALUES ($1,$2,FALSE,'[]'::jsonb,$3)
+         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"lastUsedStep"=NULL,"setupSecretFingerprint"=$3,"lastAttemptAt"=NULL,"lastAttemptCodeLength"=NULL,"lastAttemptDigitsOnly"=NULL,"lastAttemptSecretFingerprintMatches"=NULL,"lastAttemptTotpMatched"=NULL,"updatedAt"=CURRENT_TIMESTAMP`,
+        user.id, encrypt(secret), secretFingerprint
       );
       const label = encodeURIComponent('reputetechs.in:' + user.email);
       const uri = 'otpauth://totp/' + label + '?secret=' + secret + '&issuer=' + encodeURIComponent('reputetechs.in') + '&algorithm=SHA1&digits=6&period=30';
@@ -297,10 +315,23 @@ function install(app) {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
-      const rows = await prisma.$queryRawUnsafe('SELECT "secretEnc","enabled" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1', user.id);
+      const rows = await prisma.$queryRawUnsafe('SELECT "secretEnc","enabled","setupSecretFingerprint" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1', user.id);
       if (!rows?.[0] || rows[0].enabled) return res.status(400).json({ error: 'Start a new authenticator setup first.' });
       const secret = decrypt(rows[0].secretEnc);
-      const matchedStep = matchingAdminTotpStep(secret, req.body?.code);
+      const codeValue = req.body?.code;
+      const submittedCode = String(codeValue ?? '');
+      const normalizedCode = submittedCode.replace(/\\s/g, '');
+      const codeLength = submittedCode.trim().length;
+      const digitsOnly = /^\\d{6}$/.test(normalizedCode);
+      const actualFingerprint = crypto.createHash('sha256').update(secret).digest('hex');
+      const expectedFingerprint = String(rows[0].setupSecretFingerprint || '');
+      const fingerprintMatches = Boolean(expectedFingerprint) &&
+        crypto.timingSafeEqual(Buffer.from(actualFingerprint, 'hex'), Buffer.from(expectedFingerprint, 'hex'));
+      const matchedStep = matchingAdminTotpStep(secret, codeValue);
+      await prisma.$executeRawUnsafe(
+        'UPDATE "AdminTwoFactor" SET "lastAttemptAt"=CURRENT_TIMESTAMP,"lastAttemptCodeLength"=$1,"lastAttemptDigitsOnly"=$2,"lastAttemptSecretFingerprintMatches"=$3,"lastAttemptTotpMatched"=$4 WHERE "userId"=$5',
+        codeLength, digitsOnly, fingerprintMatches, matchedStep !== null, user.id
+      );
       if (matchedStep === null) return res.status(400).json({ error: 'That code is not valid. Check your authenticator app and try again.' });
       const recoveryCodes = newRecoveryCodes();
       const hashes = recoveryCodes.map(recoveryHash);
