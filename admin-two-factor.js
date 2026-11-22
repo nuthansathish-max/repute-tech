@@ -22,6 +22,7 @@ export async function ensureAdminTwoFactorTables() {
     "lastAttemptDigitsOnly" BOOLEAN,
     "lastAttemptSecretFingerprintMatches" BOOLEAN,
     "lastAttemptTotpMatched" BOOLEAN,
+    "lastAttemptMatchedStepOffset" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -32,6 +33,7 @@ export async function ensureAdminTwoFactorTables() {
   await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptDigitsOnly" BOOLEAN');
   await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptSecretFingerprintMatches" BOOLEAN');
   await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptTotpMatched" BOOLEAN');
+  await prisma.$executeRawUnsafe('ALTER TABLE "AdminTwoFactor" ADD COLUMN IF NOT EXISTS "lastAttemptMatchedStepOffset" INTEGER');
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdminTwoFactorChallenge" (
     "tokenHash" TEXT PRIMARY KEY,
     "userId" TEXT NOT NULL,
@@ -263,7 +265,7 @@ function install(app) {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
       const rows = await prisma.$queryRawUnsafe(
-        'SELECT "secretEnc","enabled","lastUsedStep","lastAttemptAt","lastAttemptCodeLength","lastAttemptDigitsOnly","lastAttemptSecretFingerprintMatches","lastAttemptTotpMatched" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1',
+        'SELECT "secretEnc","enabled","lastUsedStep","lastAttemptAt","lastAttemptCodeLength","lastAttemptDigitsOnly","lastAttemptSecretFingerprintMatches","lastAttemptTotpMatched","lastAttemptMatchedStepOffset" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1',
         user.id
       );
       const databaseRows = await prisma.$queryRawUnsafe('SELECT CURRENT_TIMESTAMP AS "databaseTime"');
@@ -296,7 +298,8 @@ function install(app) {
         lastAttemptCodeLength: rows?.[0]?.lastAttemptCodeLength ?? null,
         lastAttemptDigitsOnly: rows?.[0]?.lastAttemptDigitsOnly ?? null,
         lastAttemptSecretFingerprintMatches: rows?.[0]?.lastAttemptSecretFingerprintMatches ?? null,
-        lastAttemptTotpMatched: rows?.[0]?.lastAttemptTotpMatched ?? null
+        lastAttemptTotpMatched: rows?.[0]?.lastAttemptTotpMatched ?? null,
+        lastAttemptMatchedStepOffset: rows?.[0]?.lastAttemptMatchedStepOffset ?? null
       });
     } catch (e) { next(e); }
   });
@@ -310,7 +313,7 @@ function install(app) {
       const secretFingerprint = crypto.createHash('sha256').update(secret).digest('hex');
       await prisma.$executeRawUnsafe(
         `INSERT INTO "AdminTwoFactor" ("userId","secretEnc","enabled","recoveryHashes","setupSecretFingerprint") VALUES ($1,$2,FALSE,'[]'::jsonb,$3)
-         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"lastUsedStep"=NULL,"setupSecretFingerprint"=$3,"lastAttemptAt"=NULL,"lastAttemptCodeLength"=NULL,"lastAttemptDigitsOnly"=NULL,"lastAttemptSecretFingerprintMatches"=NULL,"lastAttemptTotpMatched"=NULL,"updatedAt"=CURRENT_TIMESTAMP`,
+         ON CONFLICT ("userId") DO UPDATE SET "secretEnc"=$2,"enabled"=FALSE,"recoveryHashes"='[]'::jsonb,"lastUsedStep"=NULL,"setupSecretFingerprint"=$3,"lastAttemptAt"=NULL,"lastAttemptCodeLength"=NULL,"lastAttemptDigitsOnly"=NULL,"lastAttemptSecretFingerprintMatches"=NULL,"lastAttemptTotpMatched"=NULL,"lastAttemptMatchedStepOffset"=NULL,"updatedAt"=CURRENT_TIMESTAMP`,
         user.id, encrypt(secret), secretFingerprint
       );
       const label = encodeURIComponent('reputetechs.in:' + user.email);
@@ -337,9 +340,20 @@ function install(app) {
       const fingerprintMatches = Boolean(expectedFingerprint) &&
         crypto.timingSafeEqual(Buffer.from(actualFingerprint, 'hex'), Buffer.from(expectedFingerprint, 'hex'));
       const matchedStep = matchingAdminTotpStep(secret, codeValue);
+      // Diagnostic-only wider scan: record time-step offset if a valid TOTP
+      // appears outside the normal +/-1 window. Never store the submitted code.
+      let diagnosticStepOffset = null;
+      if (digitsOnly) {
+        const nowCounter = Math.floor(Date.now() / 30000);
+        const candidate = Buffer.from(normalizedCode);
+        for (let offset = -20; offset <= 20; offset++) {
+          const expected = Buffer.from(totp(secret, (nowCounter + offset) * 30000));
+          if (crypto.timingSafeEqual(expected, candidate)) { diagnosticStepOffset = offset; break; }
+        }
+      }
       await prisma.$executeRawUnsafe(
-        'UPDATE "AdminTwoFactor" SET "lastAttemptAt"=CURRENT_TIMESTAMP,"lastAttemptCodeLength"=$1,"lastAttemptDigitsOnly"=$2,"lastAttemptSecretFingerprintMatches"=$3,"lastAttemptTotpMatched"=$4 WHERE "userId"=$5',
-        codeLength, digitsOnly, fingerprintMatches, matchedStep !== null, user.id
+        'UPDATE "AdminTwoFactor" SET "lastAttemptAt"=CURRENT_TIMESTAMP,"lastAttemptCodeLength"=$1,"lastAttemptDigitsOnly"=$2,"lastAttemptSecretFingerprintMatches"=$3,"lastAttemptTotpMatched"=$4,"lastAttemptMatchedStepOffset"=$5 WHERE "userId"=$6',
+        codeLength, digitsOnly, fingerprintMatches, matchedStep !== null, diagnosticStepOffset, user.id
       );
       if (matchedStep === null) return res.status(400).json({ error: 'That code is not valid. Check your authenticator app and try again.' });
       const recoveryCodes = newRecoveryCodes();
