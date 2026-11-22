@@ -52,3 +52,34 @@ export async function publishDueAnnouncements(prisma){
  await prisma.$executeRawUnsafe(`UPDATE "AdminAnnouncement" SET "status"='EXPIRED',"updatedAt"=CURRENT_TIMESTAMP WHERE "status" IN ('PUBLISHED','SCHEDULED') AND "expiresAt" IS NOT NULL AND "expiresAt"<=CURRENT_TIMESTAMP`);
  return {announcementsProcessed,businessesMatched,ownerRecipients,notificationsCreated};
 }
+
+
+// Run scheduled announcements independently of admin/owner page visits.
+export function startAnnouncementScheduler({ prisma, intervalMinutes = 1 } = {}) {
+ const minutes = Number.isFinite(Number(intervalMinutes)) && Number(intervalMinutes) > 0
+  ? Math.max(1, Number(intervalMinutes)) : 1;
+ let running = false;
+ const run = async () => {
+  if (running) return { skipped: true, reason: 'announcement-scheduler-already-running' };
+  running = true;
+  try {
+   const result = await publishDueAnnouncements(prisma);
+   if (result.announcementsProcessed || result.notificationsCreated) {
+    console.info('[announcements] Scheduled publishing check completed', result);
+   }
+   return result;
+  } catch (error) {
+   console.error('[announcements] Scheduled publishing check failed:', error?.message || error);
+   return { error: String(error?.message || error) };
+  } finally {
+   running = false;
+  }
+ };
+ // Catch up immediately after startup, then check once per minute.
+ run().catch(error => console.error('[announcements] Startup check failed:', error?.message || error));
+ const timer = setInterval(() => {
+  run().catch(error => console.error('[announcements] Scheduled check failed:', error?.message || error));
+ }, minutes * 60 * 1000);
+ timer.unref?.();
+ return { runNow: run, intervalMinutes: minutes };
+}
