@@ -234,6 +234,45 @@ function install(app) {
       res.json({ currentUser: { id: user.id, enabled: map.get(user.id) || false }, admins: admins.map(x => ({ userId: x.id, name: x.name, email: x.email, role: x.role, enabled: map.get(x.id) || false })) });
     } catch (e) { next(e); }
   });
+  // Temporary, admin-only diagnostics for the reported TOTP enrollment failure.
+  // Never returns or logs the authenticator secret or submitted verification code.
+  originalGet.call(app, '/api/admin/two-factor/diagnostics', async (req, res, next) => {
+    try {
+      const user = await requireAdmin(req, res); if (!user) return;
+      await ensureAdminTwoFactorTables();
+      const rows = await prisma.$queryRawUnsafe(
+        'SELECT "secretEnc","enabled","lastUsedStep" FROM "AdminTwoFactor" WHERE "userId"=$1 LIMIT 1',
+        user.id
+      );
+      const databaseRows = await prisma.$queryRawUnsafe('SELECT CURRENT_TIMESTAMP AS "databaseTime"');
+      const serverNow = Date.now();
+      const databaseTime = databaseRows?.[0]?.databaseTime ? new Date(databaseRows[0].databaseTime) : null;
+      let secretDecryptable = false, secretBase32Valid = false, secretDecodedBytes = null;
+      if (rows?.[0]?.secretEnc) {
+        try {
+          const decodedSecret = decrypt(rows[0].secretEnc);
+          secretDecryptable = true;
+          const decodedBytes = base32Decode(decodedSecret);
+          secretDecodedBytes = decodedBytes.length;
+          secretBase32Valid = decodedBytes.length === 20;
+        } catch {}
+      }
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        ok: true,
+        serverTimeUtc: new Date(serverNow).toISOString(),
+        serverEpochMs: serverNow,
+        databaseTimeUtc: databaseTime?.toISOString() || null,
+        databaseClockDifferenceMs: databaseTime ? serverNow - databaseTime.getTime() : null,
+        setupRecordFound: Boolean(rows?.[0]),
+        twoFactorEnabled: Boolean(rows?.[0]?.enabled),
+        secretDecryptable,
+        secretBase32Valid,
+        secretDecodedBytes,
+        lastUsedStep: rows?.[0]?.lastUsedStep == null ? null : String(rows[0].lastUsedStep)
+      });
+    } catch (e) { next(e); }
+  });
   originalPost.call(app, '/api/admin/two-factor/setup', async (req, res, next) => {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
