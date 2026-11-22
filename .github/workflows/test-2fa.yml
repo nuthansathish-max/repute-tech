@@ -1,0 +1,40 @@
+name: Admin 2FA TOTP tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'admin-two-factor.js'
+      - 'tests/admin-two-factor.test.js'
+      - 'package.json'
+      - 'schema.prisma'
+      - '.github/workflows/test-2fa.yml'
+  push:
+    branches:
+      - fix/admin-2fa-totp-tests
+
+permissions:
+  contents: read
+
+jobs:
+  test-admin-2fa-totp:
+    name: Test Admin 2FA TOTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Run TOTP regression tests
+        run: npm run test:2fa
