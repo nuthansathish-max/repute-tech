@@ -295,3 +295,6 @@ function install(app) {
 }
 express.application.get = function(path, ...handlers) { install(this); return originalGet.call(this, path, ...handlers); };
 express.application.post = function(path, ...handlers) { install(this); return originalPost.call(this, path, ...handlers); };
+
+// Export deterministic primitives for RFC 6238 regression tests.
+export { base32Encode, base32Decode, totp };
