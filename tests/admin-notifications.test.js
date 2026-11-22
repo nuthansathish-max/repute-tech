@@ -92,6 +92,18 @@ test('alert status, severity, category, search and saved handling remain wired',
   assert.match(admin, /matching alert/);
 });
 
+test('new business alerts read the registration registry directly and track reviewed state', () => {
+  assert.match(admin, /\/api\/admin\/new-businesses/);
+  assert.match(admin, /where:\{createdAt:\{gte:since\}\}/);
+  assert.match(admin, /NEW_BUSINESS:%/);
+  assert.match(admin, /pendingCount:mapped\.filter\(b=>b\.reviewStatus!=='RESOLVED'\)\.length/);
+  assert.match(admin, /name:'new business registrations',path:'\/admin\/new-businesses'/);
+  assert.match(admin, /const newBusinesses=get\('new business registrations'\)/);
+  assert.match(admin, /alertKey:'NEW_BUSINESS:'\+b\.id/);
+  assert.match(admin, /unreviewed business registration/);
+  assert.match(admin, /mark it resolved when checked/);
+});
+
 test('device push settings and protected API routes are present', () => {
   for (const id of ['adminPushEnable', 'adminPushTest', 'adminPushDisable']) {
     assert.match(admin, new RegExp('id="' + id + '"'));
