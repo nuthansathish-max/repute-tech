@@ -2504,6 +2504,14 @@ function install(app){
   await prisma.$executeRawUnsafe('UPDATE "AdminAnnouncement" SET "status"=\'PUBLISHED\',"publishAt"=CURRENT_TIMESTAMP,"publishedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',req.params.id);
   const delivery=await publishDueAnnouncements(prisma);await prisma.auditLog.create({data:{actorUserId:user.id,action:'ANNOUNCEMENT_PUBLISHED',entity:'AdminAnnouncement',entityId:req.params.id,metadata:delivery}});res.json({ok:true,delivery});
  }catch(e){next(e)}});
+ originalGet.call(app,'/api/admin/announcements/:id/delivery-history',async(req,res,next)=>{try{
+  const user=await requireAdmin(req,res);if(!user)return;await ensureAnnouncementTable(prisma);
+  const found=await prisma.$queryRawUnsafe('SELECT "id","title","status" FROM "AdminAnnouncement" WHERE "id"=$1',req.params.id);
+  if(!found.length)return res.status(404).json({error:'Announcement not found.'});
+  const businesses=await prisma.$queryRawUnsafe(`SELECT n."businessId",COALESCE(b."name",'Business no longer exists') AS "businessName",COUNT(*)::int AS "notificationCount",COUNT(*) FILTER (WHERE n."readAt" IS NOT NULL)::int AS "readCount",COUNT(*) FILTER (WHERE n."readAt" IS NULL)::int AS "unreadCount",MIN(n."createdAt") AS "firstCreatedAt",MAX(n."createdAt") AS "lastCreatedAt" FROM "Notification" n LEFT JOIN "Business" b ON b."id"=n."businessId" WHERE n."type"=$1 GROUP BY n."businessId",b."name" ORDER BY MAX(n."createdAt") DESC`,'ANNOUNCEMENT:'+req.params.id);
+  const totalNotifications=businesses.reduce((sum,row)=>sum+Number(row.notificationCount||0),0);
+  res.json({announcement:found[0],businesses,businessesNotified:businesses.length,totalNotifications});
+ }catch(e){next(e)}});
  originalDelete.call(app,'/api/admin/announcements/:id',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;await ensureAnnouncementTable(prisma);
   const found=await prisma.$queryRawUnsafe('SELECT "status" FROM "AdminAnnouncement" WHERE "id"=$1',req.params.id);if(!found.length)return res.status(404).json({error:'Announcement not found.'});
