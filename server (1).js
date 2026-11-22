@@ -17,7 +17,7 @@ import { businessPermissionMiddleware } from './business-permissions.js';
 import { isPlanFeatureEnabled } from './feature-entitlements.js';
 import { queueAdminPushEvent } from './admin-push.js';
 import { getAdminTwoFactor, startAdminTwoFactorChallenge } from './admin-two-factor.js';
-import { publishDueAnnouncements } from './announcement-service.js';
+import { publishDueAnnouncements, startAnnouncementScheduler } from './announcement-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
@@ -368,6 +368,7 @@ app.get('/{*splat}',(req,res,next)=>req.path.startsWith('/api/')?next():res.send
 app.use((err,_req,res,_next)=>{console.error(err);res.status(500).json({error:err.message||'Internal server error'})});
 
 const scheduler=startReviewSyncScheduler({prisma});
+const announcementScheduler=startAnnouncementScheduler({prisma,intervalMinutes:1});
 const port=Number(process.env.PORT||4000);
 const server=app.listen(port,()=>console.log(`repute-tech.in running on port ${port}`));
 server.on('error',err=>console.error('Server error',err));
