@@ -175,13 +175,16 @@ const dashboardPage = () => `<!doctype html><html><head><meta charset="utf-8"><m
 function install(app) {
   if (installed) return;
   installed = true;
+  // These routes are installed before the app-wide JSON parser in server (1).js.
+  // Parse JSON on each 2FA POST route here so req.body is available to handlers.
+  const parseJsonBody = express.json({ limit: '1mb' });
   originalGet.call(app, '/admin-2fa-login', (_req, res) => res.type('html').send(loginPage()));
   originalGet.call(app, '/admin-two-factor-ui.js', (_req, res) => res.type('application/javascript').set('Cache-Control', 'no-store').send(dashboardScript()));
   originalGet.call(app, '/admin-two-factor', async (req, res, next) => {
     try { if (!await adminSession(req)) return res.redirect('/admin-login'); res.set('Cache-Control', 'no-store'); res.type('html').send(dashboardPage()); }
     catch (e) { next(e); }
   });
-  originalPost.call(app, '/api/auth/2fa/verify-login', async (req, res, next) => {
+  originalPost.call(app, '/api/auth/2fa/verify-login', parseJsonBody, async (req, res, next) => {
     try {
       await ensureAdminTwoFactorTables();
       const token = getCookie(req, 'rp_admin_2fa_challenge');
@@ -297,7 +300,7 @@ function install(app) {
       });
     } catch (e) { next(e); }
   });
-  originalPost.call(app, '/api/admin/two-factor/setup', async (req, res, next) => {
+  originalPost.call(app, '/api/admin/two-factor/setup', parseJsonBody, async (req, res, next) => {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
@@ -317,7 +320,7 @@ function install(app) {
       res.json({ ok: true, secret, qrDataUrl });
     } catch (e) { next(e); }
   });
-  originalPost.call(app, '/api/admin/two-factor/enable', async (req, res, next) => {
+  originalPost.call(app, '/api/admin/two-factor/enable', parseJsonBody, async (req, res, next) => {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
@@ -349,7 +352,7 @@ function install(app) {
       res.json({ ok: true, recoveryCodes });
     } catch (e) { next(e); }
   });
-  originalPost.call(app, '/api/admin/two-factor/disable', async (req, res, next) => {
+  originalPost.call(app, '/api/admin/two-factor/disable', parseJsonBody, async (req, res, next) => {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
       const current = await prisma.user.findUnique({ where: { id: user.id } });
