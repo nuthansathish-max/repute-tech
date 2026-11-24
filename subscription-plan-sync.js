@@ -12,7 +12,14 @@ const plans = [
 ];
 
 try {
+  const existing = await prisma.planCatalog.findMany({ where:{ active:true } });
+  const byCode = new Map(existing.map(p => [p.code, p]));
   for (const p of plans) {
+    const source = byCode.get(p.code) || byCode.get(
+      p.code === 'STARTER_YEARLY' ? 'STARTER' :
+      p.code === 'GROWTH_PRO_YEARLY' ? 'GROWTH' :
+      p.code === 'PRO_YEARLY' ? 'PRO' : p.code
+    );
     await prisma.planCatalog.upsert({
       where:{ code:p.code },
       // Seed only missing catalogue rows. Admin edits and deactivations are authoritative.
