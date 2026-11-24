@@ -485,7 +485,7 @@ function adminPage(){
   <button class="nav" data-view="dangerous"><span class="ico">⚠</span><span class="txt">Dangerous Actions</span></button>
   <button class="nav" data-view="notifications"><span class="ico">♢</span><span class="txt">Notifications & Alerts</span></button>
   <button class="nav" data-view="kill"><span class="ico">!</span><span class="txt">Emergency Kill Switch</span></button>
-  <div style="margin-top:12px"><button class="nav" onclick="location.href='/'"><span class="ico">↗</span><span class="txt">Business Dashboard</span></button></div>
+  <div style="margin-top:12px"><button class="nav" onclick="location.href='/'"><span class="ico">↗</span><span class="txt">Business Dashboard</span></button></div><div style="margin-top:6px"><button class="nav" id="adminLogout" type="button"><span class="ico">↪</span><span class="txt">Logout</span></button></div>
  </aside>
  <main class="main">
   <header class="top"><div class="crumb">ROOT CLUSTER &nbsp; / &nbsp; <b>ap-south-1</b></div><div class="top-actions"><input class="search" id="globalSearch" placeholder="Quick search or command  ⌘K"><button class="topbtn new-business-indicator" id="newBusinessIndicator" type="button" hidden title="View businesses registered in the last 7 days">＋ New businesses <b id="newBusinessCount">0</b></button><button class="topbtn" id="maintenanceBtn" title="Platform maintenance control">Maint: OFF</button><button class="topbtn" id="exportBtn" title="Export tenant registry">⇩</button><button class="topbtn" id="refreshBtn" title="Refresh current admin view">◔</button><button class="topbtn primary" id="onboardBtn" onclick="show('tenants')" title="Open tenant workspace">▣ Onboard Business</button></div></header>
@@ -1706,6 +1706,8 @@ async function loadPlans(){const d=await api('/admin/plans');$('planCount').text
   }
  });
  $('businessSearch').addEventListener('input',renderRows);$('businessStatus').addEventListener('change',renderRows);$('businessOpenStatus').addEventListener('change',renderRows);$('businessPlan').addEventListener('change',renderRows);$('businessSort').addEventListener('change',renderRows);$('userSearch').addEventListener('input',renderUsers);$('userRole').addEventListener('change',renderUsers);$('userBusiness').addEventListener('change',renderUsers);loadBusinesses();loadIntegrations();loadSystem();loadOverviewInsights();
+ </script><script>
+ document.addEventListener('click',async function(e){const button=e.target.closest('#adminLogout');if(!button)return;e.preventDefault();button.disabled=true;const label=button.querySelector('.txt');if(label)label.textContent='Signing out…';try{const response=await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'}});if(!response.ok)throw new Error('Unable to end the admin session. Please try again.');location.replace('/admin-login')}catch(error){button.disabled=false;if(label)label.textContent='Logout';const note=document.createElement('div');note.textContent=error.message;note.style.cssText='position:fixed;right:16px;bottom:16px;z-index:9999;background:#7f1d1d;color:#fff;padding:12px 16px;border-radius:10px;font-size:13px';document.body.appendChild(note);setTimeout(()=>note.remove(),4500)}});
  </script><script src="/admin-announcements.js"></script></body></html>`;
 }
 function install(app){
