@@ -712,7 +712,7 @@ function adminPage(){
  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
  const money=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});
  const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';
- document.addEventListener('click',e=>{if(e.target.closest?.('[data-business-action-close]')){e.preventDefault();closeBusinessActionModal();return}const del=e.target.closest?.('[data-business-delete-confirm]');if(del){e.preventDefault();confirmBusinessDelete(del.dataset.businessDeleteConfirm,del);return}const pw=e.target.closest?.('[data-owner-password-save]');if(pw){e.preventDefault();saveOwnerPassword(pw.dataset.ownerPasswordSave,pw);return}if(e.target?.id==='metricModal'&&e.target.classList.contains('business-action-modal-active'))closeBusinessActionModal()});
+ document.addEventListener('click',e=>{if(e.target.closest?.('[data-business-action-close]')){e.preventDefault();closeBusinessActionModal();return}const del=e.target.closest?.('[data-business-delete-confirm]');if(del){e.preventDefault();confirmBusinessDelete(del.dataset.businessDeleteConfirm,del);return}const pw=e.target.closest?.('[data-owner-password-save]');if(pw){e.preventDefault();saveOwnerPassword(pw.dataset.ownerPasswordSave,pw);return}const availability=e.target.closest?.('[data-business-availability-confirm]');if(availability){e.preventDefault();confirmBusinessAvailability(availability.dataset.businessAvailabilityConfirm,availability.dataset.open==='true',availability);return}const flag=e.target.closest?.('[data-feature-flag-confirm]');if(flag){e.preventDefault();confirmFeatureFlag(flag.dataset.feature,flag.dataset.featureFlagConfirm,flag.dataset.enabled==='true',flag);return}const feature=e.target.closest?.('[data-business-feature-confirm]');if(feature){e.preventDefault();const id=feature.dataset.businessFeatureConfirm,key=feature.dataset.feature,enabled=feature.dataset.enabled==='true',source=document.querySelector('[data-admin-feature="'+CSS.escape(key)+'"]');confirmBusinessFeature(key,id,enabled,feature,source);return}if(e.target?.id==='metricModal'&&e.target.classList.contains('business-action-modal-active'))closeBusinessActionModal()});
 document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-card');if(!card)return;document.querySelectorAll('.metric-card.is-metric-selected').forEach(x=>x.classList.remove('is-metric-selected'));card.classList.add('is-metric-selected')});\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch'){window.__auditTodayOnly=false;renderAudit()}}); document.addEventListener('input',e=>{if(e.target?.id==='cprSearch')renderCustomPlanRequests()}); document.addEventListener('click',e=>{const card=e.target.closest?.('.cpr-filter-card');if(!card)return;window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})}); document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const card=e.target.closest?.('.cpr-filter-card');if(!card)return;e.preventDefault();window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})});
  document.addEventListener('change',e=>{if(e.target?.id==='auditCategory'||e.target?.id==='auditPeriod'){window.__auditTodayOnly=false;renderAudit()}});\n document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const metric=e.target.closest?.('[data-audit-card]');if(!metric)return;e.preventDefault();applyAuditMetric(metric)}); document.addEventListener('click',e=>{
   const metric=e.target.closest?.('[data-audit-card]');if(metric){applyAuditMetric(metric);return}
@@ -948,33 +948,28 @@ document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-car
   finally{if(button){button.disabled=false;button.textContent='⇩ Download Data'}}
  }
 
- async function toggleBusinessAvailability(id,isOpen,button){
+ function toggleBusinessAvailability(id,isOpen,button){
   if(!id)return;
-  if(!confirm((isOpen?'Turn ON ':'Turn OFF ')+'this business?'))return;
-  if(button){button.disabled=true;button.textContent='Updating…'}
-  try{
-   await api('/admin/businesses/'+encodeURIComponent(id)+'/status',{method:'POST',body:JSON.stringify({isOpen})});
-   await loadBusinesses(); await openBusiness(id);
-  }catch(e){alert('Unable to update business status: '+e.message);if(button){button.disabled=false;button.textContent=isOpen?'Turn ON Business':'Turn OFF Business'}}
+  const action=isOpen?'Turn ON':'Turn OFF';
+  openBusinessActionModal(action+' business','<div class="plan-delete-notice"><strong>'+action+' this business?</strong><p>This changes the business availability shown to its customers. Existing business data will not be deleted.</p></div><div id="businessActionMessage" class="plan-modal-message" role="status"></div><div class="plan-modal-actions"><button class="smallbtn" data-business-action-close>Cancel</button><button class="smallbtn primary" data-business-availability-confirm="'+esc(id)+'" data-open="'+String(Boolean(isOpen))+'">Confirm '+action+'</button></div>');
  }
- async function toggleAdminFeature(key,id,button){
+ async function confirmBusinessAvailability(id,isOpen,button){
+  if(button){button.disabled=true;button.textContent='Updating…'}
+  try{await api('/admin/businesses/'+encodeURIComponent(id)+'/status',{method:'POST',body:JSON.stringify({isOpen})});closeBusinessActionModal();await loadBusinesses();await openBusiness(id)}
+  catch(e){businessActionMessage('Unable to update business status: '+e.message,true);if(button){button.disabled=false;button.textContent='Confirm '+(isOpen?'Turn ON':'Turn OFF')}}
+ }
+ function toggleAdminFeature(key,id,button){
   if(!ADMIN_FEATURE_KEYS.includes(key)||!id||!button)return;
-  const current=button.dataset.adminEnabled==='true';
-  const enabled=!current;
-  if(!confirm((enabled?'Enable ':'Disable ')+key+' for this business?'))return;
-  button.disabled=true;
+  const current=button.dataset.adminEnabled==='true',enabled=!current;
+  openBusinessActionModal((enabled?'Enable ':'Disable ')+key,'<div class="plan-delete-notice"><strong>'+(enabled?'Enable ':'Disable ')+esc(key)+' for this business?</strong><p>This saves a business-specific feature override. The plan-level default and other businesses remain unchanged.</p></div><div id="businessActionMessage" class="plan-modal-message" role="status"></div><div class="plan-modal-actions"><button class="smallbtn" data-business-action-close>Cancel</button><button class="smallbtn primary" data-business-feature-confirm="'+esc(id)+'" data-feature="'+esc(key)+'" data-enabled="'+String(enabled)+'">Confirm</button></div>');
+ }
+ async function confirmBusinessFeature(key,id,enabled,button,source){
+  button.disabled=true;button.textContent='Saving…';
   try{
-   const d=await api('/admin/businesses/'+encodeURIComponent(id)+'/features',{method:'POST',body:JSON.stringify({feature:key,enabled})});
-   const saved=Boolean(d.enabled);
-   button.dataset.adminEnabled=String(saved);
-   button.textContent=saved?'ON':'OFF';
-   button.classList.remove('inherit');
-   button.classList.toggle('on',saved);
-   button.classList.toggle('off',!saved);
-   button.title=saved?'Explicitly enabled':'Explicitly disabled';
-   button.setAttribute('aria-label',key+' '+(saved?'explicitly enabled':'explicitly disabled'));
-  }catch(e){alert('Unable to update feature: '+e.message)}
-  finally{button.disabled=false}
+   const d=await api('/admin/businesses/'+encodeURIComponent(id)+'/features',{method:'POST',body:JSON.stringify({feature:key,enabled})}),saved=Boolean(d.enabled);
+   if(source){source.dataset.adminEnabled=String(saved);source.textContent=saved?'ON':'OFF';source.classList.remove('inherit');source.classList.toggle('on',saved);source.classList.toggle('off',!saved);source.title=saved?'Explicitly enabled':'Explicitly disabled';source.setAttribute('aria-label',key+' '+(saved?'explicitly enabled':'explicitly disabled'))}
+   closeBusinessActionModal();
+  }catch(e){businessActionMessage('Unable to update feature: '+e.message,true);button.disabled=false;button.textContent='Confirm'}
  }
  function openBusinessActionModal(title,html){const modal=$('metricModal'),heading=$('metricModalTitle'),body=$('metricModalBody');if(!modal||!heading||!body)return;heading.textContent=title;body.innerHTML=html;modal.classList.add('business-action-modal-active');modal.classList.remove('hidden')}
  function closeBusinessActionModal(){const modal=$('metricModal');if(modal){modal.classList.remove('business-action-modal-active');modal.classList.add('hidden')}}
@@ -1070,17 +1065,15 @@ async function savePlanFeatureDefaults(planId,button){
   if($('ffDisabledCount'))$('ffDisabledCount').textContent=disabled;
   host.innerHTML=matches.length?'<div class="row head" style="grid-template-columns:minmax(170px,1.5fr) repeat(8,minmax(68px,.55fr));min-width:900px"><div>Business / Plan</div>'+keys.map(([,label])=>'<div>'+label+'</div>').join('')+'</div>'+matches.map(b=>'<div class="row" style="grid-template-columns:minmax(170px,1.5fr) repeat(8,minmax(68px,.55fr));min-width:900px"><div><button class="smallbtn" data-action="view-business" data-business-id="'+esc(b.id)+'">'+esc(b.name||'Unnamed business')+'</button><div class="sub">'+esc(b.ownerName||b.ownerEmail||'Owner not assigned')+' · '+esc(b.subscription?.plan||'No plan')+'</div></div>'+keys.map(([key,label])=>{const hasOverride=Object.prototype.hasOwnProperty.call(b.featureFlags||{},key);const on=b.featureFlags?.[key]!==false;const state=hasOverride?(on?'on':'off'):'inherit';const stateLabel=hasOverride?(on?'enabled':'disabled'):'using plan default';return '<div><button type="button" class="admin-feature-toggle ff-switch '+state+'" aria-label="'+esc(label)+' '+stateLabel+' for '+esc(b.name)+'" title="'+(hasOverride?(on?'Explicitly enabled':'Explicitly disabled'):'No business override — plan entitlement applies')+'" data-ff-toggle="'+key+'" data-business-id="'+esc(b.id)+'" data-enabled="'+(on?'true':'false')+'"><span class="ff-switch-state">'+(hasOverride?(on?'ON':'OFF'):'PLAN')+'</span></button></div>'}).join('')+'</div>').join(''):'<div class="empty">No businesses match these filters.</div>';
  }
- async function updateFeatureFlag(key,id,button){
+ function updateFeatureFlag(key,id,button){
   if(!ADMIN_FEATURE_KEYS.includes(key)||!id||!button)return;
   const enabled=button.dataset.enabled!=='true';
-  if(!confirm((enabled?'Enable ':'Disable ')+key+' for this business?'))return;
-  button.disabled=true;
-  try{
-   const d=await api('/admin/businesses/'+encodeURIComponent(id)+'/features',{method:'POST',body:JSON.stringify({feature:key,enabled})});
-   const b=(rows||[]).find(x=>x.id===id);if(b)b.featureFlags={...(b.featureFlags||{}),[key]:Boolean(d.enabled)};
-   renderFeatureFlags();
-  }catch(e){alert('Unable to update feature: '+e.message)}
-  finally{const current=$('ffRows')?.querySelector('[data-ff-toggle="'+key+'"][data-business-id="'+id+'"]');if(current)current.disabled=false}
+  openBusinessActionModal((enabled?'Enable ':'Disable ')+key,'<div class="plan-delete-notice"><strong>'+(enabled?'Enable ':'Disable ')+esc(key)+' for this business?</strong><p>This changes only this business-specific feature override. Other businesses and plan defaults are unchanged.</p></div><div id="businessActionMessage" class="plan-modal-message" role="status"></div><div class="plan-modal-actions"><button class="smallbtn" data-business-action-close>Cancel</button><button class="smallbtn primary" data-feature-flag-confirm="'+esc(id)+'" data-feature="'+esc(key)+'" data-enabled="'+String(enabled)+'">Confirm</button></div>');
+ }
+ async function confirmFeatureFlag(key,id,enabled,button){
+  button.disabled=true;button.textContent='Saving…';
+  try{const d=await api('/admin/businesses/'+encodeURIComponent(id)+'/features',{method:'POST',body:JSON.stringify({feature:key,enabled})});const b=(rows||[]).find(x=>x.id===id);if(b)b.featureFlags={...(b.featureFlags||{}),[key]:Boolean(d.enabled)};closeBusinessActionModal();renderFeatureFlags()}
+  catch(e){businessActionMessage('Unable to update feature: '+e.message,true);button.disabled=false;button.textContent='Confirm'}
  }
  document.addEventListener('input',e=>{if(e.target?.id==='ffSearch')renderFeatureFlags()});
  document.addEventListener('change',e=>{if(e.target?.id==='ffPlanFilter')renderFeatureFlags()});
