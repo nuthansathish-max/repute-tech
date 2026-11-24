@@ -448,6 +448,10 @@ function adminPage(){
  .plan-delete-notice{padding:14px;border:1px solid #f3d4d4;border-radius:12px;background:#fff8f8;color:#7f1d1d;line-height:1.6}
  .plan-delete-notice strong{font-size:14px}.plan-delete-notice p{margin:7px 0 0;font-size:12px;color:#7f4141}
  @media(max-width:640px){#metricModal.plan-modal-active{padding:12px}#metricModal.plan-modal-active>.card{width:100%;max-height:90dvh;padding:16px;border-radius:15px}.plan-form-grid{grid-template-columns:1fr;gap:11px}.plan-field-wide{grid-column:auto}.plan-modal-actions{position:sticky;bottom:-16px;background:#fff;padding:12px 0 2px}.plan-modal-actions .smallbtn{min-height:40px}}
+
+ #metricModal.business-action-modal-active{z-index:120;align-items:center;overflow-y:auto;background:rgba(8,13,27,.68);backdrop-filter:blur(5px)}
+ #metricModal.business-action-modal-active>.card{width:min(540px,96vw);max-height:min(88vh,820px);overflow-y:auto;border:1px solid #dedcfb;border-radius:18px;padding:22px;box-shadow:0 24px 70px #080d1b40}
+ @media(max-width:640px){#metricModal.business-action-modal-active{padding:12px}#metricModal.business-action-modal-active>.card{width:100%;max-height:90dvh;padding:16px;border-radius:15px}}
 </style></head><body><div class="app">
  <aside class="side">
   <div class="brand">repute<span>techs.in</span></div><div class="role">SUPER ADMIN · PLATFORM OWNER</div>
@@ -708,7 +712,8 @@ function adminPage(){
  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
  const money=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});
  const date=v=>v?new Date(v).toLocaleDateString('en-IN'):'—';
- document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-card');if(!card)return;document.querySelectorAll('.metric-card.is-metric-selected').forEach(x=>x.classList.remove('is-metric-selected'));card.classList.add('is-metric-selected')});\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch'){window.__auditTodayOnly=false;renderAudit()}}); document.addEventListener('input',e=>{if(e.target?.id==='cprSearch')renderCustomPlanRequests()}); document.addEventListener('click',e=>{const card=e.target.closest?.('.cpr-filter-card');if(!card)return;window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})}); document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const card=e.target.closest?.('.cpr-filter-card');if(!card)return;e.preventDefault();window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})});
+ document.addEventListener('click',e=>{if(e.target.closest?.('[data-business-action-close]')){e.preventDefault();closeBusinessActionModal();return}const del=e.target.closest?.('[data-business-delete-confirm]');if(del){e.preventDefault();confirmBusinessDelete(del.dataset.businessDeleteConfirm,del);return}const pw=e.target.closest?.('[data-owner-password-save]');if(pw){e.preventDefault();saveOwnerPassword(pw.dataset.ownerPasswordSave,pw);return}if(e.target?.id==='metricModal'&&e.target.classList.contains('business-action-modal-active'))closeBusinessActionModal()});
+document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-card');if(!card)return;document.querySelectorAll('.metric-card.is-metric-selected').forEach(x=>x.classList.remove('is-metric-selected'));card.classList.add('is-metric-selected')});\n document.addEventListener('input',e=>{if(e.target?.id==='auditSearch'){window.__auditTodayOnly=false;renderAudit()}}); document.addEventListener('input',e=>{if(e.target?.id==='cprSearch')renderCustomPlanRequests()}); document.addEventListener('click',e=>{const card=e.target.closest?.('.cpr-filter-card');if(!card)return;window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})}); document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const card=e.target.closest?.('.cpr-filter-card');if(!card)return;e.preventDefault();window.__cprFilter=card.dataset.cprFilter||'ALL';if($('cprSearch'))$('cprSearch').value='';renderCustomPlanRequests();$('cprRows')?.scrollIntoView({behavior:'smooth',block:'nearest'})});
  document.addEventListener('change',e=>{if(e.target?.id==='auditCategory'||e.target?.id==='auditPeriod'){window.__auditTodayOnly=false;renderAudit()}});\n document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const metric=e.target.closest?.('[data-audit-card]');if(!metric)return;e.preventDefault();applyAuditMetric(metric)}); document.addEventListener('click',e=>{
   const metric=e.target.closest?.('[data-audit-card]');if(metric){applyAuditMetric(metric);return}
   if(e.target?.id==='auditRefresh')loadAudit().catch(err=>{if($('auditRows'))$('auditRows').innerHTML='<div class="empty">'+esc(err.message)+'</div>'});
@@ -971,32 +976,13 @@ function adminPage(){
   }catch(e){alert('Unable to update feature: '+e.message)}
   finally{button.disabled=false}
  }
- async function deleteBusiness(id,button){
-  if(!id)return;
-  if(!confirm('Delete this business permanently? All business data will be removed and cannot be recovered.'))return;
-  const typed=prompt('Type DELETE to confirm permanent business deletion:');
-  if(typed!=='DELETE'){if(typed!==null)alert('Deletion cancelled. You must type DELETE exactly.');return}
-  if(button){button.disabled=true;button.textContent='Deleting…'}
-  try{
-   await api('/admin/businesses/'+encodeURIComponent(id)+'/delete',{method:'POST',body:JSON.stringify({confirmation:'DELETE'})});
-   closeBusiness();
-   await loadBusinesses();
-   alert('Business deleted successfully.');
-  }catch(e){if(button){button.disabled=false;button.textContent='Delete Business'}alert('Unable to delete business: '+e.message)}
- }
- async function resetOwnerPassword(id){
-  const password=prompt('Enter a new owner password (minimum 8 characters):');
-  if(password===null)return;
-  if(password.length<8){alert('Password must be at least 8 characters.');return}
-  const confirmPassword=prompt('Re-enter the new owner password:');
-  if(confirmPassword!==password){alert('Passwords do not match.');return}
-  if(!confirm('Change the owner password and sign out all existing owner sessions?'))return;
-  try{
-   await api('/admin/businesses/'+encodeURIComponent(id)+'/reset-password',{method:'POST',body:JSON.stringify({password})});
-   alert('Owner password changed successfully. All existing owner sessions were signed out.');
-   await openBusiness(id);
-  }catch(e){alert('Unable to change owner password: '+e.message)}
- }
+ function openBusinessActionModal(title,html){const modal=$('metricModal'),heading=$('metricModalTitle'),body=$('metricModalBody');if(!modal||!heading||!body)return;heading.textContent=title;body.innerHTML=html;modal.classList.add('business-action-modal-active');modal.classList.remove('hidden')}
+ function closeBusinessActionModal(){const modal=$('metricModal');if(modal){modal.classList.remove('business-action-modal-active');modal.classList.add('hidden')}}
+ function businessActionMessage(message,isError=false){const node=$('businessActionMessage');if(node){node.textContent=message;node.classList.toggle('bad',isError)}}
+ function deleteBusiness(id,button){if(!id)return;openBusinessActionModal('Permanently delete business','<div class="plan-delete-notice"><strong>This action cannot be undone.</strong><p>All data belonging to this business will be permanently removed. Type DELETE below to confirm.</p></div><label class="plan-field" style="margin-top:14px"><span>Confirmation phrase</span><input class="input" id="businessDeletePhrase" autocomplete="off" placeholder="Type DELETE"></label><div id="businessActionMessage" class="plan-modal-message" role="status"></div><div class="plan-modal-actions"><button class="smallbtn" data-business-action-close>Cancel</button><button class="smallbtn admin-reject" data-business-delete-confirm="'+esc(id)+'">Delete business</button></div>')}
+ async function confirmBusinessDelete(id,button){const phrase=$('businessDeletePhrase')?.value;if(phrase!=='DELETE'){businessActionMessage('Type DELETE exactly to confirm.',true);return}button.disabled=true;button.textContent='Deleting…';try{await api('/admin/businesses/'+encodeURIComponent(id)+'/delete',{method:'POST',body:JSON.stringify({confirmation:'DELETE'})});closeBusinessActionModal();closeBusiness();await loadBusinesses()}catch(e){businessActionMessage(e.message||'Unable to delete business.',true);button.disabled=false;button.textContent='Delete business'}}
+ function resetOwnerPassword(id){if(!id)return;openBusinessActionModal('Reset owner password','<div class="plan-form-grid"><label class="plan-field plan-field-wide"><span>New password</span><input class="input" id="ownerNewPassword" type="password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label><label class="plan-field plan-field-wide"><span>Confirm new password</span><input class="input" id="ownerConfirmPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Re-enter password"></label></div><div class="sub plan-modal-hint">All existing owner sessions will be signed out after the password is changed.</div><div id="businessActionMessage" class="plan-modal-message" role="status"></div><div class="plan-modal-actions"><button class="smallbtn" data-business-action-close>Cancel</button><button class="smallbtn primary" data-owner-password-save="'+esc(id)+'">Change password</button></div>')}
+ async function saveOwnerPassword(id,button){const password=$('ownerNewPassword')?.value||'',confirmation=$('ownerConfirmPassword')?.value||'';if(password.length<8){businessActionMessage('Password must be at least 8 characters.',true);return}if(password!==confirmation){businessActionMessage('Passwords do not match.',true);return}button.disabled=true;button.textContent='Changing…';try{await api('/admin/businesses/'+encodeURIComponent(id)+'/reset-password',{method:'POST',body:JSON.stringify({password})});businessActionMessage('Password changed. Existing owner sessions were signed out.');await openBusiness(id);closeBusinessActionModal()}catch(e){businessActionMessage(e.message||'Unable to change owner password.',true);button.disabled=false;button.textContent='Change password'}}
  async function markSubscriptionPaid(id,button){
  if(!id)return;
  if(!confirm('Confirm that the subscription payment has been received?'))return;
