@@ -14,7 +14,6 @@ const plans = [
 try {
   const existing = await prisma.planCatalog.findMany({ where:{ active:true } });
   const byCode = new Map(existing.map(p => [p.code, p]));
-
   for (const p of plans) {
     const source = byCode.get(p.code) || byCode.get(
       p.code === 'STARTER_YEARLY' ? 'STARTER' :
@@ -23,12 +22,8 @@ try {
     );
     await prisma.planCatalog.upsert({
       where:{ code:p.code },
-      update:{
-        name:p.name,
-        price:p.price,
-        billingInterval:p.billingInterval,
-        active:true
-      },
+      // Seed only missing catalogue rows. Admin edits and deactivations are authoritative.
+      update:{},
       create:{
         code:p.code,
         name:p.name,
@@ -39,11 +34,6 @@ try {
       }
     });
   }
-
-  await prisma.planCatalog.updateMany({
-    where:{ code:{ notIn:plans.map(p=>p.code) } },
-    data:{ active:false }
-  });
 } finally {
   await prisma.$disconnect();
 }

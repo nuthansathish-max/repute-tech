@@ -33,7 +33,9 @@ function install(app){
   originalPost.call(app,'/api/admin/logout',async(req,res,next)=>{try{
     const token=getCookie(req,'rp_admin_session');
     if(token)await prisma.session.deleteMany({where:{tokenHash:tokenHash(token)}});
-    res.setHeader('Set-Cookie','rp_admin_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax');
+    const clearParts=['rp_admin_session=','Max-Age=0','Path=/','HttpOnly','SameSite=Lax'];
+    if(process.env.NODE_ENV==='production')clearParts.push('Secure');
+    res.setHeader('Set-Cookie',clearParts.join('; '));
     res.json({ok:true});
   }catch(e){next(e)}});
 }
