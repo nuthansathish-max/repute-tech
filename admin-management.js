@@ -1083,7 +1083,9 @@ async function savePlanFeatureDefaults(planId,button){
  document.addEventListener('input',e=>{if(e.target?.id==='ffSearch')renderFeatureFlags()});
  document.addEventListener('change',e=>{if(e.target?.id==='ffPlanFilter')renderFeatureFlags()});
  document.addEventListener('click',e=>{
-  const planEdit=e.target.closest?.('[data-plan-edit]');if(planEdit){e.preventDefault();editPlan(planEdit.dataset.planEdit);return}\n  const planDelete=e.target.closest?.('[data-plan-delete]');if(planDelete){e.preventDefault();deletePlan(planDelete.dataset.planDelete,planDelete.dataset.planName||'this plan');return}\n  const planToggle=e.target.closest?.('[data-plan-feature]');if(planToggle){e.preventDefault();const next=planToggle.dataset.enabled!=='true';planToggle.dataset.enabled=next?'true':'false';planToggle.classList.toggle('on',next);planToggle.classList.toggle('off',!next);planToggle.textContent=next?'ON':'OFF';return}
+  const planEdit=e.target.closest?.('[data-plan-edit]');if(planEdit){e.preventDefault();editPlan(planEdit.dataset.planEdit);return}
+  const planDelete=e.target.closest?.('[data-plan-delete]');if(planDelete){e.preventDefault();deletePlan(planDelete.dataset.planDelete,planDelete.dataset.planName||'this plan');return}
+  const planToggle=e.target.closest?.('[data-plan-feature]');if(planToggle){e.preventDefault();const next=planToggle.dataset.enabled!=='true';planToggle.dataset.enabled=next?'true':'false';planToggle.classList.toggle('on',next);planToggle.classList.toggle('off',!next);planToggle.textContent=next?'ON':'OFF';return}
   const savePlan=e.target.closest?.('[data-save-plan-features]');if(savePlan){e.preventDefault();savePlanFeatureDefaults(savePlan.dataset.savePlanFeatures,savePlan);return}
   const toggle=e.target.closest?.('[data-ff-toggle]');
   if(toggle){e.preventDefault();updateFeatureFlag(toggle.dataset.ffToggle,toggle.dataset.businessId,toggle);return}
