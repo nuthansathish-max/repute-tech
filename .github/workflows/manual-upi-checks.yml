@@ -1,4 +1,5 @@
 name: Manual UPI subscription payment checks
+# Covers the owner payment form, Admin review UI, API routes and existing Admin access regressions.
 
 on:
   push:
