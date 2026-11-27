@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken, encrypt, decrypt, setSessionCookie, verifyPassword } from './auth.js';
+import { getAdminAccessForUser } from './admin-access.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -124,7 +125,8 @@ async function adminSession(req) {
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
-  if (!['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) return null;
+  const adminAccess = await getAdminAccessForUser(prisma, session.user.id);
+  if (!adminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) return null;
   return session.user;
 }
 async function requireAdmin(req, res) {
