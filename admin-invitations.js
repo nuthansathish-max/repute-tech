@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken, hashPassword, setSessionCookie } from './auth.js';
-import { ADMIN_PERMISSION_KEYS, ensureAdminAccessTables, getAdminAccessForUser } from './admin-access.js';
+import { ADMIN_PERMISSION_KEYS, ensureAdminAccessTables, getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 import { sendAdminInvitationEmail } from './admin-invitation-email.js';
 
 const prisma = new PrismaClient();
@@ -22,6 +22,8 @@ async function getSessionUser(req, cookieName) {
 async function requireSuperAdmin(req, res) {
   const user = await getSessionUser(req, 'rp_admin_session');
   if (!user) { res.status(401).json({ error: 'Admin sign-in required.' }); return null; }
+  const accessStatus = await getAdminAccessStatusForUser(prisma, user.id);
+  if (accessStatus && !accessStatus.isActive) { res.status(403).json({ error: 'Admin access has been deactivated.' }); return null; }
   const access = await getAdminAccessForUser(prisma, user.id);
   if (access?.role !== 'SUPER_ADMIN' && user.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Super Admin permission required.' }); return null;
