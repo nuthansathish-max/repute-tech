@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken } from './auth.js';
+import { getAdminAccessForUser } from './admin-access.js';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
@@ -12,13 +13,14 @@ async function createAdminSessionFromUser(req,res){
   if(!token)return res.status(401).json({error:'Please sign in first'});
   const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}});
   if(!s||s.expiresAt<new Date())return res.status(401).json({error:'Please sign in first'});
-  if(!['ADMIN','SUPER_ADMIN'].includes(s.user.role))return res.status(403).json({error:'Admin access required'});
+  const adminAccess=await getAdminAccessForUser(prisma,s.user.id);
+  if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(s.user.role))return res.status(403).json({error:'Admin access required'});
   const adminToken=randomToken();
   await prisma.session.create({data:{tokenHash:tokenHash(adminToken),userId:s.user.id,expiresAt:new Date(Date.now()+86400000)}});
   const parts=[`rp_admin_session=${adminToken}`,'Max-Age=86400','Path=/','HttpOnly','SameSite=Lax'];
   if(process.env.NODE_ENV==='production')parts.push('Secure');
   res.setHeader('Set-Cookie',parts.join('; '));
-  res.json({ok:true,user:{id:s.user.id,name:s.user.name,email:s.user.email,role:s.user.role}});
+  res.json({ok:true,user:{id:s.user.id,name:s.user.name,email:s.user.email,role:adminAccess?.role||s.user.role}});
 }
 
 function loginPage(){
