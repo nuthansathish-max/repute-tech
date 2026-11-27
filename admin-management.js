@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
-import { getAdminAccessForUser, hasAdminPermission } from './admin-access.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser, hasAdminPermission } from './admin-access.js';
 import { deflateRawSync } from 'node:zlib';
 import crypto from 'node:crypto';
 import { adminPushConfigured, adminPushPublicKey, ensureAdminPushTables, queueAdminPushEvent, dispatchAdminPushQueue } from './admin-push.js';
@@ -154,6 +154,8 @@ async function sessionUser(req){
 async function requireAdmin(req,res){
   const user=await sessionUser(req);
   if(!user)return null;
+  const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);
+  if(accessStatus&&!accessStatus.isActive){res.status(403).json({error:'Admin access has been deactivated.'});return null;}
   const adminAccess=await getAdminAccessForUser(prisma,user.id);
   if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
@@ -162,6 +164,8 @@ async function isSuperAdmin(user){const access=await getAdminAccessForUser(prism
 async function requireAdminPermission(req,res,permission){
   const user=await sessionUser(req);
   if(!user){res.status(401).json({error:'Admin sign-in required'});return null;}
+  const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);
+  if(accessStatus&&!accessStatus.isActive){res.status(403).json({error:'Admin access has been deactivated.'});return null;}
   const adminAccess=await getAdminAccessForUser(prisma,user.id);
   if(adminAccess){
     if(!hasAdminPermission(adminAccess,permission)){res.status(403).json({error:'This action requires the '+permission+' permission.'});return null;}
