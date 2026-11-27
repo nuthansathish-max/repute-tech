@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
+import { getAdminAccessForUser } from './admin-access.js';
 import { deflateRawSync } from 'node:zlib';
 import crypto from 'node:crypto';
 import { adminPushConfigured, adminPushPublicKey, ensureAdminPushTables, queueAdminPushEvent, dispatchAdminPushQueue } from './admin-push.js';
@@ -153,7 +154,8 @@ async function sessionUser(req){
 async function requireAdmin(req,res){
   const user=await sessionUser(req);
   if(!user)return null;
-  if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
+  const adminAccess=await getAdminAccessForUser(prisma,user.id);
+  if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
 }
 function adminPage(){
