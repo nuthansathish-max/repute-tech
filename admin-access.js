@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 export const ADMIN_PERMISSION_KEYS = Object.freeze([
   'PAYMENTS_VIEW',
   'PAYMENTS_CONFIGURE_UPI',
-  'PAYMENTS_CONFIGURE_GATEWAY',
   'PAYMENTS_VERIFY',
   'PAYMENTS_APPROVE',
   'PAYMENTS_REFUND',
