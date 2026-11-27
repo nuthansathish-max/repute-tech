@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken, hashPassword, setSessionCookie } from './auth.js';
-import { ADMIN_PERMISSION_KEYS, ensureAdminAccessTables, getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
+import { ADMIN_DELEGABLE_PERMISSION_KEYS, ensureAdminAccessTables, getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 import { sendAdminInvitationEmail } from './admin-invitation-email.js';
 
 const prisma = new PrismaClient();
@@ -99,7 +99,7 @@ function invitePage() {
   ].join('');
 }
 function managementPage() {
-  const keys = JSON.stringify(ADMIN_PERMISSION_KEYS);
+  const keys = JSON.stringify(ADMIN_DELEGABLE_PERMISSION_KEYS);
   return [
     '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Access · reputetechs.in</title>',
     '<style>*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#182033;font:13px system-ui}.wrap{max-width:1000px;margin:28px auto;padding:0 15px}.panel{background:white;border:1px solid #ddd9ff;border-radius:14px;padding:18px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:6px}input{padding:10px;border:1px solid #d9deea;border-radius:8px;font:inherit}button{padding:9px 12px;border:1px solid #d9deea;border-radius:8px;background:white;font-weight:700;cursor:pointer}.primary{background:#5146e5;color:white;border-color:#5146e5}.danger{color:#b42318;border-color:#fecaca}.item{padding:12px 0;border-bottom:1px solid #edf0f5;display:flex;justify-content:space-between;gap:10px;align-items:center}.muted{color:#687386}.permissions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.permissions label{display:flex;gap:7px;align-items:center}@media(max-width:650px){.grid{grid-template-columns:1fr}.item{align-items:flex-start;flex-direction:column}}</style></head><body><main class="wrap">',
@@ -193,7 +193,7 @@ function install(app) {
     try {
       const actor = await requireSuperAdmin(req, res); if (!actor) return;
       const requested = req.body?.permissions;
-      if (!Array.isArray(requested) || requested.some(p => !ADMIN_PERMISSION_KEYS.includes(p))) return res.status(400).json({ error: 'Choose valid permissions.' });
+      if (!Array.isArray(requested) || requested.some(p => !ADMIN_DELEGABLE_PERMISSION_KEYS.includes(p))) return res.status(400).json({ error: 'Choose valid permissions.' });
       const rows = await prisma.$queryRawUnsafe('SELECT "id","role" FROM "AdminAccess" WHERE "userId"=$1 LIMIT 1', req.params.userId);
       if (!rows?.length) return res.status(404).json({ error: 'Admin account not found.' });
       if (rows[0].role === 'SUPER_ADMIN') return res.status(409).json({ error: 'Super Admin permissions are controlled by secure owner provisioning.' });
