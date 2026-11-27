@@ -169,6 +169,10 @@ async function requireAdminPermission(req,res,permission){
   if(['ADMIN','SUPER_ADMIN'].includes(user.role))return user;
   res.status(403).json({error:'Admin access required'});return null;
 }
+async function requireAdminPermissions(req,res,permissions){
+  for(const permission of permissions){const user=await requireAdminPermission(req,res,permission);if(!user)return null;}
+  return await sessionUser(req);
+}
 function adminPage(){
  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in · SaaS Owner Console</title>
  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -2054,6 +2058,7 @@ function install(app){
   await ensureCustomPlanRequestColumns();
   const body=await readAdminJsonBody(req);
   const paymentStatus=String(body?.paymentStatus||'').trim().toUpperCase();
+  if(paymentStatus==='PAID'&&!(await requireAdminPermission(req,res,'PAYMENTS_APPROVE')))return;
   const allowed=['PENDING','PAID','FAILED','EXPIRED'];
   if(paymentStatus==='MANUAL')return res.status(400).json({error:'MANUAL is no longer a valid payment status; use PENDING'});
   if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
