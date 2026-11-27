@@ -1875,7 +1875,7 @@ function install(app){
  });
 
  originalGet.call(app,'/api/admin/businesses/:businessId/export',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_EXPORT');if(!user)return;
   const businessId=String(req.params.businessId||'');
   const b=await prisma.business.findUnique({where:{id:businessId}});
   if(!b)return res.status(404).json({error:'Business not found'});
