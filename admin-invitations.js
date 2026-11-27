@@ -36,8 +36,8 @@ function getInviteUrl(token) {
   if (!base) throw new Error('APP_BASE_URL is not configured');
   const url = new URL(base);
   if (url.protocol !== 'https:') throw new Error('APP_BASE_URL must use HTTPS');
-  url.pathname = '/admin-invite'; url.search = ''; url.hash = '';
-  url.searchParams.set('token', token);
+  url.pathname = '/admin-invite'; url.search = '';
+  url.hash = 'token=' + encodeURIComponent(token);
   return url.toString();
 }
 async function createInvitation(actor, email, name, replaceId) {
@@ -93,7 +93,7 @@ function invitePage() {
     '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6fb;color:#182033;font:14px system-ui}.card{width:min(440px,92vw);padding:28px;background:#fff;border:1px solid #ddd9ff;border-radius:16px}h1{font-size:23px}p{color:#687386;line-height:1.5}label{display:block;margin:16px 0 6px;font-weight:650}input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #d9deea;border-radius:9px;font:inherit}button{width:100%;padding:12px;margin-top:18px;border:0;border-radius:9px;background:#5146e5;color:white;font-weight:750}#message{min-height:20px;margin-top:12px;color:#b42318}</style></head><body>',
     '<main class="card"><h1>Repute Tech Admin invitation</h1><p>Create a password to accept. If you already have a Repute Tech account, sign in to that account using the invited email before accepting so your business access remains unchanged.</p>',
     '<label>Password (at least 12 characters)</label><input id="password" type="password" minlength="12" autocomplete="new-password"><label>Confirm password</label><input id="confirm" type="password" minlength="12" autocomplete="new-password"><button id="accept">Accept invitation</button><div id="message" role="alert"></div><p>Invitation links expire after 24 hours and can only be used once.</p></main>',
-    '<script>const token=new URLSearchParams(location.search).get("token")||"";document.getElementById("accept").onclick=async()=>{const m=document.getElementById("message"),p=document.getElementById("password").value,c=document.getElementById("confirm").value,b=document.getElementById("accept");m.textContent="";if(p.length&&p.length<12){m.textContent="Use at least 12 characters.";return}if(p!==c){m.textContent="Passwords do not match.";return}b.disabled=true;try{const r=await fetch("/api/admin/invitations/accept",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,password:p})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Invitation could not be accepted.");m.style.color="#087e61";m.textContent="Invitation accepted. Redirecting…";setTimeout(()=>location.href="/admin-login",900)}catch(e){m.textContent=e.message;b.disabled=false}};</script></body></html>'
+    '<script>const token=new URLSearchParams(location.hash.slice(1)).get("token")||"";document.getElementById("accept").onclick=async()=>{const m=document.getElementById("message"),p=document.getElementById("password").value,c=document.getElementById("confirm").value,b=document.getElementById("accept");m.textContent="";if(p.length&&p.length<12){m.textContent="Use at least 12 characters.";return}if(p!==c){m.textContent="Passwords do not match.";return}b.disabled=true;try{const r=await fetch("/api/admin/invitations/accept",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,password:p})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Invitation could not be accepted.");m.style.color="#087e61";m.textContent="Invitation accepted. Redirecting…";setTimeout(()=>location.href="/admin-login",900)}catch(e){m.textContent=e.message;b.disabled=false}};</script></body></html>'
   ].join('');
 }
 function managementPage() {
@@ -111,7 +111,7 @@ function managementPage() {
 function install(app) {
   if (installed) return;
   installed = true;
-  originalGet.call(app, '/admin-invite', (req, res) => { res.set('Cache-Control', 'no-store'); res.type('html').send(invitePage()); });
+  originalGet.call(app, '/admin-invite', (req, res) => { res.set('Cache-Control', 'no-store'); res.set('Referrer-Policy', 'no-referrer'); res.type('html').send(invitePage()); });
   originalGet.call(app, '/admin-access', async (req, res, next) => {
     try { const actor = await requireSuperAdmin(req, res); if (!actor) return; res.set('Cache-Control', 'no-store'); res.type('html').send(managementPage()); }
     catch (e) { next(e); }
