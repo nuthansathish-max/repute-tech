@@ -58,7 +58,7 @@ async function adminAllowed(user, permission) {
   if (status && !status.isActive) return false;
   const access = await getAdminAccessForUser(prisma, user.id);
   if (access) return hasAdminPermission(access, permission);
-  return ['ADMIN','SUPER_ADMIN'].includes(String(user.role || '').toUpperCase());
+  return false;
 }
 
 async function businessForOwner(userId, businessId) {
@@ -87,6 +87,17 @@ function install(app) {
       if (!user) return res.status(401).json({ error: 'Authentication required' });
       const businessId = String(req.query.businessId || '').trim();
       if (!businessId || !(await businessForOwner(user.id, businessId))) return res.status(403).json({ error: 'Business access denied' });
+      await ensureTables();
+      const rows = await prisma.$queryRawUnsafe('SELECT "upiId","accountName","qrDataUrl","instructions" FROM "SubscriptionUpiSettings" WHERE "id"=$1 LIMIT 1', 'default');
+      res.json({ settings: rows[0] || { upiId:'', accountName:'', qrDataUrl:null, instructions:'' } });
+    } catch(e) { next(e); }
+  });
+
+  originalGet.call(app, '/api/admin/subscription-upi-settings', async (req,res,next) => {
+    try {
+      const user = await currentUser(req);
+      if (!user) return res.status(401).json({ error: 'Authentication required' });
+      if (!(await adminAllowed(user, 'PAYMENTS_VIEW'))) return res.status(403).json({ error: 'Payment view permission required.' });
       await ensureTables();
       const rows = await prisma.$queryRawUnsafe('SELECT "upiId","accountName","qrDataUrl","instructions" FROM "SubscriptionUpiSettings" WHERE "id"=$1 LIMIT 1', 'default');
       res.json({ settings: rows[0] || { upiId:'', accountName:'', qrDataUrl:null, instructions:'' } });
