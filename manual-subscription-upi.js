@@ -41,6 +41,7 @@ async function ensureTables() {
     )`);
     await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "SubscriptionPaymentSubmission_status_created_idx" ON "SubscriptionPaymentSubmission" ("status","createdAt" DESC)');
     await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "SubscriptionPaymentSubmission_business_idx" ON "SubscriptionPaymentSubmission" ("businessId","createdAt" DESC)');
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SubscriptionPaymentSubmission_one_open_per_plan" ON "SubscriptionPaymentSubmission" ("planRequestId") WHERE "status" IN ('PENDING','APPROVED')`);
   })().catch(error => { setupPromise = null; throw error; });
   return setupPromise;
 }
@@ -160,12 +161,25 @@ function install(app) {
       if (!(await adminAllowed(user, 'PAYMENTS_VIEW'))) return res.status(403).json({ error: 'Payment view permission required.' });
       await ensureTables();
       const status = ['PENDING','APPROVED','REJECTED'].includes(String(req.query.status||'').toUpperCase()) ? String(req.query.status).toUpperCase() : 'PENDING';
-      const rows = await prisma.$queryRawUnsafe(`SELECT s."id",s."planRequestId",s."businessId",s."userId",s."utr",s."proofDataUrl",s."status",s."reviewNote",s."reviewedAt",s."createdAt",
+      const rows = await prisma.$queryRawUnsafe(`SELECT s."id",s."planRequestId",s."businessId",s."userId",s."utr",s."status",s."reviewNote",s."reviewedAt",s."createdAt",
         b."name" AS "businessName",u."name" AS "ownerName",u."email" AS "ownerEmail",p."planName",p."price",p."billingInterval"
         FROM "SubscriptionPaymentSubmission" s JOIN "Business" b ON b."id"=s."businessId"
         JOIN "User" u ON u."id"=s."userId" JOIN "PlanRequest" p ON p."id"=s."planRequestId"
         WHERE s."status"=$1 ORDER BY s."createdAt" DESC LIMIT 200`, status);
       res.json({ submissions:rows });
+    } catch(e) { next(e); }
+  });
+
+  originalGet.call(app, '/api/admin/subscription-payment-submissions/:id/proof', async (req,res,next) => {
+    try {
+      const user = await currentUser(req);
+      if (!user) return res.status(401).json({ error: 'Authentication required' });
+      if (!(await adminAllowed(user, 'PAYMENTS_VIEW'))) return res.status(403).json({ error: 'Payment view permission required.' });
+      await ensureTables();
+      const rows = await prisma.$queryRawUnsafe('SELECT "proofDataUrl" FROM "SubscriptionPaymentSubmission" WHERE "id"=$1 LIMIT 1', req.params.id);
+      if (!rows[0]) return res.status(404).json({ error: 'Payment submission not found.' });
+      if (!rows[0].proofDataUrl) return res.status(404).json({ error: 'No payment proof was attached.' });
+      res.json({ proofDataUrl: rows[0].proofDataUrl });
     } catch(e) { next(e); }
   });
 
@@ -186,7 +200,8 @@ function install(app) {
       const request = await prisma.planRequest.findUnique({ where:{id:submission.planRequestId} });
       if (!request || request.paymentStatus === 'PAID') return res.status(409).json({ error: 'Subscription payment is already recorded or request is unavailable.' });
       await prisma.$transaction(async tx => {
-        await tx.$executeRawUnsafe('UPDATE "SubscriptionPaymentSubmission" SET "status"=$2,"reviewNote"=$3,"reviewedByUserId"=$4,"reviewedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1', submission.id, status, note || null, user.id);
+        const changed = await tx.$executeRawUnsafe('UPDATE "SubscriptionPaymentSubmission" SET "status"=$2,"reviewNote"=$3,"reviewedByUserId"=$4,"reviewedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=\'PENDING\'', submission.id, status, note || null, user.id);
+        if (changed !== 1) throw new Error('This payment submission has already been reviewed.');
         if (status === 'APPROVED') {
           await tx.planRequest.update({ where:{id:request.id}, data:{paymentStatus:'PAID',paidAt:new Date()} });
         }
