@@ -16,7 +16,7 @@ async function currentAdmin(req, res) {
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) { res.status(401).json({ error: 'Admin session expired. Sign in again.' }); return null; }
   const access = await getAdminAccessForUser(prisma, session.user.id);
-  if (access?.role !== 'SUPER_ADMIN' && session.user.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Only a Super Admin can use Dangerous Actions.' }); return null; }
+  if (access ? access.role !== 'SUPER_ADMIN' : session.user.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Only a Super Admin can use Dangerous Actions.' }); return null; }
   return session.user;
 }
 async function requireFreshSecurity(user, password) {
