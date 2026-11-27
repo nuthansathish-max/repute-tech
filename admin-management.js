@@ -770,15 +770,16 @@ document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-car
   const scope=$('userBusiness')?.value||'';
   const filtered=users.filter(u=>{
    const hay=[u.id,u.name,u.email,u.role].join(' ').toLowerCase();
-   const isPlatform=u.role==='ADMIN'||u.role==='SUPER_ADMIN';
-   return (!q||hay.includes(q))&&(!role||u.role===role)&&(!scope||(scope==='platform'?isPlatform:u.businessCount>0));
+   const isPlatform=Boolean(u.adminRole)||u.role==='ADMIN'||u.role==='SUPER_ADMIN';
+   const roleMatches=!role||u.role===role||u.adminRole===role;
+   return (!q||hay.includes(q))&&roleMatches&&(!scope||(scope==='platform'?isPlatform:u.businessCount>0));
   });
   if($('userBadge'))$('userBadge').textContent=users.length;
   if($('userTotal'))$('userTotal').textContent=users.length;
   if($('userOwners'))$('userOwners').textContent=users.filter(u=>u.role==='OWNER').length;
-  if($('userAdmins'))$('userAdmins').textContent=users.filter(u=>u.role==='ADMIN'||u.role==='SUPER_ADMIN').length;
+  if($('userAdmins'))$('userAdmins').textContent=users.filter(u=>u.adminRole||u.role==='ADMIN'||u.role==='SUPER_ADMIN').length;
   if($('userMemberships'))$('userMemberships').textContent=users.reduce((sum,u)=>sum+Number(u.businessCount||0),0);
-  if($('userRows'))$('userRows').innerHTML=filtered.map(u=>'<div class="row user-click-row" data-user-id="'+esc(u.id)+'" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px;cursor:pointer"><div><div class="name">'+esc(u.name||'Unnamed user')+'</div><div class="sub">'+esc(u.id)+'</div></div><div>'+esc(u.email||'')+'</div><div>'+statusPill(u.role)+'</div><div>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div>'+date(u.createdAt)+'</div></div>').join('')||'<div class="empty">No users found.</div>'; 
+  if($('userRows'))$('userRows').innerHTML=filtered.map(u=>'<div class="row user-click-row" data-user-id="'+esc(u.id)+'" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px;cursor:pointer"><div><div class="name">'+esc(u.name||'Unnamed user')+'</div><div class="sub">'+esc(u.id)+'</div></div><div>'+esc(u.email||'')+'</div><div>'+statusPill(u.adminRole&&u.adminRole!==u.role?u.adminRole+' + '+u.role:(u.adminRole||u.role))+'</div><div>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div>'+date(u.createdAt)+'</div></div>').join('')||'<div class="empty">No users found.</div>'; 
  $('userRows')?.querySelectorAll('.user-click-row').forEach(row=>row.addEventListener('click',()=>{const u=users.find(x=>x.id===row.dataset.userId);if(!u)return;const d=$('userDetail');if(d){d.classList.remove('hidden');d.innerHTML='<div class="card"><div class="section-title">'+esc(u.name||'Unnamed user')+'</div><div class="kv"><b>Email</b>'+esc(u.email||'—')+'</div><div class="kv"><b>Role</b>'+esc(u.role||'—')+'</div><div class="kv"><b>Business Access</b>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div class="kv"><b>Created</b>'+date(u.createdAt)+'</div></div>';d.scrollIntoView({behavior:'smooth',block:'nearest'})}}));
  }
  async function loadUsers(){
