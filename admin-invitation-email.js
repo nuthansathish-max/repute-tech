@@ -26,7 +26,7 @@ export async function sendAdminInvitationEmail(
   const apiKey = requiredEnv(env, 'RESEND_API_KEY');
   const from = requiredEnv(env, 'RESEND_FROM');
   const replyTo = requiredEnv(env, 'RESEND_REPLY_TO');
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(replyTo)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
     throw new Error('A valid reply-to email address is required');
   }
 
