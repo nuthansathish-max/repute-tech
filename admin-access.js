@@ -12,6 +12,7 @@ export const ADMIN_PERMISSION_KEYS = Object.freeze([
   'PAYMENT_PERMISSIONS_MANAGE'
 ]);
 
+export const ADMIN_DELEGABLE_PERMISSION_KEYS = Object.freeze(ADMIN_PERMISSION_KEYS.filter(key => key !== 'PAYMENT_PERMISSIONS_MANAGE'));
 const SUPER_ADMIN_PERMISSIONS = new Set(ADMIN_PERMISSION_KEYS);
 
 let tableSetupPromise = null;
@@ -74,7 +75,7 @@ export function resolveAdminAccess(record, permissions = []) {
   if (!['ADMIN', 'SUPER_ADMIN'].includes(record.role)) return null;
   const granted = record.role === 'SUPER_ADMIN'
     ? [...SUPER_ADMIN_PERMISSIONS]
-    : [...new Set(permissions.filter(value => ADMIN_PERMISSION_KEYS.includes(value)))];
+    : [...new Set(permissions.filter(value => ADMIN_DELEGABLE_PERMISSION_KEYS.includes(value)))];
   return Object.freeze({
     id: record.id,
     userId: record.userId,
@@ -85,6 +86,7 @@ export function resolveAdminAccess(record, permissions = []) {
 
 export function hasAdminPermission(access, permission) {
   if (!access || !ADMIN_PERMISSION_KEYS.includes(permission)) return false;
+  if (permission === 'PAYMENT_PERMISSIONS_MANAGE' && access.role !== 'SUPER_ADMIN') return false;
   return access.role === 'SUPER_ADMIN' || access.permissions.includes(permission);
 }
 
