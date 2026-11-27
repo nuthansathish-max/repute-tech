@@ -93,8 +93,9 @@ function install(app) {
       let submission = null;
       const planRequestId = String(req.query.planRequestId || '').trim();
       if (planRequestId) {
-        const owned = await prisma.planRequest.findFirst({ where:{ id:planRequestId, businessId, userId:user.id }, select:{ id:true } });
+        const owned = await prisma.planRequest.findFirst({ where:{ id:planRequestId, businessId, userId:user.id }, select:{ id:true, status:true, paymentStatus:true } });
         if (!owned) return res.status(404).json({ error:'Subscription request not found.' });
+        if (owned.status !== 'APPROVED' || owned.paymentStatus === 'PAID') return res.status(409).json({ error:'UPI payment instructions are available only for approved, unpaid subscription requests.' });
         const existing = await prisma.$queryRawUnsafe('SELECT "status","reviewNote","createdAt" FROM "SubscriptionPaymentSubmission" WHERE "planRequestId"=$1 ORDER BY "createdAt" DESC LIMIT 1', planRequestId);
         submission = existing[0] || null;
       }
@@ -106,7 +107,7 @@ function install(app) {
     try {
       const user = await currentUser(req);
       if (!user) return res.status(401).json({ error: 'Authentication required' });
-      if (!(await adminAllowed(user, 'PAYMENTS_VIEW'))) return res.status(403).json({ error: 'Payment view permission required.' });
+      if (!(await adminAllowed(user, 'PAYMENTS_VIEW')) && !(await adminAllowed(user, 'PAYMENTS_CONFIGURE_UPI'))) return res.status(403).json({ error: 'Payment view or UPI configuration permission required.' });
       await ensureTables();
       const rows = await prisma.$queryRawUnsafe('SELECT "upiId","accountName","qrDataUrl","instructions" FROM "SubscriptionUpiSettings" WHERE "id"=$1 LIMIT 1', 'default');
       res.json({ settings: rows[0] || { upiId:'', accountName:'', qrDataUrl:null, instructions:'' } });
@@ -151,7 +152,7 @@ function install(app) {
       await ensureTables();
       const request = await prisma.planRequest.findFirst({ where:{ id:planRequestId, businessId, userId:user.id }, select:{ id:true, status:true, paymentStatus:true } });
       if (!request) return res.status(404).json({ error: 'Subscription request not found.' });
-      if (!['PENDING','APPROVED'].includes(request.status) || request.paymentStatus === 'PAID') return res.status(409).json({ error: 'This subscription request is not awaiting payment.' });
+      if (request.status !== 'APPROVED' || request.paymentStatus === 'PAID') return res.status(409).json({ error: 'Payment can be submitted only for an approved, unpaid subscription request.' });
       const duplicate = await prisma.$queryRawUnsafe('SELECT "id" FROM "SubscriptionPaymentSubmission" WHERE "planRequestId"=$1 AND "status" IN (\'PENDING\',\'APPROVED\') LIMIT 1', planRequestId);
       if (duplicate.length) return res.status(409).json({ error: 'A payment submission is already under review for this subscription.' });
       const id = ID();
