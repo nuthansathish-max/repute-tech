@@ -1775,7 +1775,7 @@ function install(app){
   if(!result.queued)return res.status(400).json({error:'No device subscription is registered for this account.'});
   res.json({ok:true,queued:result.queued});
  }catch(e){next(e)}});
- originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage())}catch(e){next(e)}});
+ originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage().replace('</body>','<script src="/manual-subscription-upi-admin.js"></script></body>'))}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/new-businesses',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const since=new Date(Date.now()-7*24*60*60*1000);
