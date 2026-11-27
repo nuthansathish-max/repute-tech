@@ -56,6 +56,7 @@ express.application.get=function(path,...handlers){
           if(body.includes('data-page="analytics"') && !body.includes('reputeAnalyticsNavFix')){
             body=body.replace('</body>',`<script id="reputeAnalyticsNavFix">document.addEventListener('click',function(e){const el=e.target.closest('[data-page="analytics"]');if(!el)return;e.preventDefault();e.stopImmediatePropagation();location.href='/analytics'});</script></body>`);
           }
+          if(body.includes('id="myPlanRequests"') && !body.includes('manual-subscription-upi-owner.js')){body=body.replace('</body>','<script src="/manual-subscription-upi-owner.js"></script></body>');}
           if(body.includes('id="menu"') && !body.includes('menu-image-ui.js')){
             body=body.replace('</body>','<script src="/menu-image-ui.js"></script></body>');
           }
