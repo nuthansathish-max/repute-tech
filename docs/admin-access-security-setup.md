@@ -57,14 +57,13 @@ Super Admins receive all permission keys. Ordinary Admins receive no payment per
 
 - `PAYMENTS_VIEW`
 - `PAYMENTS_CONFIGURE_UPI`
-- `PAYMENTS_CONFIGURE_GATEWAY`
 - `PAYMENTS_VERIFY`
 - `PAYMENTS_APPROVE`
 - `PAYMENTS_REFUND`
 - `SUBSCRIPTIONS_ACTIVATE`
 - `PAYMENTS_EXPORT`
 
-`PAYMENT_PERMISSIONS_MANAGE` remains Super Admin-only. The existing subscription ledger, payment verification, refund, custom-plan pricing, plan pricing, and subscription activation routes enforce their corresponding permissions server-side. UPI and official gateway configuration permission keys are ready for the separate payment-settings integration; the current repository does not yet contain those provider configuration endpoints.
+`PAYMENT_PERMISSIONS_MANAGE` remains Super Admin-only. The existing subscription ledger, payment verification, refund, custom-plan pricing, plan pricing, and subscription activation routes enforce their corresponding permissions server-side. UPI configuration is available for the manual subscription-payment workflow. No external payment gateway is included or configured.
 
 ## Review and deployment checklist
 
