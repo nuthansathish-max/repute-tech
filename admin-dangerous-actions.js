@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, verifyPassword } from './auth.js';
 import { getAdminTwoFactor } from './admin-two-factor.js';
-import { getAdminAccessForUser } from './admin-access.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -15,6 +15,8 @@ async function currentAdmin(req, res) {
   if (!token) { res.status(401).json({ error: 'Admin sign-in required.' }); return null; }
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) { res.status(401).json({ error: 'Admin session expired. Sign in again.' }); return null; }
+  const accessStatus = await getAdminAccessStatusForUser(prisma, session.user.id);
+  if (accessStatus && !accessStatus.isActive) { res.status(403).json({ error: 'Admin access has been deactivated.' }); return null; }
   const access = await getAdminAccessForUser(prisma, session.user.id);
   if (access ? access.role !== 'SUPER_ADMIN' : session.user.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Only a Super Admin can use Dangerous Actions.' }); return null; }
   return session.user;
