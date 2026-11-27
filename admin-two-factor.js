@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken, encrypt, decrypt, setSessionCookie, verifyPassword } from './auth.js';
-import { getAdminAccessForUser } from './admin-access.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -125,6 +125,8 @@ async function adminSession(req) {
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
+  const accessStatus = await getAdminAccessStatusForUser(prisma, session.user.id);
+  if (accessStatus && !accessStatus.isActive) return null;
   const adminAccess = await getAdminAccessForUser(prisma, session.user.id);
   if (!adminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) return null;
   return session.user;
@@ -239,8 +241,9 @@ function install(app) {
         }
       }
       const user = await prisma.user.findUnique({ where: { id: challenge.userId } });
+      const accessStatus = user ? await getAdminAccessStatusForUser(prisma, user.id) : null;
       const activeAdminAccess = user ? await getAdminAccessForUser(prisma, user.id) : null;
-      if (!user || (!activeAdminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(user.role))) return res.status(403).json({ error: 'Admin access is no longer available for this account.' });
+      if (!user || (accessStatus && !accessStatus.isActive) || (!activeAdminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(user.role))) return res.status(403).json({ error: 'Admin access is no longer available for this account.' });
             const sessionToken = randomToken();
       await prisma.session.create({ data: { tokenHash: tokenHash(sessionToken), userId: user.id, expiresAt: new Date(Date.now() + 14 * 864e5) } });
       setSessionCookie(res, sessionToken);
