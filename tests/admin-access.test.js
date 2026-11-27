@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ADMIN_PERMISSION_KEYS,
+  ADMIN_DELEGABLE_PERMISSION_KEYS,
   resolveAdminAccess,
   hasAdminPermission,
   createAdminInvitationToken
@@ -27,6 +28,13 @@ test('Admin permissions are restricted to the supported permission keys', () => 
   assert.deepEqual([...access.permissions].sort(), ['PAYMENTS_REFUND', 'PAYMENTS_VIEW']);
   assert.equal(hasAdminPermission(access, 'PAYMENTS_REFUND'), true);
   assert.equal(hasAdminPermission(access, 'PAYMENTS_APPROVE'), false);
+});
+
+test('ordinary Admins cannot be granted permission-management authority', () => {
+  const access = resolveAdminAccess({ id: 'a', userId: 'u', role: 'ADMIN', isActive: true }, ['PAYMENT_PERMISSIONS_MANAGE']);
+  assert.equal(access.permissions.includes('PAYMENT_PERMISSIONS_MANAGE'), false);
+  assert.equal(ADMIN_DELEGABLE_PERMISSION_KEYS.includes('PAYMENT_PERMISSIONS_MANAGE'), false);
+  assert.equal(hasAdminPermission(access, 'PAYMENT_PERMISSIONS_MANAGE'), false);
 });
 
 test('Super Admin receives the complete permission set', () => {
