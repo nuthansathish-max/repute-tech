@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { ensureAdminAccessTables } from '../admin-access.js';
 
 const prisma = new PrismaClient();
@@ -44,10 +45,7 @@ async function main() {
 }
 
 function cryptoId() {
-  return requireUuid();
-}
-function requireUuid() {
-  return globalThis.crypto.randomUUID();
+  return randomUUID();
 }
 
 main().catch(error => {
