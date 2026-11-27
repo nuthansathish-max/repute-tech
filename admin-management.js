@@ -2107,7 +2107,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/pending-plan-requests',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const requests=await prisma.planRequest.findMany({where:{status:'PENDING',isCustom:false},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'asc'}});
   const mapped=requests.map(x=>{const owner=x.business.members[0]?.user;return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||null,ownerEmail:owner?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,status:x.status,paymentStatus:x.paymentStatus,createdAt:x.createdAt}});
@@ -2115,7 +2115,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/custom-plan-requests/:requestId/quote',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT`);
   const body=await readAdminJsonBody(req);const planName=String(body?.planName||'').trim();const billingInterval=String(body?.billingInterval||'').trim().toUpperCase();const price=Number(body?.price);const customDetails=String(body?.customDetails||'').trim().slice(0,1500);
@@ -2129,7 +2129,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/custom-plan-requests',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT`);
   const requests=await prisma.planRequest.findMany({where:{isCustom:true},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
@@ -2138,7 +2138,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'}});
   const businessIds=[...new Set(subs.map(s=>s.businessId).filter(Boolean))];
   const businesses=businessIds.length?await prisma.business.findMany({where:{id:{in:businessIds}},include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}):[];
