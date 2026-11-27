@@ -9,6 +9,7 @@ import { analyzeReview, generateReply } from './ai.js';
 import { aiReviewAnalysis } from './aiProvider.js';
 import { syncLocationReviews, mockSyncLocationReviews } from './reviewPipeline.js';
 import { businessPermissionMiddleware } from './business-permissions.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser, hasAdminPermission } from './admin-access.js';
 import { isPlanFeatureEnabled } from './feature-entitlements.js';
 
 const prisma = new PrismaClient();
@@ -137,7 +138,11 @@ express.application.get=function(path,...handlers){
   }catch(e){next(e)}});
   if(path==='/api/admin/plan-requests') return originalGet.call(this,path,async(req,res,next)=>{try{
     const user=await sessionUser(req); if(!user)return res.status(401).json({error:'Authentication required'});
-    if(!['ADMIN','SUPER_ADMIN'].includes(user.role))return res.status(403).json({error:'Admin access required'});
+    const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);
+    if(accessStatus&&!accessStatus.isActive)return res.status(403).json({error:'Admin access has been deactivated.'});
+    const access=await getAdminAccessForUser(prisma,user.id);
+    const allowed=access?hasAdminPermission(access,'PAYMENTS_VIEW'):['ADMIN','SUPER_ADMIN'].includes(user.role);
+    if(!allowed)return res.status(403).json({error:'This action requires the PAYMENTS_VIEW permission.'});
     res.json(await prisma.planRequest.findMany({include:{business:{select:{id:true,name:true,slug:true}},user:{select:{id:true,name:true,email:true}}},orderBy:{createdAt:'desc'}}));
   }catch(e){next(e)}});
   if(path==='/api/businesses/:businessId/campaigns') return originalGet.call(this,path,async(req,res,next)=>{try{
