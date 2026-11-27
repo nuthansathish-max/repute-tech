@@ -1,0 +1,47 @@
+name: Manual UPI subscription payment checks
+# Covers the owner payment form, Admin review UI, API routes and existing Admin access regressions.
+
+on:
+  push:
+    branches: [feature/manual-upi-subscription-payments]
+  pull_request:
+    branches: [feature/admin-access-security]
+    paths:
+      - 'manual-subscription-upi.js'
+      - 'manual-subscription-upi-owner.js'
+      - 'manual-subscription-upi-admin.js'
+      - 'server.js'
+      - 'admin-management.js'
+      - 'index.html'
+      - 'schema.prisma'
+      - 'package.json'
+      - '.github/workflows/manual-upi-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  manual-upi-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Check manual UPI and server JavaScript syntax
+        run: |
+          node --check manual-subscription-upi.js
+          node --check manual-subscription-upi-owner.js
+          node --check manual-subscription-upi-admin.js
+          node --check server.js
+          node --check "server (1).js"
+          node --check admin-management.js
+      - name: Run existing Admin security regression tests
+        run: |
+          npm run test:admin-access
+          npm run test:2fa
+      - name: Generate Prisma client
+        run: npm run prisma:generate

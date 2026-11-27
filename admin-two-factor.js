@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken, encrypt, decrypt, setSessionCookie, verifyPassword } from './auth.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 
 const prisma = new PrismaClient();
 const originalGet = express.application.get;
@@ -124,7 +125,10 @@ async function adminSession(req) {
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { tokenHash: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
-  if (!['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) return null;
+  const accessStatus = await getAdminAccessStatusForUser(prisma, session.user.id);
+  if (accessStatus && !accessStatus.isActive) return null;
+  const adminAccess = await getAdminAccessForUser(prisma, session.user.id);
+  if (!adminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) return null;
   return session.user;
 }
 async function requireAdmin(req, res) {
@@ -237,7 +241,9 @@ function install(app) {
         }
       }
       const user = await prisma.user.findUnique({ where: { id: challenge.userId } });
-      if (!user || !['ADMIN', 'SUPER_ADMIN'].includes(user.role)) return res.status(403).json({ error: 'Admin access is no longer available for this account.' });
+      const accessStatus = user ? await getAdminAccessStatusForUser(prisma, user.id) : null;
+      const activeAdminAccess = user ? await getAdminAccessForUser(prisma, user.id) : null;
+      if (!user || (accessStatus && !accessStatus.isActive) || (!activeAdminAccess && !['ADMIN', 'SUPER_ADMIN'].includes(user.role))) return res.status(403).json({ error: 'Admin access is no longer available for this account.' });
             const sessionToken = randomToken();
       await prisma.session.create({ data: { tokenHash: tokenHash(sessionToken), userId: user.id, expiresAt: new Date(Date.now() + 14 * 864e5) } });
       setSessionCookie(res, sessionToken);
@@ -250,12 +256,15 @@ function install(app) {
     try {
       const user = await requireAdmin(req, res); if (!user) return;
       await ensureAdminTwoFactorTables();
-      const admins = await prisma.user.findMany({ where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } }, select: { id: true, name: true, email: true, role: true }, orderBy: { name: 'asc' } });
+      const accessRows = await prisma.$queryRawUnsafe('SELECT "userId","role" FROM "AdminAccess" WHERE "isActive"=TRUE');
+      const accessRoleByUser = new Map((accessRows || []).map(row => [row.userId, row.role]));
+      const adminIds = [...accessRoleByUser.keys()];
+      const admins = await prisma.user.findMany({ where: { OR: [{ role: { in: ['ADMIN', 'SUPER_ADMIN'] } }, ...(adminIds.length ? [{ id: { in: adminIds } }] : [])] }, select: { id: true, name: true, email: true, role: true }, orderBy: { name: 'asc' } });
       const ids = admins.map(x => x.id);
       const rows = ids.length ? await prisma.$queryRawUnsafe('SELECT "userId","enabled" FROM "AdminTwoFactor" WHERE "userId" = ANY($1::text[])', ids) : [];
       const map = new Map(rows.map(x => [x.userId, Boolean(x.enabled)]));
       res.set('Cache-Control', 'no-store');
-      res.json({ currentUser: { id: user.id, enabled: map.get(user.id) || false }, admins: admins.map(x => ({ userId: x.id, name: x.name, email: x.email, role: x.role, enabled: map.get(x.id) || false })) });
+      res.json({ currentUser: { id: user.id, enabled: map.get(user.id) || false }, admins: admins.map(x => ({ userId: x.id, name: x.name, email: x.email, role: accessRoleByUser.get(x.id) || x.role, accountRole: x.role, enabled: map.get(x.id) || false })) });
     } catch (e) { next(e); }
   });
   // Temporary, admin-only diagnostics for the reported TOTP enrollment failure.

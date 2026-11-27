@@ -17,6 +17,7 @@ import { businessPermissionMiddleware } from './business-permissions.js';
 import { isPlanFeatureEnabled } from './feature-entitlements.js';
 import { queueAdminPushEvent } from './admin-push.js';
 import { getAdminTwoFactor, startAdminTwoFactorChallenge } from './admin-two-factor.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser, hasAdminPermission } from './admin-access.js';
 import { publishDueAnnouncements, startAnnouncementScheduler } from './announcement-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -69,12 +70,23 @@ async function sessionUser(req){
   return s.user;
 }
 async function auth(req,res,next){try{const user=await sessionUser(req);if(!user)return res.status(401).json({error:'Authentication required'});req.user=user;next();}catch(e){next(e)}}
+async function requireAdmin(req,res,permission=null){
+  const accessStatus=await getAdminAccessStatusForUser(prisma,req.user.id);
+  if(accessStatus&&!accessStatus.isActive){res.status(403).json({error:'Admin access has been deactivated.'});return false;}
+  const access=await getAdminAccessForUser(prisma,req.user.id);
+  if(access){
+    if(permission&&!hasAdminPermission(access,permission)){res.status(403).json({error:'This action requires the '+permission+' permission.'});return false;}
+    return true;
+  }
+  if(['ADMIN','SUPER_ADMIN'].includes(req.user.role))return true;
+  res.status(403).json({error:'Admin access required'});return false;
+}
 function signedState(userId){const raw=`${userId}.${Date.now()}`;const sig=tokenHash(raw);return Buffer.from(`${raw}.${sig}`).toString('base64url')}
 function verifyState(state){const raw=Buffer.from(state,'base64url').toString();const parts=raw.split('.');if(parts.length!==3)return null;const [userId,ts,sig]=parts;if(Date.now()-Number(ts)>10*60*1000)return null;if(sig!==tokenHash(`${userId}.${ts}`))return null;return userId}
 
 const signupSchema=z.object({name:z.string().min(2).max(80),email:z.string().email(),password:z.string().min(8).max(200)});
 app.post('/api/auth/signup',async(req,res,next)=>{try{const p=signupSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const email=p.data.email.toLowerCase();const exists=await prisma.user.findUnique({where:{email}});if(exists)return res.status(409).json({error:'Email already registered'});const user=await prisma.user.create({data:{name:p.data.name,email,passwordHash:hashPassword(p.data.password)}});const token=randomToken();await prisma.session.create({data:{tokenHash:tokenHash(token),userId:user.id,expiresAt:new Date(Date.now()+14*864e5)}});setSessionCookie(res,token);res.status(201).json({user:{id:user.id,name:user.name,email:user.email,role:user.role},onboardingRequired:true,onboardingUrl:'/business-setup'})}catch(e){next(e)}});
-app.post('/api/auth/login',async(req,res,next)=>{try{const p=z.object({email:z.string().email(),password:z.string().min(1)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:'Invalid login'});const user=await prisma.user.findUnique({where:{email:p.data.email.toLowerCase()}});if(!user?.passwordHash||!verifyPassword(p.data.password,user.passwordHash))return res.status(401).json({error:'Invalid email or password'});if(['ADMIN','SUPER_ADMIN'].includes(user.role)){const twoFactor=await getAdminTwoFactor(user.id);if(twoFactor?.enabled){clearSessionCookie(res);await startAdminTwoFactorChallenge(user.id,res);return res.json({twoFactorRequired:true,user:{id:user.id,name:user.name,email:user.email,role:user.role}})}}const token=randomToken();await prisma.session.create({data:{tokenHash:tokenHash(token),userId:user.id,expiresAt:new Date(Date.now()+14*864e5)}});setSessionCookie(res,token);res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role}})}catch(e){next(e)}});
+app.post('/api/auth/login',async(req,res,next)=>{try{const p=z.object({email:z.string().email(),password:z.string().min(1)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:'Invalid login'});const user=await prisma.user.findUnique({where:{email:p.data.email.toLowerCase()}});if(!user?.passwordHash||!verifyPassword(p.data.password,user.passwordHash))return res.status(401).json({error:'Invalid email or password'});const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);if(accessStatus&&!accessStatus.isActive)return res.status(403).json({error:'Admin access has been deactivated.'});const adminAccess=await getAdminAccessForUser(prisma,user.id);if(adminAccess||['ADMIN','SUPER_ADMIN'].includes(user.role)){const twoFactor=await getAdminTwoFactor(user.id);if(twoFactor?.enabled){clearSessionCookie(res);await startAdminTwoFactorChallenge(user.id,res);return res.json({twoFactorRequired:true,user:{id:user.id,name:user.name,email:user.email,role:user.role}})}if(adminAccess){const setupToken=randomToken();await prisma.session.create({data:{tokenHash:tokenHash(setupToken),userId:user.id,expiresAt:new Date(Date.now()+15*60*1000)}});setSessionCookie(res,setupToken,1);return res.json({twoFactorSetupRequired:true,user:{id:user.id,name:user.name,email:user.email,role:user.role}})}}const token=randomToken();await prisma.session.create({data:{tokenHash:tokenHash(token),userId:user.id,expiresAt:new Date(Date.now()+14*864e5)}});setSessionCookie(res,token);res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role}})}catch(e){next(e)}});
 app.post('/api/auth/logout',async(req,res,next)=>{try{const token=getCookie(req,'rp_session');if(token)await prisma.session.deleteMany({where:{tokenHash:tokenHash(token)}});clearSessionCookie(res);res.json({ok:true})}catch(e){next(e)}});
 app.get('/api/auth/me',async(req,res,next)=>{try{const user=await sessionUser(req);if(!user)return res.status(401).json({error:'Not signed in'});res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role}})}catch(e){next(e)}});
 
@@ -84,7 +96,7 @@ app.get('/auth/google/callback',async(req,res,next)=>{try{const userId=verifySta
 app.get('/api/google/status',auth,async(req,res,next)=>{try{const c=await prisma.googleConnection.findFirst({where:{userId:req.user.id},orderBy:{createdAt:'desc'}});res.json({connected:!!c,expiresAt:c?.expiresAt||null,scope:c?.scope||null})}catch(e){next(e)}});
 
 app.get('/api/businesses/:businessId/owner-profile',auth,async(req,res,next)=>{try{
-  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);const isAdmin=adminAccess?hasAdminPermission(adminAccess,'PAYMENTS_VIEW'):['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
   const business=await prisma.business.findFirst({where:{id:String(req.params.businessId),...(isAdmin?{}:{members:{some:{userId:req.user.id}}})},select:{id:true}});
   if(!business)return res.status(403).json({error:'Business access denied'});
   const members=await prisma.businessMember.findMany({where:{businessId:business.id},include:{user:{select:{id:true,name:true,email:true,role:true}}}});
@@ -165,8 +177,8 @@ app.get('/api/notifications',auth,async(req,res,next)=>{try{await publishDueAnno
 app.post('/api/notifications/:id/read',auth,async(req,res,next)=>{try{const n=await prisma.notification.findFirst({where:{id:req.params.id,userId:req.user.id}});if(!n)return res.status(404).json({error:'Notification not found'});res.json(await prisma.notification.update({where:{id:n.id},data:{readAt:new Date()}}));}catch(e){next(e)}});
 
 // Admin monitoring
-app.get('/api/admin/overview',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});const [businesses,users,reviews,customers,campaigns,syncs]=await Promise.all([prisma.business.count(),prisma.user.count(),prisma.review.count(),prisma.customer.count(),prisma.campaign.count(),prisma.reviewSyncLog.findMany({orderBy:{createdAt:'desc'},take:10,include:{}})]);res.json({businesses,users,reviews,customers,campaigns,recentSyncs:syncs});}catch(e){next(e)}});
-app.post('/api/admin/sync-now',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});const result=await scheduler.runNow();res.json({ok:true,result});}catch(e){next(e)}});
+app.get('/api/admin/overview',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res)))return;const [businesses,users,reviews,customers,campaigns,syncs]=await Promise.all([prisma.business.count(),prisma.user.count(),prisma.review.count(),prisma.customer.count(),prisma.campaign.count(),prisma.reviewSyncLog.findMany({orderBy:{createdAt:'desc'},take:10,include:{}})]);res.json({businesses,users,reviews,customers,campaigns,recentSyncs:syncs});}catch(e){next(e)}});
+app.post('/api/admin/sync-now',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res)))return;const result=await scheduler.runNow();res.json({ok:true,result});}catch(e){next(e)}});
 
 // v1.4 business management, AI settings, entitlements and public customer hub
 const businessAccess = async (req, businessId) => prisma.business.findFirst({
@@ -281,8 +293,8 @@ app.post('/api/whatsapp/connection',auth,async(req,res,next)=>{try{
 
 // Plans and manual approval workflow. No payment provider is connected.
 app.get('/api/plans',async(_req,res,next)=>{try{const plans=await prisma.planCatalog.findMany({where:{active:true},orderBy:{price:'asc'}});res.json(plans.map(p=>{let features=p.features;if(typeof features==='string'){try{features=JSON.parse(features)}catch{features=[]}}if(!Array.isArray(features)){features=features&&typeof features==='object'?Object.entries(features).filter(([,enabled])=>enabled===true).map(([key])=>key):[]}return {...p,features}}));}catch(e){next(e)}});
-app.get('/api/admin/plans',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});res.json(await prisma.planCatalog.findMany({orderBy:{price:'asc'}}));}catch(e){next(e)}});
-app.put('/api/admin/plans/:code',auth,async(req,res,next)=>{try{if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role))return res.status(403).json({error:'Admin access required'});const p=z.object({name:z.string().min(2).max(80),price:z.number().nonnegative(),billingInterval:z.enum(['MONTH','YEAR']),description:z.string().max(500).optional(),features:z.array(z.string()).default([]),active:z.boolean().default(true)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const existing=await prisma.planCatalog.findUnique({where:{code:req.params.code}});if(!existing)return res.status(404).json({error:'Plan not found'});const updated=await prisma.planCatalog.update({where:{code:req.params.code},data:p.data});await prisma.auditLog.create({data:{actorUserId:req.user.id,action:'UPDATE_PLAN',entity:'PlanCatalog',entityId:updated.id,metadata:p.data}});res.json(updated);}catch(e){next(e)}});
+app.get('/api/admin/plans',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res,'PAYMENTS_VIEW')))return;res.json(await prisma.planCatalog.findMany({orderBy:{price:'asc'}}));}catch(e){next(e)}});
+app.put('/api/admin/plans/:code',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res,'PAYMENTS_APPROVE')))return;const p=z.object({name:z.string().min(2).max(80),price:z.number().nonnegative(),billingInterval:z.enum(['MONTH','YEAR']),description:z.string().max(500).optional(),features:z.array(z.string()).default([]),active:z.boolean().default(true)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const existing=await prisma.planCatalog.findUnique({where:{code:req.params.code}});if(!existing)return res.status(404).json({error:'Plan not found'});const updated=await prisma.planCatalog.update({where:{code:req.params.code},data:p.data});await prisma.auditLog.create({data:{actorUserId:req.user.id,action:'UPDATE_PLAN',entity:'PlanCatalog',entityId:updated.id,metadata:p.data}});res.json(updated);}catch(e){next(e)}});
 
 app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
   const p=z.object({businessId:z.string(),planCode:z.string(),ownerName:z.string().min(2).max(100),contact:z.string().min(3).max(120)}).safeParse(req.body);
@@ -298,7 +310,8 @@ app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.get('/api/plan-requests',auth,async(req,res,next)=>{try{
-  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);
+  const isAdmin=adminAccess?hasAdminPermission(adminAccess,'PAYMENTS_VIEW'):['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
   const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();
   let where;
   if(selected){
@@ -314,9 +327,8 @@ app.get('/api/plan-requests',auth,async(req,res,next)=>{try{
   res.json(await prisma.planRequest.findMany({where,include:{business:{select:{id:true,name:true,slug:true}},user:{select:{id:true,name:true,email:true}}},orderBy:{createdAt:'desc'}}));
 }catch(e){next(e)}});
 
-async function requireAdmin(req,res){if(!['ADMIN','SUPER_ADMIN'].includes(req.user.role)){res.status(403).json({error:'Admin access required'});return false}return true}
 app.post('/api/admin/plan-requests/:id/approve',auth,async(req,res,next)=>{try{
-  if(!(await requireAdmin(req,res)))return;
+  if(!(await requireAdmin(req,res,'SUBSCRIPTIONS_ACTIVATE')))return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.id}}); if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='PENDING')return res.status(400).json({error:`Request is already ${request.status}`});
   const updated=await prisma.$transaction(async tx=>{
@@ -330,7 +342,7 @@ app.post('/api/admin/plan-requests/:id/approve',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.post('/api/admin/plan-requests/:id/reject',auth,async(req,res,next)=>{try{
-  if(!(await requireAdmin(req,res)))return;
+  if(!(await requireAdmin(req,res,'SUBSCRIPTIONS_ACTIVATE')))return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.id}}); if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='PENDING')return res.status(400).json({error:`Request is already ${request.status}`});
   const reason=String(req.body?.reason||'').trim().slice(0,500)||null;
@@ -342,7 +354,7 @@ app.post('/api/admin/plan-requests/:id/reject',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.post('/api/admin/plan-requests/:id/publish',auth,async(req,res,next)=>{try{
-  if(!(await requireAdmin(req,res)))return;
+  if(!(await requireAdmin(req,res,'SUBSCRIPTIONS_ACTIVATE')))return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.id}}); if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='APPROVED')return res.status(400).json({error:'Only approved requests can be published'});
   const updated=await prisma.$transaction(async tx=>{

@@ -1,0 +1,51 @@
+name: Admin access security checks
+
+on:
+  push:
+    branches: [feature/admin-access-security]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'admin-access.js'
+      - 'admin-auth.js'
+      - 'admin-invitations.js'
+      - 'admin-invitation-email.js'
+      - 'admin-management.js'
+      - 'admin-two-factor.js'
+      - 'server.js'
+      - 'server (1).js'
+      - 'scripts/bootstrap-admin-access.js'
+      - 'tests/admin-access.test.js'
+      - 'tests/admin-invitation-email.test.js'
+      - 'package.json'
+      - '.github/workflows/admin-access-security.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-admin-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: |
+          node --check admin-access.js
+          node --check admin-auth.js
+          node --check admin-invitations.js
+          node --check admin-invitation-email.js
+          node --check admin-management.js
+          node --check admin-two-factor.js
+          node --check server.js
+          node --check "server (1).js"
+          node --check scripts/bootstrap-admin-access.js
+      - name: Run Admin access and invitation tests
+        run: |
+          npm run test:admin-access
+          npm run test:admin-invitation-email

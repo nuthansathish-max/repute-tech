@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser, hasAdminPermission } from './admin-access.js';
 import { deflateRawSync } from 'node:zlib';
 import crypto from 'node:crypto';
 import { adminPushConfigured, adminPushPublicKey, ensureAdminPushTables, queueAdminPushEvent, dispatchAdminPushQueue } from './admin-push.js';
@@ -153,8 +154,29 @@ async function sessionUser(req){
 async function requireAdmin(req,res){
   const user=await sessionUser(req);
   if(!user)return null;
-  if(!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
+  const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);
+  if(accessStatus&&!accessStatus.isActive){res.status(403).json({error:'Admin access has been deactivated.'});return null;}
+  const adminAccess=await getAdminAccessForUser(prisma,user.id);
+  if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
+}
+async function isSuperAdmin(user){const access=await getAdminAccessForUser(prisma,user.id);return access?access.role==='SUPER_ADMIN':user.role==='SUPER_ADMIN';}
+async function requireAdminPermission(req,res,permission){
+  const user=await sessionUser(req);
+  if(!user){res.status(401).json({error:'Admin sign-in required'});return null;}
+  const accessStatus=await getAdminAccessStatusForUser(prisma,user.id);
+  if(accessStatus&&!accessStatus.isActive){res.status(403).json({error:'Admin access has been deactivated.'});return null;}
+  const adminAccess=await getAdminAccessForUser(prisma,user.id);
+  if(adminAccess){
+    if(!hasAdminPermission(adminAccess,permission)){res.status(403).json({error:'This action requires the '+permission+' permission.'});return null;}
+    return user;
+  }
+  if(['ADMIN','SUPER_ADMIN'].includes(user.role))return user;
+  res.status(403).json({error:'Admin access required'});return null;
+}
+async function requireAdminPermissions(req,res,permissions){
+  for(const permission of permissions){const user=await requireAdminPermission(req,res,permission);if(!user)return null;}
+  return await sessionUser(req);
 }
 function adminPage(){
  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in · SaaS Owner Console</title>
@@ -696,7 +718,7 @@ function adminPage(){
    </section>
    <section id="audit" class="hidden"><div class="page-head"><div><h1>Audit Logs</h1><p>Read-only security and administration history · latest 100 recorded events</p></div><span class="pill">READ ONLY</span></div><div class="grid4 audit-summary"><div class="card metric-card clickable" role="button" tabindex="0" data-audit-card="ALL" aria-label="Show all loaded audit events"><div class="label">Loaded Events</div><div class="metric" id="auditTotal">—</div><div class="sub">Latest 100 records</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-audit-card="TODAY" aria-label="Show audit events recorded today"><div class="label">Today</div><div class="metric" id="auditToday">—</div><div class="sub">Recorded since midnight</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-audit-card="SUBSCRIPTION" aria-label="Filter subscription audit events"><div class="label">Subscription Events</div><div class="metric" id="auditSubscriptions">—</div><div class="sub">In the loaded records</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-audit-card="FEATURE" aria-label="Filter feature change audit events"><div class="label">Feature Changes</div><div class="metric" id="auditFeatures">—</div><div class="sub">In the loaded records</div></div></div><div class="card section"><div class="toolbar"><input id="auditSearch" class="input" placeholder="Search action, actor, business, entity or details"><select id="auditCategory" class="select"><option value="">All categories</option><option value="FEATURE">Feature Control</option><option value="SUBSCRIPTION">Subscriptions & Payments</option><option value="BUSINESS">Business</option><option value="USER">Users & Access</option><option value="SECURITY">Security & Settings</option><option value="OTHER">Other</option></select><select id="auditPeriod" class="select"><option value="ALL">All loaded dates</option><option value="24H">Last 24 hours</option><option value="7D">Last 7 days</option><option value="30D">Last 30 days</option></select><button class="smallbtn" id="auditRefresh">↻ Refresh</button><button class="smallbtn" id="auditExport">⇩ Export CSV</button></div><div class="notice">Read-only history from existing audit records. Filters and export apply to the latest 100 records returned by the platform; no business data or operations are changed.</div><div class="sub" id="auditResultCount" style="margin-top:8px">Loading audit events…</div></div><div class="card table section"><div class="row head" style="grid-template-columns:1.3fr .85fr 1fr 1.3fr 130px 88px;min-width:1120px"><div>Action</div><div>Category</div><div>Actor</div><div>Business / Entity</div><div>Time</div><div>Details</div></div><div id="auditRows"></div></div></section>
    <section id="billing" class="hidden"><div class="grid4"><div class="card metric-card"><div class="label">Starter</div><div class="metric">₹499</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Growth Pro</div><div class="metric">₹999</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Pro Plus</div><div class="metric">₹1499</div><div class="sub">Monthly</div></div><div class="card metric-card"><div class="label">Yearly Plans</div><div class="metric">3</div><div class="sub">₹4999 · ₹9999 · ₹12999</div></div></div><div class="section notice">Billing tiers mirror the existing six-plan catalog. Editing controls are not enabled in this phase.</div></section>
-   <section id="featureflags" class="hidden"><div class="grid4"><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-controls"><div class="label">Feature Controls</div><div class="metric">8</div><div class="sub">View the eight business-level switches</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-businesses"><div class="label">Businesses</div><div class="metric" id="ffBusinessCount">—</div><div class="sub">Loaded from current business records</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-disabled"><div class="label">Overrides OFF</div><div class="metric" id="ffDisabledCount">—</div><div class="sub">Explicit business-level blocks</div></div></div><div class="card section"><div class="section-title"><h2>Per-Business Feature Flags</h2><span>Changes are audited</span></div><div class="toolbar"><input id="ffSearch" class="input" placeholder="Search business or owner"><select id="ffPlanFilter" class="select"><option value="">All plans</option><option value="STARTER">Starter</option><option value="GROWTH">Growth</option><option value="PRO">Pro</option><option value="OTHER">Other / no plan</option></select><button class="smallbtn" id="ffRefresh">↻ Refresh</button></div><div class="notice">Plan defaults are saved to each plan record. A business-specific override takes precedence over its plan default. Changes are recorded in Audit Logs.</div><div id="ffRows" class="table section"><div class="empty">Loading verified business records…</div></div></div></section><section id="settings" class="hidden"><div class="page-head"><div><h1>Platform Settings</h1><p>Save and reload supported platform identity settings. Changes here do not modify business-owner settings.</p></div><span class="pill">SUPER ADMIN</span></div><div class="grid2"><div class="card"><div class="section-title"><h2>General Settings</h2><span>Platform identity</span></div><label class="label" for="platformSettingName">Platform Name</label><input id="platformSettingName" maxlength="80" value="reputetechs.in" style="width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text)"><label class="label" for="platformSettingTagline">Platform Tagline</label><input id="platformSettingTagline" maxlength="160" placeholder="Optional tagline" style="width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text)"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="smallbtn" id="platformSettingsSave">Save Settings</button><button class="smallbtn" id="platformSettingsReload">Reload Saved Values</button></div><div id="platformSettingsMessage" class="notice" style="margin-top:12px">Loading saved platform settings…</div></div><div class="card"><div class="section-title"><h2>Security Settings</h2><span>Access & protection</span></div><div class="label">Current behavior</div><div class="metric" style="font-size:18px">Existing controls preserved</div><div class="sub">Sign-in, session expiry, and role checks are unchanged. Security switches are not exposed without a verified implementation.</div></div><div class="card"><div class="section-title"><h2>System Configuration</h2><span>Runtime region</span></div><div class="label">Region</div><div class="metric">ap-south-1</div><div class="sub">Mumbai · India Standard Time (IST)</div><div class="notice" style="margin-top:12px">Read-only information; environment variables and server settings are not changed.</div></div><div class="card"><div class="section-title"><h2>Integration Settings</h2><span>Connected services</span></div><div class="label">Google connections</div><div class="metric" id="settingsGoogleStatus">Loading…</div><div class="label" style="margin-top:12px">WhatsApp connected</div><div class="metric" id="settingsWhatsAppStatus">Loading…</div><div class="sub">Live counts from the existing integration status endpoint. Manage connections in their existing dashboards.</div></div><div class="card"><div class="section-title"><h2>Maintenance Controls</h2><span>Platform availability</span></div><div class="metric">Unavailable · No global maintenance service</div><div class="sub">A global maintenance switch is intentionally not enabled because no safe existing platform-wide maintenance mechanism is configured.</div></div><div class="card"><div class="section-title"><h2>Change Safety</h2><span>Current scope</span></div><div class="label">Saved values</div><div class="sub">Platform name and tagline are stored persistently in the admin settings table. Only a SUPER_ADMIN can save changes. No other dashboards, business records, plans, or integrations are changed.</div></div></div></section><section id="announcements" class="hidden"><div class="card"><div class="section-title"><h2>Announcements</h2><span>Business-owner communications</span><button class="smallbtn" id="announcementNew">New announcement</button></div><p class="sub">Create platform notices for business owners only. Admin accounts are excluded.</p><div class="grid2"><div class="card"><div class="label">Published</div><div class="metric" id="announcementStatPUBLISHED">0</div></div><div class="card"><div class="label">Scheduled</div><div class="metric" id="announcementStatSCHEDULED">0</div></div><div class="card"><div class="label">Drafts</div><div class="metric" id="announcementStatDRAFT">0</div></div><div class="card"><div class="label">Expired</div><div class="metric" id="announcementStatEXPIRED">0</div></div></div><div class="card" style="margin-top:12px"><input type="hidden" id="announcementId"><div class="section-title"><h2>Create / Edit Announcement</h2><span>Owner dashboard notifications</span></div><div class="grid2"><label>Title<input id="announcementTitle" maxlength="120" placeholder="Announcement title"></label><label>Audience<select id="announcementAudience"><option value="ALL">All business owners</option><option value="SELECTED">Selected businesses</option><optgroup label="Business categories"><option value="TYPE_RESTAURANT">Restaurants</option><option value="TYPE_HOTEL">Hotels</option><option value="TYPE_CAFE">Cafes</option><option value="TYPE_SALON">Salons</option><option value="TYPE_OTHER">Other businesses</option></optgroup><optgroup label="Trial businesses"><option value="TRIAL_ACTIVE">Active trials</option><option value="TRIAL_ENDING_SOON">Trials ending in next 7 days</option><option value="TRIAL_EXPIRED">Expired trials</option></optgroup><optgroup label="Subscription businesses"><option value="SUBSCRIPTION_ACTIVE">Active subscriptions</option><option value="SUBSCRIPTION_ENDING_SOON">Subscriptions ending in next 7 days</option><option value="SUBSCRIPTION_EXPIRED">Expired subscriptions</option></optgroup><option value="NO_SUBSCRIPTION">Businesses without a subscription</option><option value="CUSTOM_PLAN">Custom plan businesses</option></select></label></div><label>Message<textarea id="announcementBody" rows="4" maxlength="2000" placeholder="Write your announcement"></textarea></label><div id="announcementBusinessWrap" style="display:none;margin-top:10px"><label for="announcementBusinessSearch">Find businesses</label><div class="announcement-business-picker"><div class="announcement-business-toolbar"><input id="announcementBusinessSearch" type="search" placeholder="Search business name..."><button type="button" class="smallbtn" id="announcementSelectVisible">Select visible</button><span id="announcementBusinessCount">0 selected</span></div><div id="announcementBusinessOptions" class="announcement-business-options"></div></div><select id="announcementBusinessIds" multiple hidden></select><div class="sub">Tick each business that should receive this announcement.</div></div><div class="grid2" style="margin-top:10px"><label>Schedule (optional)<input id="announcementSchedule" type="datetime-local"></label><label>Expiry (optional)<input id="announcementExpiry" type="datetime-local"></label></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" id="announcementSave">Save draft</button><button class="btn primary" id="announcementPublish">Publish now</button></div><div id="announcementMessage" class="notice" style="display:none;margin-top:10px"></div></div><div class="card" style="margin-top:12px"><div class="section-title"><h2>Announcement history</h2><span>Manage existing notices</span></div><div id="announcementRows"></div></div></div></section><section id="menuqr" class="hidden"><div class="card"><div class="section-title"><h2>Digital Menu & QR</h2><span>Infrastructure & Gateways</span></div><p class="sub">Digital menu and QR platform operations.</p><div class="grid2"><div class="card"><div class="label">Digital Menu</div><div class="metric">Connected</div><div class="sub">Existing business menu functionality remains unchanged</div></div><div class="card"><div class="label">QR</div><div class="metric">Connected</div><div class="sub">Existing QR generation functionality remains unchanged</div></div></div><div class="notice" style="margin-top:12px">This section is added to the Super Admin navigation without changing any existing business-owner or admin functionality.</div></div></section><section id="rbac" class="hidden"><div class="card"><div class="section-title"><h2>Admin Accounts & RBAC</h2><span>Security & Config</span></div><p class="sub">Super Admin accounts, roles and access governance.</p><div class="grid2"><div class="card"><div class="label">Admin Accounts</div><div class="metric">2</div><div class="sub">Existing admin access remains unchanged</div></div><div class="card"><div class="label">RBAC</div><div class="metric">Enabled</div><div class="sub">Existing role checks remain unchanged</div></div></div><div class="notice" style="margin-top:12px">This section is added to the Super Admin navigation without changing any existing business-owner or admin functionality.</div></div></section><section id="dangerous" class="hidden"><iframe id="dangerousActionsFrame" title="Dangerous Actions security workspace" src="/admin-dangerous-actions?embedded=1" loading="lazy" style="display:block;width:100%;height:1480px;border:0;border-radius:12px;background:transparent" referrerpolicy="same-origin"></iframe></section><section id="notifications" class="hidden"><div class="card"><div class="section-title"><h2>Notifications & Alerts</h2><span>Security & Config</span></div><p class="sub">Platform operational notifications and alert status.</p><div class="grid2"><div class="card"><div class="label">Alerts</div><div class="metric">0</div><div class="sub">No active platform alerts</div></div><div class="card"><div class="label">Status</div><div class="metric">Healthy</div><div class="sub">Existing software behavior unchanged</div></div></div><div class="notice" style="margin-top:12px">This section is added to the Super Admin navigation without changing any existing business-owner or admin functionality.</div></div></section><section id="kill" class="hidden"><div class="card danger"><div class="section-title"><h2>Emergency Kill Switch</h2><span>Security & Config</span></div><div class="kv"><b>Global state</b><span class="pill good">OFF · NORMAL OPERATIONS</span></div><div class="notice" style="margin-top:10px">No destructive or global shutdown action is wired to this UI. This prevents accidental changes to live business operations.</div></div></section>
+   <section id="featureflags" class="hidden"><div class="grid4"><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-controls"><div class="label">Feature Controls</div><div class="metric">8</div><div class="sub">View the eight business-level switches</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-businesses"><div class="label">Businesses</div><div class="metric" id="ffBusinessCount">—</div><div class="sub">Loaded from current business records</div></div><div class="card metric-card clickable" role="button" tabindex="0" data-admin-card="flags-disabled"><div class="label">Overrides OFF</div><div class="metric" id="ffDisabledCount">—</div><div class="sub">Explicit business-level blocks</div></div></div><div class="card section"><div class="section-title"><h2>Per-Business Feature Flags</h2><span>Changes are audited</span></div><div class="toolbar"><input id="ffSearch" class="input" placeholder="Search business or owner"><select id="ffPlanFilter" class="select"><option value="">All plans</option><option value="STARTER">Starter</option><option value="GROWTH">Growth</option><option value="PRO">Pro</option><option value="OTHER">Other / no plan</option></select><button class="smallbtn" id="ffRefresh">↻ Refresh</button></div><div class="notice">Plan defaults are saved to each plan record. A business-specific override takes precedence over its plan default. Changes are recorded in Audit Logs.</div><div id="ffRows" class="table section"><div class="empty">Loading verified business records…</div></div></div></section><section id="settings" class="hidden"><div class="page-head"><div><h1>Platform Settings</h1><p>Save and reload supported platform identity settings. Changes here do not modify business-owner settings.</p></div><span class="pill">SUPER ADMIN</span></div><div class="grid2"><div class="card"><div class="section-title"><h2>General Settings</h2><span>Platform identity</span></div><label class="label" for="platformSettingName">Platform Name</label><input id="platformSettingName" maxlength="80" value="reputetechs.in" style="width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text)"><label class="label" for="platformSettingTagline">Platform Tagline</label><input id="platformSettingTagline" maxlength="160" placeholder="Optional tagline" style="width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text)"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="smallbtn" id="platformSettingsSave">Save Settings</button><button class="smallbtn" id="platformSettingsReload">Reload Saved Values</button></div><div id="platformSettingsMessage" class="notice" style="margin-top:12px">Loading saved platform settings…</div></div><div class="card"><div class="section-title"><h2>Security Settings</h2><span>Access & protection</span></div><div class="label">Current behavior</div><div class="metric" style="font-size:18px">Existing controls preserved</div><div class="sub">Sign-in, session expiry, and role checks are unchanged. Security switches are not exposed without a verified implementation.</div></div><div class="card"><div class="section-title"><h2>System Configuration</h2><span>Runtime region</span></div><div class="label">Region</div><div class="metric">ap-south-1</div><div class="sub">Mumbai · India Standard Time (IST)</div><div class="notice" style="margin-top:12px">Read-only information; environment variables and server settings are not changed.</div></div><div class="card"><div class="section-title"><h2>Integration Settings</h2><span>Connected services</span></div><div class="label">Google connections</div><div class="metric" id="settingsGoogleStatus">Loading…</div><div class="label" style="margin-top:12px">WhatsApp connected</div><div class="metric" id="settingsWhatsAppStatus">Loading…</div><div class="sub">Live counts from the existing integration status endpoint. Manage connections in their existing dashboards.</div></div><div class="card"><div class="section-title"><h2>Maintenance Controls</h2><span>Platform availability</span></div><div class="metric">Unavailable · No global maintenance service</div><div class="sub">A global maintenance switch is intentionally not enabled because no safe existing platform-wide maintenance mechanism is configured.</div></div><div class="card"><div class="section-title"><h2>Change Safety</h2><span>Current scope</span></div><div class="label">Saved values</div><div class="sub">Platform name and tagline are stored persistently in the admin settings table. Only a SUPER_ADMIN can save changes. No other dashboards, business records, plans, or integrations are changed.</div></div></div></section><section id="announcements" class="hidden"><div class="card"><div class="section-title"><h2>Announcements</h2><span>Business-owner communications</span><button class="smallbtn" id="announcementNew">New announcement</button></div><p class="sub">Create platform notices for business owners only. Admin accounts are excluded.</p><div class="grid2"><div class="card"><div class="label">Published</div><div class="metric" id="announcementStatPUBLISHED">0</div></div><div class="card"><div class="label">Scheduled</div><div class="metric" id="announcementStatSCHEDULED">0</div></div><div class="card"><div class="label">Drafts</div><div class="metric" id="announcementStatDRAFT">0</div></div><div class="card"><div class="label">Expired</div><div class="metric" id="announcementStatEXPIRED">0</div></div></div><div class="card" style="margin-top:12px"><input type="hidden" id="announcementId"><div class="section-title"><h2>Create / Edit Announcement</h2><span>Owner dashboard notifications</span></div><div class="grid2"><label>Title<input id="announcementTitle" maxlength="120" placeholder="Announcement title"></label><label>Audience<select id="announcementAudience"><option value="ALL">All business owners</option><option value="SELECTED">Selected businesses</option><optgroup label="Business categories"><option value="TYPE_RESTAURANT">Restaurants</option><option value="TYPE_HOTEL">Hotels</option><option value="TYPE_CAFE">Cafes</option><option value="TYPE_SALON">Salons</option><option value="TYPE_OTHER">Other businesses</option></optgroup><optgroup label="Trial businesses"><option value="TRIAL_ACTIVE">Active trials</option><option value="TRIAL_ENDING_SOON">Trials ending in next 7 days</option><option value="TRIAL_EXPIRED">Expired trials</option></optgroup><optgroup label="Subscription businesses"><option value="SUBSCRIPTION_ACTIVE">Active subscriptions</option><option value="SUBSCRIPTION_ENDING_SOON">Subscriptions ending in next 7 days</option><option value="SUBSCRIPTION_EXPIRED">Expired subscriptions</option></optgroup><option value="NO_SUBSCRIPTION">Businesses without a subscription</option><option value="CUSTOM_PLAN">Custom plan businesses</option></select></label></div><label>Message<textarea id="announcementBody" rows="4" maxlength="2000" placeholder="Write your announcement"></textarea></label><div id="announcementBusinessWrap" style="display:none;margin-top:10px"><label for="announcementBusinessSearch">Find businesses</label><div class="announcement-business-picker"><div class="announcement-business-toolbar"><input id="announcementBusinessSearch" type="search" placeholder="Search business name..."><button type="button" class="smallbtn" id="announcementSelectVisible">Select visible</button><span id="announcementBusinessCount">0 selected</span></div><div id="announcementBusinessOptions" class="announcement-business-options"></div></div><select id="announcementBusinessIds" multiple hidden></select><div class="sub">Tick each business that should receive this announcement.</div></div><div class="grid2" style="margin-top:10px"><label>Schedule (optional)<input id="announcementSchedule" type="datetime-local"></label><label>Expiry (optional)<input id="announcementExpiry" type="datetime-local"></label></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" id="announcementSave">Save draft</button><button class="btn primary" id="announcementPublish">Publish now</button></div><div id="announcementMessage" class="notice" style="display:none;margin-top:10px"></div></div><div class="card" style="margin-top:12px"><div class="section-title"><h2>Announcement history</h2><span>Manage existing notices</span></div><div id="announcementRows"></div></div></div></section><section id="menuqr" class="hidden"><div class="card"><div class="section-title"><h2>Digital Menu & QR</h2><span>Infrastructure & Gateways</span></div><p class="sub">Digital menu and QR platform operations.</p><div class="grid2"><div class="card"><div class="label">Digital Menu</div><div class="metric">Connected</div><div class="sub">Existing business menu functionality remains unchanged</div></div><div class="card"><div class="label">QR</div><div class="metric">Connected</div><div class="sub">Existing QR generation functionality remains unchanged</div></div></div><div class="notice" style="margin-top:12px">This section is added to the Super Admin navigation without changing any existing business-owner or admin functionality.</div></div></section><section id="rbac" class="hidden"><iframe title="Admin accounts and role-based access" src="/admin-access?embedded=1" loading="lazy" style="display:block;width:100%;height:1120px;border:0;border-radius:12px;background:transparent" referrerpolicy="same-origin"></iframe></section><section id="dangerous" class="hidden"><iframe id="dangerousActionsFrame" title="Dangerous Actions security workspace" src="/admin-dangerous-actions?embedded=1" loading="lazy" style="display:block;width:100%;height:1480px;border:0;border-radius:12px;background:transparent" referrerpolicy="same-origin"></iframe></section><section id="notifications" class="hidden"><div class="card"><div class="section-title"><h2>Notifications & Alerts</h2><span>Security & Config</span></div><p class="sub">Platform operational notifications and alert status.</p><div class="grid2"><div class="card"><div class="label">Alerts</div><div class="metric">0</div><div class="sub">No active platform alerts</div></div><div class="card"><div class="label">Status</div><div class="metric">Healthy</div><div class="sub">Existing software behavior unchanged</div></div></div><div class="notice" style="margin-top:12px">This section is added to the Super Admin navigation without changing any existing business-owner or admin functionality.</div></div></section><section id="kill" class="hidden"><div class="card danger"><div class="section-title"><h2>Emergency Kill Switch</h2><span>Security & Config</span></div><div class="kv"><b>Global state</b><span class="pill good">OFF · NORMAL OPERATIONS</span></div><div class="notice" style="margin-top:10px">No destructive or global shutdown action is wired to this UI. This prevents accidental changes to live business operations.</div></div></section>
   </div>
  </main></div>
  <div id="metricModal" class="hidden" style="position:fixed;inset:0;background:#0b122080;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px">
@@ -752,15 +774,16 @@ document.addEventListener('click',e=>{const card=e.target.closest?.('.metric-car
   const scope=$('userBusiness')?.value||'';
   const filtered=users.filter(u=>{
    const hay=[u.id,u.name,u.email,u.role].join(' ').toLowerCase();
-   const isPlatform=u.role==='ADMIN'||u.role==='SUPER_ADMIN';
-   return (!q||hay.includes(q))&&(!role||u.role===role)&&(!scope||(scope==='platform'?isPlatform:u.businessCount>0));
+   const isPlatform=Boolean(u.adminRole)||u.role==='ADMIN'||u.role==='SUPER_ADMIN';
+   const roleMatches=!role||u.role===role||u.adminRole===role;
+   return (!q||hay.includes(q))&&roleMatches&&(!scope||(scope==='platform'?isPlatform:u.businessCount>0));
   });
   if($('userBadge'))$('userBadge').textContent=users.length;
   if($('userTotal'))$('userTotal').textContent=users.length;
   if($('userOwners'))$('userOwners').textContent=users.filter(u=>u.role==='OWNER').length;
-  if($('userAdmins'))$('userAdmins').textContent=users.filter(u=>u.role==='ADMIN'||u.role==='SUPER_ADMIN').length;
+  if($('userAdmins'))$('userAdmins').textContent=users.filter(u=>u.adminRole||u.role==='ADMIN'||u.role==='SUPER_ADMIN').length;
   if($('userMemberships'))$('userMemberships').textContent=users.reduce((sum,u)=>sum+Number(u.businessCount||0),0);
-  if($('userRows'))$('userRows').innerHTML=filtered.map(u=>'<div class="row user-click-row" data-user-id="'+esc(u.id)+'" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px;cursor:pointer"><div><div class="name">'+esc(u.name||'Unnamed user')+'</div><div class="sub">'+esc(u.id)+'</div></div><div>'+esc(u.email||'')+'</div><div>'+statusPill(u.role)+'</div><div>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div>'+date(u.createdAt)+'</div></div>').join('')||'<div class="empty">No users found.</div>'; 
+  if($('userRows'))$('userRows').innerHTML=filtered.map(u=>'<div class="row user-click-row" data-user-id="'+esc(u.id)+'" style="grid-template-columns:1.5fr 1.5fr 110px 130px 110px;min-width:760px;cursor:pointer"><div><div class="name">'+esc(u.name||'Unnamed user')+'</div><div class="sub">'+esc(u.id)+'</div></div><div>'+esc(u.email||'')+'</div><div>'+statusPill(u.adminRole&&u.adminRole!==u.role?u.adminRole+' + '+u.role:(u.adminRole||u.role))+'</div><div>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div>'+date(u.createdAt)+'</div></div>').join('')||'<div class="empty">No users found.</div>'; 
  $('userRows')?.querySelectorAll('.user-click-row').forEach(row=>row.addEventListener('click',()=>{const u=users.find(x=>x.id===row.dataset.userId);if(!u)return;const d=$('userDetail');if(d){d.classList.remove('hidden');d.innerHTML='<div class="card"><div class="section-title">'+esc(u.name||'Unnamed user')+'</div><div class="kv"><b>Email</b>'+esc(u.email||'—')+'</div><div class="kv"><b>Role</b>'+esc(u.role||'—')+'</div><div class="kv"><b>Business Access</b>'+Number(u.businessCount||0)+' business'+(Number(u.businessCount||0)===1?'':'es')+'</div><div class="kv"><b>Created</b>'+date(u.createdAt)+'</div></div>';d.scrollIntoView({behavior:'smooth',block:'nearest'})}}));
  }
  async function loadUsers(){
@@ -1752,7 +1775,7 @@ function install(app){
   if(!result.queued)return res.status(400).json({error:'No device subscription is registered for this account.'});
   res.json({ok:true,queued:result.queued});
  }catch(e){next(e)}});
- originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage())}catch(e){next(e)}});
+ originalGet.call(app,'/admin-panel',async(req,res,next)=>{try{const user=await requireAdmin(req,res);if(!user)return res.redirect('/admin-login');res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');res.type('html').send(adminPage().replace('</body>','<script src="/manual-subscription-upi-admin.js"></script></body>'))}catch(e){next(e)}});
  originalGet.call(app,'/api/admin/new-businesses',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   const since=new Date(Date.now()-7*24*60*60*1000);
@@ -1852,7 +1875,7 @@ function install(app){
  });
 
  originalGet.call(app,'/api/admin/businesses/:businessId/export',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_EXPORT');if(!user)return;
   const businessId=String(req.params.businessId||'');
   const b=await prisma.business.findUnique({where:{id:businessId}});
   if(!b)return res.status(404).json({error:'Business not found'});
@@ -1957,7 +1980,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/subscription-payment-ledger',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const requests=await prisma.planRequest.findMany({include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
   const ids=requests.map(x=>x.id);
@@ -2011,7 +2034,7 @@ function install(app){
   res.json({records,totalReceived,thisMonthReceived,outstanding,totalRefunded,reconciliation});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/refunds',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_REFUND');if(!user)return;
   const body=await readAdminJsonBody(req);
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
@@ -2037,10 +2060,11 @@ function install(app){
  }catch(e){if(String(e?.message||'').startsWith('Refund exceeds remaining'))return res.status(400).json({error:e.message});next(e)}});
 
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VERIFY');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const body=await readAdminJsonBody(req);
   const paymentStatus=String(body?.paymentStatus||'').trim().toUpperCase();
+  if(paymentStatus==='PAID'&&!(await requireAdminPermission(req,res,'PAYMENTS_APPROVE')))return;
   const allowed=['PENDING','PAID','FAILED','EXPIRED'];
   if(paymentStatus==='MANUAL')return res.status(400).json({error:'MANUAL is no longer a valid payment status; use PENDING'});
   if(!allowed.includes(paymentStatus))return res.status(400).json({error:'Invalid payment status'});
@@ -2067,7 +2091,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/reject',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'SUBSCRIPTIONS_ACTIVATE');if(!user)return;
   const body=await readAdminJsonBody(req);
   const reason=String(body?.reason||'').trim();
   if(!reason)return res.status(400).json({error:'Rejection reason is required'});
@@ -2081,7 +2105,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/trials',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'TRIAL'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{trialEndsAt:'asc'}});
   const now=Date.now();
   const trials=subs.map(s=>{const owner=s.business.members[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.trialEndsAt||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,trialStartedAt:s.trialStartedAt,trialEndsAt:s.trialEndsAt,daysRemaining}});
@@ -2089,7 +2113,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/pending-plan-requests',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const requests=await prisma.planRequest.findMany({where:{status:'PENDING',isCustom:false},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'asc'}});
   const mapped=requests.map(x=>{const owner=x.business.members[0]?.user;return {id:x.id,businessId:x.businessId,businessName:x.business.name,businessType:x.business.type,ownerName:owner?.name||null,ownerEmail:owner?.email||null,requesterName:x.user?.name||null,requesterEmail:x.user?.email||null,planCode:x.planCode,planName:x.planName,price:x.price,billingInterval:x.billingInterval,status:x.status,paymentStatus:x.paymentStatus,createdAt:x.createdAt}});
@@ -2097,7 +2121,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/custom-plan-requests/:requestId/quote',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT`);
   const body=await readAdminJsonBody(req);const planName=String(body?.planName||'').trim();const billingInterval=String(body?.billingInterval||'').trim().toUpperCase();const price=Number(body?.price);const customDetails=String(body?.customDetails||'').trim().slice(0,1500);
@@ -2111,7 +2135,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/custom-plan-requests',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "isCustom" BOOLEAN NOT NULL DEFAULT FALSE`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "PlanRequest" ADD COLUMN IF NOT EXISTS "customDetails" TEXT`);
   const requests=await prisma.planRequest.findMany({where:{isCustom:true},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
@@ -2120,7 +2144,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/active-subscriptions',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'ACTIVE'}});
   const businessIds=[...new Set(subs.map(s=>s.businessId).filter(Boolean))];
   const businesses=businessIds.length?await prisma.business.findMany({where:{id:{in:businessIds}},include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}):[];
@@ -2131,7 +2155,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/unpaid-bills',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const requests=await prisma.planRequest.findMany({
    where:{paymentStatus:{not:'PAID'},status:'APPROVED'},
    include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},
@@ -2152,7 +2176,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/approve',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'SUBSCRIPTIONS_ACTIVATE');if(!user)return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId},include:{business:true}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
@@ -2177,8 +2201,12 @@ function install(app){
  originalGet.call(app,'/api/admin/users',async(req,res,next)=>{
   try {
    const user=await requireAdmin(req,res); if(!user)return;
-   const users=await prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}});
-   const mapped=users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,businessCount:u.memberships.length,createdAt:u.createdAt}));
+   const [users,accessRows]=await Promise.all([
+    prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}}),
+    prisma.$queryRawUnsafe('SELECT "userId","role" FROM "AdminAccess" WHERE "isActive"=TRUE')
+   ]);
+   const accessRoles=new Map((accessRows||[]).map(row=>[row.userId,row.role]));
+   const mapped=users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,adminRole:accessRoles.get(u.id)||(['ADMIN','SUPER_ADMIN'].includes(u.role)?u.role:null),businessCount:u.memberships.length,createdAt:u.createdAt}));
    res.json({users:mapped});
   } catch(e) { next(e); }
  });
@@ -2209,7 +2237,7 @@ function install(app){
   res.json({ok:true,planId:saved.id,features:saved.features});
  }catch(e){next(e)}});
  originalPatch.call(app,'/api/admin/plans/:planId',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   const body=await readAdminJsonBody(req);
   const current=await prisma.planCatalog.findUnique({where:{id:req.params.planId}});if(!current)return res.status(404).json({error:'Plan not found'});
   const name=String(body?.name??'').trim().slice(0,100),price=Number(body?.price),billingInterval=String(body?.billingInterval||'').toUpperCase(),description=String(body?.description??'').trim().slice(0,1000);
@@ -2222,7 +2250,7 @@ function install(app){
   res.json({ok:true,plan:updated});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plans/:planId/delete',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   const plan=await prisma.planCatalog.findUnique({where:{id:req.params.planId}});if(!plan)return res.status(404).json({error:'Plan not found'});
   if(!plan.active)return res.json({ok:true,active:false,alreadyInactive:true});
   const updated=await prisma.planCatalog.update({where:{id:plan.id},data:{active:false}});
@@ -2230,14 +2258,14 @@ function install(app){
   res.json({ok:true,active:updated.active,preservedHistory:true});
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/plans',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const plans=await prisma.planCatalog.findMany({orderBy:{price:'asc'}});
   const pending=await prisma.planRequest.count({where:{status:'PENDING'}});
   res.json({plans,pending});
  }catch(e){ next(e); }
  });
  originalGet.call(app,'/api/admin/analytics',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const now=new Date();
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const istYear=parts.find(x=>x.type==='year').value;
@@ -2388,11 +2416,11 @@ function install(app){
     const rows=await prisma.$queryRawUnsafe('SELECT "key","value","updatedAt" FROM "AdminPlatformSetting" WHERE "key" = ANY($1::text[])',['platformName','platformTagline']);
   const settings={platformName:'reputetechs.in',platformTagline:''};
   for(const row of rows){if(row.key in settings)settings[row.key]=row.value}
-  res.json({settings,canEdit:user.role==='SUPER_ADMIN'});
+  res.json({settings,canEdit:await isSuperAdmin(user)});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/platform-settings',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  if(user.role!=='SUPER_ADMIN')return res.status(403).json({error:'Super Admin access required to save platform settings.'});
+  if(!(await isSuperAdmin(user)))return res.status(403).json({error:'Super Admin access required to save platform settings.'});
   const body=await readAdminJsonBody(req);
   const platformName=String(body.platformName??'').trim();
   const platformTagline=String(body.platformTagline??'').trim();
@@ -2488,10 +2516,12 @@ function install(app){
  originalGet.call(app,'/api/admin/alert-actions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
-  const [rows,admins]=await Promise.all([
+  const [rows,accessRows]=await Promise.all([
    prisma.$queryRawUnsafe('SELECT "alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt" FROM "AdminAlertAction"'),
-   prisma.user.findMany({where:{role:{in:['ADMIN','SUPER_ADMIN']}},select:{id:true,name:true,email:true},orderBy:{name:'asc'}})
+   prisma.$queryRawUnsafe('SELECT "userId" FROM "AdminAccess" WHERE "isActive"=TRUE')
   ]);
+  const activeAdminIds=(accessRows||[]).map(row=>row.userId);
+  const admins=await prisma.user.findMany({where:{OR:[{role:{in:['ADMIN','SUPER_ADMIN']}},...(activeAdminIds.length?[{id:{in:activeAdminIds}}]:[])]},select:{id:true,name:true,email:true},orderBy:{name:'asc'}});
   const actorIds=[...new Set(rows.map(x=>x.updatedByUserId).filter(Boolean))];
   const actors=actorIds.length?await prisma.user.findMany({where:{id:{in:actorIds}},select:{id:true,name:true,email:true}}):[];
   const actorMap=new Map(actors.map(x=>[x.id,x.name||x.email]));
@@ -2504,7 +2534,7 @@ function install(app){
   if(!alertKey||alertKey.length>500)return res.status(400).json({error:'Invalid alert key.'});
   if(!['OPEN','ACKNOWLEDGED','RESOLVED'].includes(status))return res.status(400).json({error:'Invalid alert status.'});
   if(notes.length>1000)return res.status(400).json({error:'Handling notes must be 1000 characters or fewer.'});
-  if(assignedToUserId){const assignee=await prisma.user.findUnique({where:{id:assignedToUserId},select:{id:true,role:true}});if(!assignee||!['ADMIN','SUPER_ADMIN'].includes(assignee.role))return res.status(400).json({error:'Choose an active admin account.'});}
+  if(assignedToUserId){const assignee=await prisma.user.findUnique({where:{id:assignedToUserId},select:{id:true,role:true}});const access=await getAdminAccessForUser(prisma,assignedToUserId);if(!assignee||(!access&&!['ADMIN','SUPER_ADMIN'].includes(assignee.role)))return res.status(400).json({error:'Choose an active admin account.'});}
   await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
   await prisma.$executeRawUnsafe('INSERT INTO "AdminAlertAction" ("alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt") VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP) ON CONFLICT ("alertKey") DO UPDATE SET "status"=EXCLUDED."status","assignedToUserId"=EXCLUDED."assignedToUserId","notes"=EXCLUDED."notes","updatedByUserId"=EXCLUDED."updatedByUserId","updatedAt"=CURRENT_TIMESTAMP',alertKey,status,assignedToUserId,notes,user.id);
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_ALERT_HANDLING_UPDATED',entity:'AdminAlertAction',entityId:alertKey,metadata:{status,assignedToUserId,notesLength:notes.length}}});
