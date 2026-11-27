@@ -2237,7 +2237,7 @@ function install(app){
   res.json({ok:true,planId:saved.id,features:saved.features});
  }catch(e){next(e)}});
  originalPatch.call(app,'/api/admin/plans/:planId',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   const body=await readAdminJsonBody(req);
   const current=await prisma.planCatalog.findUnique({where:{id:req.params.planId}});if(!current)return res.status(404).json({error:'Plan not found'});
   const name=String(body?.name??'').trim().slice(0,100),price=Number(body?.price),billingInterval=String(body?.billingInterval||'').toUpperCase(),description=String(body?.description??'').trim().slice(0,1000);
@@ -2250,7 +2250,7 @@ function install(app){
   res.json({ok:true,plan:updated});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plans/:planId/delete',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_APPROVE');if(!user)return;
   const plan=await prisma.planCatalog.findUnique({where:{id:req.params.planId}});if(!plan)return res.status(404).json({error:'Plan not found'});
   if(!plan.active)return res.json({ok:true,active:false,alreadyInactive:true});
   const updated=await prisma.planCatalog.update({where:{id:plan.id},data:{active:false}});
