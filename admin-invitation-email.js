@@ -25,6 +25,10 @@ export async function sendAdminInvitationEmail(
 ) {
   const apiKey = requiredEnv(env, 'RESEND_API_KEY');
   const from = requiredEnv(env, 'RESEND_FROM');
+  const replyTo = requiredEnv(env, 'RESEND_REPLY_TO');
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(replyTo)) {
+    throw new Error('A valid reply-to email address is required');
+  }
 
   if (typeof to !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     throw new Error('A valid invitation recipient email is required');
@@ -59,6 +63,7 @@ export async function sendAdminInvitationEmail(
     },
     body: JSON.stringify({
       from,
+      reply_to: replyTo,
       to: [to.trim()],
       subject: 'Your Repute Tech Admin invitation',
       text: `Hello ${name.trim()},\n\nYou have been invited to access the Repute Tech Admin dashboard. Accept your invitation using this secure link:\n${parsedInviteUrl.toString()}\n\nThis link expires on ${expiryText}. If you were not expecting this invitation, you can ignore this email.`,
