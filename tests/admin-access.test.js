@@ -24,7 +24,7 @@ test('Admin permissions are restricted to the supported permission keys', () => 
     { id: 'a', userId: 'u', role: 'ADMIN', isActive: true },
     ['PAYMENTS_VIEW', 'NOT_A_PERMISSION', 'PAYMENTS_REFUND', 'PAYMENTS_VIEW']
   );
-  assert.deepEqual(access.permissions.sort(), ['PAYMENTS_REFUND', 'PAYMENTS_VIEW']);
+  assert.deepEqual([...access.permissions].sort(), ['PAYMENTS_REFUND', 'PAYMENTS_VIEW']);
   assert.equal(hasAdminPermission(access, 'PAYMENTS_REFUND'), true);
   assert.equal(hasAdminPermission(access, 'PAYMENTS_APPROVE'), false);
 });
