@@ -8,7 +8,7 @@ const base = {
   inviteUrl: 'https://reputetechs.in/admin-invite/opaque-token',
   expiresAt: new Date('2026-11-28T10:00:00Z')
 };
-const env = { RESEND_API_KEY: 're_test_secret', RESEND_FROM: 'Repute Tech <admin@reputetechs.in>' };
+const env = { RESEND_API_KEY: 're_test_secret', RESEND_FROM: 'Repute Tech <admin@reputetechs.in>', RESEND_REPLY_TO: 'reputetechs@gmail.com' };
 
 test('sends an invitation using configured Resend credentials and sender', async () => {
   let request;
@@ -25,6 +25,7 @@ test('sends an invitation using configured Resend credentials and sender', async
   const body = JSON.parse(request.options.body);
   assert.deepEqual(body.to, [base.to]);
   assert.equal(body.from, env.RESEND_FROM);
+  assert.equal(body.reply_to, env.RESEND_REPLY_TO);
   assert.match(body.text, /https:\/\/reputetechs\.in\/admin-invite\/opaque-token/);
 });
 
@@ -36,6 +37,14 @@ test('requires API key and verified sender configuration', async () => {
   await assert.rejects(
     sendAdminInvitationEmail(base, { env: { RESEND_API_KEY: env.RESEND_API_KEY }, fetchImpl: async () => ({}) }),
     /RESEND_FROM/
+  );
+  await assert.rejects(
+    sendAdminInvitationEmail(base, { env: { ...env, RESEND_REPLY_TO: '' }, fetchImpl: async () => ({}) }),
+    /RESEND_REPLY_TO/
+  );
+  await assert.rejects(
+    sendAdminInvitationEmail(base, { env: { ...env, RESEND_REPLY_TO: 'not-an-email' }, fetchImpl: async () => ({}) }),
+    /valid reply-to/
   );
 });
 
