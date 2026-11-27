@@ -48,7 +48,7 @@ async function createInvitation(actor, email, name, replaceId) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { const e = new Error('Enter a valid email address.'); e.status = 400; throw e; }
   if (name.length < 2 || name.length > 80) { const e = new Error('Name must be between 2 and 80 characters.'); e.status = 400; throw e; }
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && await getAdminAccessForUser(prisma, existing.id)) { const e = new Error('This account already has Admin access.'); e.status = 409; throw e; }
+  if (existing && (await getAdminAccessForUser(prisma, existing.id) || ['ADMIN', 'SUPER_ADMIN'].includes(existing.role))) { const e = new Error('This account already has Admin access. Use the existing Admin account instead of sending another invitation.'); e.status = 409; throw e; }
 
   const token = randomToken(), digest = tokenHash(token), id = newId();
   const expiresAt = new Date(Date.now() + 86400000);
@@ -160,7 +160,7 @@ function install(app) {
       if (!invite) return res.status(400).json({ error: 'This invitation is invalid or has expired.' });
       const existing = await prisma.user.findUnique({ where: { email: invite.email } });
       const signedIn = await getSessionUser(req, 'rp_session');
-      if (existing?.passwordHash && (!signedIn || signedIn.id !== existing.id)) return res.status(401).json({ error: 'Sign in to your existing account using the invited email, then accept again.' });
+      if (existing && (!signedIn || signedIn.id !== existing.id)) return res.status(401).json({ error: 'Sign in to your existing account using the invited email, then accept again.' });
       if ((!existing || !existing.passwordHash) && password.length < 12) return res.status(400).json({ error: 'Use a password with at least 12 characters.' });
       const user = await prisma.$transaction(async tx => {
         const used = await tx.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=\'ACCEPTED\',"acceptedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "tokenHash"=$2 AND "status"=\'PENDING\' AND "expiresAt">CURRENT_TIMESTAMP RETURNING "id"', invite.id, digest);
