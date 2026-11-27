@@ -96,7 +96,7 @@ app.get('/auth/google/callback',async(req,res,next)=>{try{const userId=verifySta
 app.get('/api/google/status',auth,async(req,res,next)=>{try{const c=await prisma.googleConnection.findFirst({where:{userId:req.user.id},orderBy:{createdAt:'desc'}});res.json({connected:!!c,expiresAt:c?.expiresAt||null,scope:c?.scope||null})}catch(e){next(e)}});
 
 app.get('/api/businesses/:businessId/owner-profile',auth,async(req,res,next)=>{try{
-  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);const isAdmin=(adminAccess&&hasAdminPermission(adminAccess,'PAYMENTS_VIEW'))||['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);const isAdmin=adminAccess?hasAdminPermission(adminAccess,'PAYMENTS_VIEW'):['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
   const business=await prisma.business.findFirst({where:{id:String(req.params.businessId),...(isAdmin?{}:{members:{some:{userId:req.user.id}}})},select:{id:true}});
   if(!business)return res.status(403).json({error:'Business access denied'});
   const members=await prisma.businessMember.findMany({where:{businessId:business.id},include:{user:{select:{id:true,name:true,email:true,role:true}}}});
@@ -293,8 +293,8 @@ app.post('/api/whatsapp/connection',auth,async(req,res,next)=>{try{
 
 // Plans and manual approval workflow. No payment provider is connected.
 app.get('/api/plans',async(_req,res,next)=>{try{const plans=await prisma.planCatalog.findMany({where:{active:true},orderBy:{price:'asc'}});res.json(plans.map(p=>{let features=p.features;if(typeof features==='string'){try{features=JSON.parse(features)}catch{features=[]}}if(!Array.isArray(features)){features=features&&typeof features==='object'?Object.entries(features).filter(([,enabled])=>enabled===true).map(([key])=>key):[]}return {...p,features}}));}catch(e){next(e)}});
-app.get('/api/admin/plans',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res)))return;res.json(await prisma.planCatalog.findMany({orderBy:{price:'asc'}}));}catch(e){next(e)}});
-app.put('/api/admin/plans/:code',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res)))return;const p=z.object({name:z.string().min(2).max(80),price:z.number().nonnegative(),billingInterval:z.enum(['MONTH','YEAR']),description:z.string().max(500).optional(),features:z.array(z.string()).default([]),active:z.boolean().default(true)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const existing=await prisma.planCatalog.findUnique({where:{code:req.params.code}});if(!existing)return res.status(404).json({error:'Plan not found'});const updated=await prisma.planCatalog.update({where:{code:req.params.code},data:p.data});await prisma.auditLog.create({data:{actorUserId:req.user.id,action:'UPDATE_PLAN',entity:'PlanCatalog',entityId:updated.id,metadata:p.data}});res.json(updated);}catch(e){next(e)}});
+app.get('/api/admin/plans',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res,'PAYMENTS_VIEW')))return;res.json(await prisma.planCatalog.findMany({orderBy:{price:'asc'}}));}catch(e){next(e)}});
+app.put('/api/admin/plans/:code',auth,async(req,res,next)=>{try{if(!(await requireAdmin(req,res,'PAYMENTS_APPROVE')))return;const p=z.object({name:z.string().min(2).max(80),price:z.number().nonnegative(),billingInterval:z.enum(['MONTH','YEAR']),description:z.string().max(500).optional(),features:z.array(z.string()).default([]),active:z.boolean().default(true)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.flatten()});const existing=await prisma.planCatalog.findUnique({where:{code:req.params.code}});if(!existing)return res.status(404).json({error:'Plan not found'});const updated=await prisma.planCatalog.update({where:{code:req.params.code},data:p.data});await prisma.auditLog.create({data:{actorUserId:req.user.id,action:'UPDATE_PLAN',entity:'PlanCatalog',entityId:updated.id,metadata:p.data}});res.json(updated);}catch(e){next(e)}});
 
 app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
   const p=z.object({businessId:z.string(),planCode:z.string(),ownerName:z.string().min(2).max(100),contact:z.string().min(3).max(120)}).safeParse(req.body);
@@ -341,7 +341,7 @@ app.post('/api/admin/plan-requests/:id/approve',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.post('/api/admin/plan-requests/:id/reject',auth,async(req,res,next)=>{try{
-  if(!(await requireAdmin(req,res)))return;
+  if(!(await requireAdmin(req,res,'SUBSCRIPTIONS_ACTIVATE')))return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.id}}); if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='PENDING')return res.status(400).json({error:`Request is already ${request.status}`});
   const reason=String(req.body?.reason||'').trim().slice(0,500)||null;
