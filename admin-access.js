@@ -88,6 +88,16 @@ export function hasAdminPermission(access, permission) {
   return access.role === 'SUPER_ADMIN' || access.permissions.includes(permission);
 }
 
+/** Return the stored Admin status so inactive grants cannot fall back to a legacy User.role. */
+export async function getAdminAccessStatusForUser(prisma, userId) {
+  await ensureAdminAccessTables(prisma);
+  const rows = await prisma.$queryRawUnsafe(
+    'SELECT "role","isActive" FROM "AdminAccess" WHERE "userId"=$1 LIMIT 1',
+    userId
+  );
+  return rows?.[0] || null;
+}
+
 /** Read the separate Admin grant; legacy User.role is intentionally ignored. */
 export async function getAdminAccessForUser(prisma, userId) {
   await ensureAdminAccessTables(prisma);
