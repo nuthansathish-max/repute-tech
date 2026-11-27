@@ -25,7 +25,7 @@ async function requireSuperAdmin(req, res) {
   const accessStatus = await getAdminAccessStatusForUser(prisma, user.id);
   if (accessStatus && !accessStatus.isActive) { res.status(403).json({ error: 'Admin access has been deactivated.' }); return null; }
   const access = await getAdminAccessForUser(prisma, user.id);
-  if (access?.role !== 'SUPER_ADMIN' && user.role !== 'SUPER_ADMIN') {
+  if (access ? access.role !== 'SUPER_ADMIN' : user.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Super Admin permission required.' }); return null;
   }
   return user;
