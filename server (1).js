@@ -310,7 +310,8 @@ app.post('/api/plan-requests',auth,async(req,res,next)=>{try{
 }catch(e){next(e)}});
 
 app.get('/api/plan-requests',auth,async(req,res,next)=>{try{
-  const isAdmin=['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);
+  const isAdmin=adminAccess?hasAdminPermission(adminAccess,'PAYMENTS_VIEW'):['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
   const selected=String(getCookie(req,'rp_business_id')||req.query.businessId||'').trim();
   let where;
   if(selected){
