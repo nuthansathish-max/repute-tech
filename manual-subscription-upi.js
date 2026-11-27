@@ -90,7 +90,15 @@ function install(app) {
       if (!businessId || !(await businessForOwner(user.id, businessId))) return res.status(403).json({ error: 'Business access denied' });
       await ensureTables();
       const rows = await prisma.$queryRawUnsafe('SELECT "upiId","accountName","qrDataUrl","instructions" FROM "SubscriptionUpiSettings" WHERE "id"=$1 LIMIT 1', 'default');
-      res.json({ settings: rows[0] || { upiId:'', accountName:'', qrDataUrl:null, instructions:'' } });
+      let submission = null;
+      const planRequestId = String(req.query.planRequestId || '').trim();
+      if (planRequestId) {
+        const owned = await prisma.planRequest.findFirst({ where:{ id:planRequestId, businessId, userId:user.id }, select:{ id:true } });
+        if (!owned) return res.status(404).json({ error:'Subscription request not found.' });
+        const existing = await prisma.$queryRawUnsafe('SELECT "status","reviewNote","createdAt" FROM "SubscriptionPaymentSubmission" WHERE "planRequestId"=$1 ORDER BY "createdAt" DESC LIMIT 1', planRequestId);
+        submission = existing[0] || null;
+      }
+      res.json({ settings: rows[0] || { upiId:'', accountName:'', qrDataUrl:null, instructions:'' }, submission });
     } catch(e) { next(e); }
   });
 
