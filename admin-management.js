@@ -160,7 +160,7 @@ async function requireAdmin(req,res){
   if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
 }
-async function isSuperAdmin(user){const access=await getAdminAccessForUser(prisma,user.id);return access?.role==='SUPER_ADMIN'||user.role==='SUPER_ADMIN';}
+async function isSuperAdmin(user){const access=await getAdminAccessForUser(prisma,user.id);return access?access.role==='SUPER_ADMIN':user.role==='SUPER_ADMIN';}
 async function requireAdminPermission(req,res,permission){
   const user=await sessionUser(req);
   if(!user){res.status(401).json({error:'Admin sign-in required'});return null;}
@@ -2091,7 +2091,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/reject',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'SUBSCRIPTIONS_ACTIVATE');if(!user)return;
   const body=await readAdminJsonBody(req);
   const reason=String(body?.reason||'').trim();
   if(!reason)return res.status(400).json({error:'Rejection reason is required'});
@@ -2105,7 +2105,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/trials',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const subs=await prisma.subscription.findMany({where:{status:'TRIAL'},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}}},orderBy:{trialEndsAt:'asc'}});
   const now=Date.now();
   const trials=subs.map(s=>{const owner=s.business.members[0]?.user;const daysRemaining=Math.max(0,Math.ceil((new Date(s.trialEndsAt||0).getTime()-now)/(24*60*60*1000)));return {id:s.id,businessId:s.businessId,businessName:s.business.name,businessType:s.business.type,isOpen:s.business.isOpen,ownerName:owner?.name||null,ownerEmail:owner?.email||null,plan:s.plan,billingInterval:s.billingInterval,monthlyPrice:s.monthlyPrice,trialStartedAt:s.trialStartedAt,trialEndsAt:s.trialEndsAt,daysRemaining}});
@@ -2258,14 +2258,14 @@ function install(app){
   res.json({ok:true,active:updated.active,preservedHistory:true});
  }catch(e){next(e)}});
  originalGet.call(app,'/api/admin/plans',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const plans=await prisma.planCatalog.findMany({orderBy:{price:'asc'}});
   const pending=await prisma.planRequest.count({where:{status:'PENDING'}});
   res.json({plans,pending});
  }catch(e){ next(e); }
  });
  originalGet.call(app,'/api/admin/analytics',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const now=new Date();
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const istYear=parts.find(x=>x.type==='year').value;
