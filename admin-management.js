@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, hashPassword } from './auth.js';
-import { getAdminAccessForUser } from './admin-access.js';
+import { getAdminAccessForUser, hasAdminPermission } from './admin-access.js';
 import { deflateRawSync } from 'node:zlib';
 import crypto from 'node:crypto';
 import { adminPushConfigured, adminPushPublicKey, ensureAdminPushTables, queueAdminPushEvent, dispatchAdminPushQueue } from './admin-push.js';
@@ -157,6 +157,17 @@ async function requireAdmin(req,res){
   const adminAccess=await getAdminAccessForUser(prisma,user.id);
   if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
+}
+async function requireAdminPermission(req,res,permission){
+  const user=await sessionUser(req);
+  if(!user){res.status(401).json({error:'Admin sign-in required'});return null;}
+  const adminAccess=await getAdminAccessForUser(prisma,user.id);
+  if(adminAccess){
+    if(!hasAdminPermission(adminAccess,permission)){res.status(403).json({error:'This action requires the '+permission+' permission.'});return null;}
+    return user;
+  }
+  if(['ADMIN','SUPER_ADMIN'].includes(user.role))return user;
+  res.status(403).json({error:'Admin access required'});return null;
 }
 function adminPage(){
  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>reputetechs.in · SaaS Owner Console</title>
@@ -1959,7 +1970,7 @@ function install(app){
 }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/subscription-payment-ledger',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const requests=await prisma.planRequest.findMany({include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},orderBy:{createdAt:'desc'}});
   const ids=requests.map(x=>x.id);
@@ -2013,7 +2024,7 @@ function install(app){
   res.json({records,totalReceived,thisMonthReceived,outstanding,totalRefunded,reconciliation});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/plan-requests/:requestId/refunds',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_REFUND');if(!user)return;
   const body=await readAdminJsonBody(req);
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
@@ -2039,7 +2050,7 @@ function install(app){
  }catch(e){if(String(e?.message||'').startsWith('Refund exceeds remaining'))return res.status(400).json({error:e.message});next(e)}});
 
  originalPost.call(app,'/api/admin/plan-requests/:requestId/payment-status',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VERIFY');if(!user)return;
   await ensureCustomPlanRequestColumns();
   const body=await readAdminJsonBody(req);
   const paymentStatus=String(body?.paymentStatus||'').trim().toUpperCase();
@@ -2133,7 +2144,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalGet.call(app,'/api/admin/unpaid-bills',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'PAYMENTS_VIEW');if(!user)return;
   const requests=await prisma.planRequest.findMany({
    where:{paymentStatus:{not:'PAID'},status:'APPROVED'},
    include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{name:true,email:true}}}}}},user:{select:{name:true,email:true}}},
@@ -2154,7 +2165,7 @@ function install(app){
  }catch(e){next(e)}});
 
  originalPost.call(app,'/api/admin/pending-plan-requests/:requestId/approve',async(req,res,next)=>{try{
-  const user=await requireAdmin(req,res);if(!user)return;
+  const user=await requireAdminPermission(req,res,'SUBSCRIPTIONS_ACTIVATE');if(!user)return;
   const request=await prisma.planRequest.findUnique({where:{id:req.params.requestId},include:{business:true}});
   if(!request)return res.status(404).json({error:'Plan request not found'});
   if(request.status!=='PENDING')return res.status(400).json({error:'This plan request is no longer pending'});
