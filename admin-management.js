@@ -158,6 +158,7 @@ async function requireAdmin(req,res){
   if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(user.role)){res.status(403).json({error:'Admin access required'});return null;}
   return user;
 }
+async function isSuperAdmin(user){const access=await getAdminAccessForUser(prisma,user.id);return access?.role==='SUPER_ADMIN'||user.role==='SUPER_ADMIN';}
 async function requireAdminPermission(req,res,permission){
   const user=await sessionUser(req);
   if(!user){res.status(401).json({error:'Admin sign-in required'});return null;}
@@ -2195,8 +2196,12 @@ function install(app){
  originalGet.call(app,'/api/admin/users',async(req,res,next)=>{
   try {
    const user=await requireAdmin(req,res); if(!user)return;
-   const users=await prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}});
-   const mapped=users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,businessCount:u.memberships.length,createdAt:u.createdAt}));
+   const [users,accessRows]=await Promise.all([
+    prisma.user.findMany({include:{memberships:true},orderBy:{createdAt:'desc'}}),
+    prisma.$queryRawUnsafe('SELECT "userId","role" FROM "AdminAccess" WHERE "isActive"=TRUE')
+   ]);
+   const accessRoles=new Map((accessRows||[]).map(row=>[row.userId,row.role]));
+   const mapped=users.map(u=>({id:u.id,name:u.name,email:u.email,role:u.role,adminRole:accessRoles.get(u.id)||(['ADMIN','SUPER_ADMIN'].includes(u.role)?u.role:null),businessCount:u.memberships.length,createdAt:u.createdAt}));
    res.json({users:mapped});
   } catch(e) { next(e); }
  });
@@ -2406,11 +2411,11 @@ function install(app){
     const rows=await prisma.$queryRawUnsafe('SELECT "key","value","updatedAt" FROM "AdminPlatformSetting" WHERE "key" = ANY($1::text[])',['platformName','platformTagline']);
   const settings={platformName:'reputetechs.in',platformTagline:''};
   for(const row of rows){if(row.key in settings)settings[row.key]=row.value}
-  res.json({settings,canEdit:user.role==='SUPER_ADMIN'});
+  res.json({settings,canEdit:await isSuperAdmin(user)});
  }catch(e){next(e)}});
  originalPost.call(app,'/api/admin/platform-settings',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
-  if(user.role!=='SUPER_ADMIN')return res.status(403).json({error:'Super Admin access required to save platform settings.'});
+  if(!(await isSuperAdmin(user)))return res.status(403).json({error:'Super Admin access required to save platform settings.'});
   const body=await readAdminJsonBody(req);
   const platformName=String(body.platformName??'').trim();
   const platformTagline=String(body.platformTagline??'').trim();
@@ -2506,10 +2511,12 @@ function install(app){
  originalGet.call(app,'/api/admin/alert-actions',async(req,res,next)=>{try{
   const user=await requireAdmin(req,res);if(!user)return;
   await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
-  const [rows,admins]=await Promise.all([
+  const [rows,accessRows]=await Promise.all([
    prisma.$queryRawUnsafe('SELECT "alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt" FROM "AdminAlertAction"'),
-   prisma.user.findMany({where:{role:{in:['ADMIN','SUPER_ADMIN']}},select:{id:true,name:true,email:true},orderBy:{name:'asc'}})
+   prisma.$queryRawUnsafe('SELECT "userId" FROM "AdminAccess" WHERE "isActive"=TRUE')
   ]);
+  const activeAdminIds=(accessRows||[]).map(row=>row.userId);
+  const admins=await prisma.user.findMany({where:{OR:[{role:{in:['ADMIN','SUPER_ADMIN']}},...(activeAdminIds.length?[{id:{in:activeAdminIds}}]:[])]},select:{id:true,name:true,email:true},orderBy:{name:'asc'}});
   const actorIds=[...new Set(rows.map(x=>x.updatedByUserId).filter(Boolean))];
   const actors=actorIds.length?await prisma.user.findMany({where:{id:{in:actorIds}},select:{id:true,name:true,email:true}}):[];
   const actorMap=new Map(actors.map(x=>[x.id,x.name||x.email]));
@@ -2522,7 +2529,7 @@ function install(app){
   if(!alertKey||alertKey.length>500)return res.status(400).json({error:'Invalid alert key.'});
   if(!['OPEN','ACKNOWLEDGED','RESOLVED'].includes(status))return res.status(400).json({error:'Invalid alert status.'});
   if(notes.length>1000)return res.status(400).json({error:'Handling notes must be 1000 characters or fewer.'});
-  if(assignedToUserId){const assignee=await prisma.user.findUnique({where:{id:assignedToUserId},select:{id:true,role:true}});if(!assignee||!['ADMIN','SUPER_ADMIN'].includes(assignee.role))return res.status(400).json({error:'Choose an active admin account.'});}
+  if(assignedToUserId){const assignee=await prisma.user.findUnique({where:{id:assignedToUserId},select:{id:true,role:true}});const access=await getAdminAccessForUser(prisma,assignedToUserId);if(!assignee||(!access&&!['ADMIN','SUPER_ADMIN'].includes(assignee.role)))return res.status(400).json({error:'Choose an active admin account.'});}
   await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAlertAction" ("alertKey" TEXT PRIMARY KEY,"status" TEXT NOT NULL DEFAULT \'OPEN\',"assignedToUserId" TEXT,"notes" TEXT NOT NULL DEFAULT \'\',"updatedByUserId" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
   await prisma.$executeRawUnsafe('INSERT INTO "AdminAlertAction" ("alertKey","status","assignedToUserId","notes","updatedByUserId","updatedAt") VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP) ON CONFLICT ("alertKey") DO UPDATE SET "status"=EXCLUDED."status","assignedToUserId"=EXCLUDED."assignedToUserId","notes"=EXCLUDED."notes","updatedByUserId"=EXCLUDED."updatedByUserId","updatedAt"=CURRENT_TIMESTAMP',alertKey,status,assignedToUserId,notes,user.id);
   await prisma.auditLog.create({data:{actorUserId:user.id,action:'ADMIN_ALERT_HANDLING_UPDATED',entity:'AdminAlertAction',entityId:alertKey,metadata:{status,assignedToUserId,notesLength:notes.length}}});
