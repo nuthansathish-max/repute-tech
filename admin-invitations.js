@@ -160,13 +160,14 @@ function install(app) {
       if (!invite) return res.status(400).json({ error: 'This invitation is invalid or has expired.' });
       const existing = await prisma.user.findUnique({ where: { email: invite.email } });
       const signedIn = await getSessionUser(req, 'rp_session');
-      if (existing && (!signedIn || signedIn.id !== existing.id)) return res.status(401).json({ error: 'Sign in to your existing account using the invited email, then accept again.' });
-      if (!existing && password.length < 12) return res.status(400).json({ error: 'Use a password with at least 12 characters.' });
+      if (existing?.passwordHash && (!signedIn || signedIn.id !== existing.id)) return res.status(401).json({ error: 'Sign in to your existing account using the invited email, then accept again.' });
+      if ((!existing || !existing.passwordHash) && password.length < 12) return res.status(400).json({ error: 'Use a password with at least 12 characters.' });
       const user = await prisma.$transaction(async tx => {
         const used = await tx.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=\'ACCEPTED\',"acceptedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "tokenHash"=$2 AND "status"=\'PENDING\' AND "expiresAt">CURRENT_TIMESTAMP RETURNING "id"', invite.id, digest);
         if (!used?.length) return null;
         let account = existing;
         if (!account) account = await tx.user.create({ data: { email: invite.email, name: invite.name, passwordHash: hashPassword(password), role: 'OWNER' } });
+        else if (!account.passwordHash) account = await tx.user.update({ where: { id: account.id }, data: { passwordHash: hashPassword(password) } });
         await tx.$executeRawUnsafe('UPDATE "AdminInvitation" SET "acceptedUserId"=$1 WHERE "id"=$2', account.id, invite.id);
         await tx.$executeRawUnsafe('INSERT INTO "AdminAccess" ("id","userId","role","isActive","grantedByUserId") VALUES ($1,$2,\'ADMIN\',TRUE,$3) ON CONFLICT ("userId") DO UPDATE SET "role"=\'ADMIN\',"isActive"=TRUE,"grantedByUserId"=EXCLUDED."grantedByUserId","updatedAt"=CURRENT_TIMESTAMP WHERE "AdminAccess"."role"=\'ADMIN\'', newId(), account.id, invite.invitedByUserId);
         await tx.$executeRawUnsafe('DELETE FROM "AdminPermission" WHERE "adminAccessId" IN (SELECT "id" FROM "AdminAccess" WHERE "userId"=$1 AND "role"=\'ADMIN\')', account.id);
