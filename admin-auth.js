@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCookie, tokenHash, randomToken } from './auth.js';
-import { getAdminAccessForUser } from './admin-access.js';
+import { getAdminAccessForUser, getAdminAccessStatusForUser } from './admin-access.js';
 
 const prisma=new PrismaClient();
 const originalGet=express.application.get;
@@ -13,6 +13,8 @@ async function createAdminSessionFromUser(req,res){
   if(!token)return res.status(401).json({error:'Please sign in first'});
   const s=await prisma.session.findUnique({where:{tokenHash:tokenHash(token)},include:{user:true}});
   if(!s||s.expiresAt<new Date())return res.status(401).json({error:'Please sign in first'});
+  const accessStatus=await getAdminAccessStatusForUser(prisma,s.user.id);
+  if(accessStatus&&!accessStatus.isActive)return res.status(403).json({error:'Admin access has been deactivated.'});
   const adminAccess=await getAdminAccessForUser(prisma,s.user.id);
   if(!adminAccess&&!['ADMIN','SUPER_ADMIN'].includes(s.user.role))return res.status(403).json({error:'Admin access required'});
   if(adminAccess){
