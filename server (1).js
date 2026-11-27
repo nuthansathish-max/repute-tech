@@ -96,7 +96,7 @@ app.get('/auth/google/callback',async(req,res,next)=>{try{const userId=verifySta
 app.get('/api/google/status',auth,async(req,res,next)=>{try{const c=await prisma.googleConnection.findFirst({where:{userId:req.user.id},orderBy:{createdAt:'desc'}});res.json({connected:!!c,expiresAt:c?.expiresAt||null,scope:c?.scope||null})}catch(e){next(e)}});
 
 app.get('/api/businesses/:businessId/owner-profile',auth,async(req,res,next)=>{try{
-  const isAdmin=Boolean(await getAdminAccessForUser(prisma,req.user.id))||['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
+  const adminAccess=await getAdminAccessForUser(prisma,req.user.id);const isAdmin=(adminAccess&&hasAdminPermission(adminAccess,'PAYMENTS_VIEW'))||['ADMIN','SUPER_ADMIN'].includes(String(req.user.role||'').toUpperCase());
   const business=await prisma.business.findFirst({where:{id:String(req.params.businessId),...(isAdmin?{}:{members:{some:{userId:req.user.id}}})},select:{id:true}});
   if(!business)return res.status(403).json({error:'Business access denied'});
   const members=await prisma.businessMember.findMany({where:{businessId:business.id},include:{user:{select:{id:true,name:true,email:true,role:true}}}});
