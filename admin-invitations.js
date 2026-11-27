@@ -53,20 +53,20 @@ async function createInvitation(actor, email, name, replaceId) {
   await prisma.$transaction(async tx => {
     if (replaceId) {
       const revoked = await tx.$queryRawUnsafe(
-        'UPDATE "AdminInvitation" SET "status"=''REVOKED'',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=''PENDING'' RETURNING "id"',
+        'UPDATE "AdminInvitation" SET "status"=\'REVOKED\',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=\'PENDING\' RETURNING "id"',
         replaceId
       );
       if (!revoked?.length) { const e = new Error('Pending invitation not found.'); e.status = 409; throw e; }
     } else {
       await tx.$executeRawUnsafe(
-        'UPDATE "AdminInvitation" SET "status"=''EXPIRED'',"updatedAt"=CURRENT_TIMESTAMP WHERE LOWER("email")=$1 AND "status"=''PENDING'' AND "expiresAt"<=CURRENT_TIMESTAMP',
+        'UPDATE "AdminInvitation" SET "status"=\'EXPIRED\',"updatedAt"=CURRENT_TIMESTAMP WHERE LOWER("email")=$1 AND "status"=\'PENDING\' AND "expiresAt"<=CURRENT_TIMESTAMP',
         email
       );
-      const pending = await tx.$queryRawUnsafe('SELECT "id" FROM "AdminInvitation" WHERE LOWER("email")=$1 AND "status"=''PENDING'' LIMIT 1', email);
+      const pending = await tx.$queryRawUnsafe('SELECT "id" FROM "AdminInvitation" WHERE LOWER("email")=$1 AND "status"=\'PENDING\' LIMIT 1', email);
       if (pending?.length) { const e = new Error('A pending invitation already exists. Use Resend instead.'); e.status = 409; throw e; }
     }
     await tx.$executeRawUnsafe(
-      'INSERT INTO "AdminInvitation" ("id","email","name","tokenHash","status","invitedByUserId","expiresAt") VALUES ($1,$2,$3,$4,''PENDING'',$5,$6)',
+      'INSERT INTO "AdminInvitation" ("id","email","name","tokenHash","status","invitedByUserId","expiresAt") VALUES ($1,$2,$3,$4,\'PENDING\',$5,$6)',
       id, email, name, digest, actor.id, expiresAt
     );
     await tx.auditLog.create({ data: { actorUserId: actor.id, action: replaceId ? 'ADMIN_INVITATION_RESENT' : 'ADMIN_INVITATION_CREATED', entity: 'AdminInvitation', entityId: id, metadata: { email, expiresAt: expiresAt.toISOString() } } });
@@ -77,7 +77,7 @@ async function createInvitation(actor, email, name, replaceId) {
     return { id, email, expiresAt, emailId: sent.id };
   } catch (error) {
     await prisma.$executeRawUnsafe(
-      'UPDATE "AdminInvitation" SET "status"=''REVOKED'',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=''PENDING''',
+      'UPDATE "AdminInvitation" SET "status"=\'REVOKED\',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=\'PENDING\'',
       id
     ).catch(() => {});
     await audit(actor.id, 'ADMIN_INVITATION_EMAIL_FAILED', 'AdminInvitation', id, { email }).catch(() => {});
@@ -120,7 +120,7 @@ function install(app) {
     try {
       const actor = await requireSuperAdmin(req, res); if (!actor) return;
       await ensureAdminAccessTables(prisma);
-      const invitations = await prisma.$queryRawUnsafe('SELECT "id","email","name","expiresAt","createdAt" FROM "AdminInvitation" WHERE "status"=''PENDING'' AND "expiresAt">CURRENT_TIMESTAMP ORDER BY "createdAt" DESC');
+      const invitations = await prisma.$queryRawUnsafe('SELECT "id","email","name","expiresAt","createdAt" FROM "AdminInvitation" WHERE "status"=\'PENDING\' AND "expiresAt">CURRENT_TIMESTAMP ORDER BY "createdAt" DESC');
       const admins = await prisma.$queryRawUnsafe('SELECT a."userId",a."role",a."isActive",u."name",u."email" FROM "AdminAccess" a JOIN "User" u ON u."id"=a."userId" ORDER BY a."createdAt" DESC');
       res.json({ invitations, admins });
     } catch (e) { next(e); }
@@ -132,7 +132,7 @@ function install(app) {
   originalPost.call(app, '/api/admin/invitations/:id/resend', async (req, res, next) => {
     try {
       const actor = await requireSuperAdmin(req, res); if (!actor) return;
-      const old = await prisma.$queryRawUnsafe('SELECT "email","name" FROM "AdminInvitation" WHERE "id"=$1 AND "status"=''PENDING'' LIMIT 1', req.params.id);
+      const old = await prisma.$queryRawUnsafe('SELECT "email","name" FROM "AdminInvitation" WHERE "id"=$1 AND "status"=\'PENDING\' LIMIT 1', req.params.id);
       if (!old?.length) return res.status(404).json({ error: 'Pending invitation not found.' });
       const result = await createInvitation(actor, old[0].email, old[0].name, req.params.id);
       res.json({ ok: true, invitation: result });
@@ -141,7 +141,7 @@ function install(app) {
   originalPost.call(app, '/api/admin/invitations/:id/revoke', async (req, res, next) => {
     try {
       const actor = await requireSuperAdmin(req, res); if (!actor) return;
-      const rows = await prisma.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=''REVOKED'',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=''PENDING'' RETURNING "email"', req.params.id);
+      const rows = await prisma.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=\'REVOKED\',"revokedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "status"=\'PENDING\' RETURNING "email"', req.params.id);
       if (!rows?.length) return res.status(404).json({ error: 'Pending invitation not found.' });
       await audit(actor.id, 'ADMIN_INVITATION_REVOKED', 'AdminInvitation', req.params.id, { email: rows[0].email });
       res.json({ ok: true });
@@ -150,22 +150,24 @@ function install(app) {
   originalPost.call(app, '/api/admin/invitations/accept', async (req, res, next) => {
     try {
       const token = String(req.body?.token || ''), password = String(req.body?.password || '');
-      if (!/^[a-f0-9]{64}$/i.test(token) || password.length < 12 || password.length > 200) return res.status(400).json({ error: 'This invitation is invalid or has expired.' });
+      if (!/^[a-f0-9]{64}$/i.test(token) || password.length > 200) return res.status(400).json({ error: 'This invitation is invalid or has expired.' });
       await ensureAdminAccessTables(prisma);
       const digest = tokenHash(token);
-      const found = await prisma.$queryRawUnsafe('SELECT "id","email","name","invitedByUserId" FROM "AdminInvitation" WHERE "tokenHash"=$1 AND "status"=''PENDING'' AND "expiresAt">CURRENT_TIMESTAMP LIMIT 1', digest);
+      const found = await prisma.$queryRawUnsafe('SELECT "id","email","name","invitedByUserId" FROM "AdminInvitation" WHERE "tokenHash"=$1 AND "status"=\'PENDING\' AND "expiresAt">CURRENT_TIMESTAMP LIMIT 1', digest);
       const invite = found?.[0];
       if (!invite) return res.status(400).json({ error: 'This invitation is invalid or has expired.' });
       const existing = await prisma.user.findUnique({ where: { email: invite.email } });
       const signedIn = await getSessionUser(req, 'rp_session');
       if (existing && (!signedIn || signedIn.id !== existing.id)) return res.status(401).json({ error: 'Sign in to your existing account using the invited email, then accept again.' });
+      if (!existing && password.length < 12) return res.status(400).json({ error: 'Use a password with at least 12 characters.' });
       const user = await prisma.$transaction(async tx => {
-        const used = await tx.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=''ACCEPTED'',"acceptedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "tokenHash"=$2 AND "status"=''PENDING'' AND "expiresAt">CURRENT_TIMESTAMP RETURNING "id"', invite.id, digest);
+        const used = await tx.$queryRawUnsafe('UPDATE "AdminInvitation" SET "status"=\'ACCEPTED\',"acceptedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "tokenHash"=$2 AND "status"=\'PENDING\' AND "expiresAt">CURRENT_TIMESTAMP RETURNING "id"', invite.id, digest);
         if (!used?.length) return null;
         let account = existing;
         if (!account) account = await tx.user.create({ data: { email: invite.email, name: invite.name, passwordHash: hashPassword(password), role: 'OWNER' } });
         await tx.$executeRawUnsafe('UPDATE "AdminInvitation" SET "acceptedUserId"=$1 WHERE "id"=$2', account.id, invite.id);
-        await tx.$executeRawUnsafe('INSERT INTO "AdminAccess" ("id","userId","role","isActive","grantedByUserId") VALUES ($1,$2,''ADMIN'',TRUE,$3) ON CONFLICT ("userId") DO NOTHING', newId(), account.id, invite.invitedByUserId);
+        await tx.$executeRawUnsafe('INSERT INTO "AdminAccess" ("id","userId","role","isActive","grantedByUserId") VALUES ($1,$2,\'ADMIN\',TRUE,$3) ON CONFLICT ("userId") DO UPDATE SET "role"=\'ADMIN\',"isActive"=TRUE,"grantedByUserId"=EXCLUDED."grantedByUserId","updatedAt"=CURRENT_TIMESTAMP WHERE "AdminAccess"."role"=\'ADMIN\'', newId(), account.id, invite.invitedByUserId);
+        await tx.$executeRawUnsafe('DELETE FROM "AdminPermission" WHERE "adminAccessId" IN (SELECT "id" FROM "AdminAccess" WHERE "userId"=$1 AND "role"=\'ADMIN\')', account.id);
         const access = await tx.$queryRawUnsafe('SELECT "id" FROM "AdminAccess" WHERE "userId"=$1 AND "isActive"=TRUE LIMIT 1', account.id);
         if (!access?.length) throw new Error('Admin access could not be created.');
         await tx.auditLog.create({ data: { actorUserId: account.id, action: 'ADMIN_INVITATION_ACCEPTED', entity: 'AdminInvitation', entityId: invite.id, metadata: { invitedByUserId: invite.invitedByUserId } } });
@@ -205,7 +207,7 @@ function install(app) {
     try {
       const actor = await requireSuperAdmin(req, res); if (!actor) return;
       if (typeof req.body?.isActive !== 'boolean') return res.status(400).json({ error: 'Choose an active status.' });
-      const rows = await prisma.$queryRawUnsafe('UPDATE "AdminAccess" SET "isActive"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$1 AND "role"=''ADMIN'' RETURNING "id"', req.params.userId, req.body.isActive);
+      const rows = await prisma.$queryRawUnsafe('UPDATE "AdminAccess" SET "isActive"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "userId"=$1 AND "role"=\'ADMIN\' RETURNING "id"', req.params.userId, req.body.isActive);
       if (!rows?.length) return res.status(404).json({ error: 'Admin account not found.' });
       await audit(actor.id, req.body.isActive ? 'ADMIN_ACCESS_REACTIVATED' : 'ADMIN_ACCESS_DEACTIVATED', 'AdminAccess', rows[0].id, { userId: req.params.userId });
       res.json({ ok: true });
